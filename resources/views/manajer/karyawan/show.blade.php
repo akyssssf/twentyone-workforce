@@ -3,8 +3,21 @@
 
 @section('content')
 <div class="mx-auto max-w-3xl">
-    <a href="{{ route('manajer.karyawan.index') }}" class="text-sm text-slate-500 hover:underline">&larr; Semua karyawan</a>
-    <h1 class="mb-6 mt-2 text-2xl font-semibold tracking-tight">{{ $employee->name }}</h1>
+    <div class="mb-6 mt-2 flex items-center gap-4">
+        @if ($photo = $employee->latestPhotoUrl())
+            <a href="{{ $photo }}" target="_blank" rel="noopener noreferrer">
+                <img src="{{ $photo }}" alt="{{ $employee->name }}" class="h-16 w-16 rounded-full object-cover ring-4 ring-slate-100 shadow">
+            </a>
+        @else
+            <div class="flex h-16 w-16 items-center justify-center rounded-full bg-slate-200 font-bold text-slate-600 text-lg shadow">
+                {{ strtoupper(substr($employee->name, 0, 2)) }}
+            </div>
+        @endif
+        <div>
+            <h1 class="text-2xl font-semibold tracking-tight">{{ $employee->name }}</h1>
+            <p class="text-sm text-slate-500">{{ $employee->employee_no }} &bull; {{ ucfirst($employee->employment_status) }}</p>
+        </div>
+    </div>
 
     <div class="mb-6 rounded-xl border border-slate-200 bg-white">
         <div class="border-b border-slate-200 px-5 py-3"><h2 class="font-semibold">Data</h2></div>

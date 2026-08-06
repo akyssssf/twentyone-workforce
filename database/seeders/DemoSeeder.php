@@ -71,6 +71,7 @@ class DemoSeeder extends Seeder
             $shift = $spec['shift'];
             $gaji = $spec['gaji'];
             $libur = $spec['libur'];
+            $isAdmin = in_array((string) $pin, ['1', '13'], true);
 
             $employee = Employee::create([
                 'branch_id' => $branch->id,
@@ -80,7 +81,7 @@ class DemoSeeder extends Seeder
                 'email' => $this->emailFor($nama),
                 'default_shift_id' => $shift->id,
                 'preferred_off_days' => $libur,
-                'employment_status' => 'active',
+                'employment_status' => $isAdmin ? 'admin' : 'active',
                 'is_active' => true,
                 'joined_at' => Carbon::parse('2024-01-01'),
             ]);
@@ -103,15 +104,14 @@ class DemoSeeder extends Seeder
                 'amount' => $gaji,
             ]);
 
-            // Peran 2: Karyawan
             User::create([
                 'employee_id' => $employee->id,
                 'name' => $nama,
                 'email' => $this->emailFor($nama),
-                'password' => Hash::make('karyawan123'),
-                'role' => UserRole::Karyawan,
+                'password' => Hash::make($isAdmin ? 'admin123' : 'karyawan123'),
+                'role' => $isAdmin ? UserRole::Admin : UserRole::Karyawan,
                 'is_active' => true,
-                'must_change_password' => true,
+                'must_change_password' => ! $isAdmin,
             ]);
         }
 

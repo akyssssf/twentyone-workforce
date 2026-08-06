@@ -56,7 +56,7 @@ class AttendanceComputer
             $ringkasan[$case->value] = 0;
         }
 
-        $employees = Employee::query()->active()->with('defaultShift')->get();
+        $employees = Employee::query()->active()->employed()->with('defaultShift')->get();
 
         foreach ($employees as $employee) {
             foreach ($this->computeEmployee($employee, $workDate) as $attendance) {

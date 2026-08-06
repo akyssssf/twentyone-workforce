@@ -184,4 +184,13 @@ class Employee extends Model
     {
         return $query->where('employment_status', 'active');
     }
+
+    public function latestPhotoUrl(): ?string
+    {
+        return $this->attendanceLogs()
+            ->whereNotNull('photo_url')
+            ->where('photo_url', '!=', '')
+            ->orderByDesc('scanned_at')
+            ->value('photo_url');
+    }
 }
