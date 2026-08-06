@@ -52,7 +52,7 @@ class ComputeAttendances extends Command
             return self::FAILURE;
         }
 
-        $total = ['computed' => 0, 'skipped' => 0, 'hadir' => 0, 'telat' => 0, 'alpha' => 0, 'libur' => 0];
+        $total = ['computed' => 0, 'hadir' => 0, 'alpha' => 0, 'izin' => 0, 'sakit' => 0, 'cuti' => 0, 'libur' => 0];
         $baris = [];
 
         for ($date = $from->copy(); $date->lessThanOrEqualTo($to); $date->addDay()) {
@@ -64,19 +64,20 @@ class ComputeAttendances extends Command
 
             $baris[] = [
                 $date->toDateString(),
-                $hasil['hadir'],
-                $hasil['telat'],
-                $hasil['alpha'],
-                $hasil['libur'],
-                $hasil['skipped'],
+                $hasil['hadir'] ?? 0,
+                $hasil['alpha'] ?? 0,
+                $hasil['izin'] ?? 0,
+                $hasil['sakit'] ?? 0,
+                $hasil['cuti'] ?? 0,
+                $hasil['libur'] ?? 0,
             ];
         }
 
-        $this->table(['Tanggal', 'Hadir', 'Telat', 'Alpha', 'Libur', 'Dilewati'], $baris);
+        $this->table(['Tanggal', 'Hadir', 'Alpha', 'Izin', 'Sakit', 'Cuti', 'Libur'], $baris);
 
         $this->info(sprintf(
-            'Selesai. %d catatan dihitung, %d dilewati.',
-            $total['computed'], $total['skipped'],
+            'Selesai. %d catatan dihitung.',
+            $total['computed'],
         ));
 
         if ($total['alpha'] > 0) {

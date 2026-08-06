@@ -32,9 +32,8 @@ class DemoSeeder extends Seeder
         $divisions = Division::pluck('id', 'code');
         $gajiPokok = SalaryComponent::where('code', 'gaji_pokok')->first();
 
-        // pin 1 sudah dipakai data nyata dari mesin, jadi karyawan demo mulai
-        // dari PIN yang belum terpakai supaya tidak menabrak.
-        $mulaiPin = 100;
+        // PIN disesuaikan dengan PIN fisik pada mesin Fingerspot (1, 2, 3, ..., 15).
+        $pinMap = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '12', '13', '14', '15', '16', '17', '18', '19'];
 
         $daftar = [
             // [nama, divisi, shift default, gaji pokok, hari libur]
@@ -63,7 +62,7 @@ class DemoSeeder extends Seeder
         ];
 
         foreach ($daftar as $index => [$nama, $divisi, $shift, $gaji, $libur]) {
-            $pin = (string) ($mulaiPin + $index);
+            $pin = $pinMap[$index] ?? (string) ($index + 1);
 
             $employee = Employee::updateOrCreate(
                 ['employee_no' => sprintf('EMP-%03d', $index + 10)],
