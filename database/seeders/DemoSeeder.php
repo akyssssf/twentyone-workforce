@@ -41,22 +41,24 @@ class DemoSeeder extends Seeder
         $divisions = Division::pluck('id', 'code');
         $gajiPokok = SalaryComponent::where('code', 'gaji_pokok')->first();
 
-        // Data real PIN fisik dari mesin Fingerspot (GQ5179086)
+        // Data real PIN & nama dari mesin Fingerspot (GQ5179086)
+        // Nama diambil langsung dari Person Management di developer.fingerspot.io
         $realPinMap = [
-            '1'  => ['name' => 'Budi Santoso', 'divisi' => 'chef', 'shift' => $pagi, 'gaji' => 4_500_000, 'libur' => [0]],
-            '2'  => ['name' => 'Sari Wulandari', 'divisi' => 'chef', 'shift' => $pagi, 'gaji' => 4_500_000, 'libur' => [1]],
-            '3'  => ['name' => 'Andi Pratama', 'divisi' => 'chef', 'shift' => $malam, 'gaji' => 4_800_000, 'libur' => [2]],
-            '4'  => ['name' => 'Dedi Kurniawan', 'divisi' => 'barista', 'shift' => $pagi, 'gaji' => 4_000_000, 'libur' => [3]],
-            '5'  => ['name' => 'Eko Wahyudi', 'divisi' => 'barista', 'shift' => $malam, 'gaji' => 4_000_000, 'libur' => [4]],
-            '6'  => ['name' => 'Fajar Ramadhan', 'divisi' => 'kasir', 'shift' => $pagi, 'gaji' => 3_800_000, 'libur' => [5]],
-            '7'  => ['name' => 'Gita Lestari', 'divisi' => 'kasir', 'shift' => $malam, 'gaji' => 3_800_000, 'libur' => [0]],
-            '8'  => ['name' => 'Hana Safitri', 'divisi' => 'waiter', 'shift' => $pagi, 'gaji' => 3_500_000, 'libur' => [1]],
-            '9'  => ['name' => 'Indra Maulana', 'divisi' => 'waiter', 'shift' => $malam, 'gaji' => 3_500_000, 'libur' => [2]],
-            '10' => ['name' => 'Joko Susilo', 'divisi' => 'waiter', 'shift' => $malam, 'gaji' => 3_500_000, 'libur' => [3]],
-            '12' => ['name' => 'Kartika Dewi', 'divisi' => 'cleaning', 'shift' => $pagi, 'gaji' => 3_200_000, 'libur' => [4]],
-            '13' => ['name' => 'Lina Marlina', 'divisi' => 'cleaning', 'shift' => $pagi, 'gaji' => 3_200_000, 'libur' => [5]],
-            '14' => ['name' => 'Maya Anggraini', 'divisi' => 'barista', 'shift' => $malam, 'gaji' => 4_000_000, 'libur' => [6]],
-            '15' => ['name' => 'Nanda Saputra', 'divisi' => 'waiter', 'shift' => $pagi, 'gaji' => 3_500_000, 'libur' => [0]],
+            '1'  => ['name' => '21 Zafan',                       'divisi' => 'chef',     'shift' => $pagi,  'gaji' => 4_500_000, 'libur' => [0]],
+            '2'  => ['name' => 'Dava Erik Prasetiyo',            'divisi' => 'chef',     'shift' => $pagi,  'gaji' => 4_500_000, 'libur' => [1]],
+            '3'  => ['name' => 'Farrel Daffa',                   'divisi' => 'chef',     'shift' => $malam, 'gaji' => 4_800_000, 'libur' => [2]],
+            '4'  => ['name' => 'Giat Firhan Sigit',              'divisi' => 'barista',  'shift' => $pagi,  'gaji' => 4_000_000, 'libur' => [3]],
+            '5'  => ['name' => 'Alvano Yuri Rafa Islama Andi',   'divisi' => 'barista',  'shift' => $malam, 'gaji' => 4_000_000, 'libur' => [4]],
+            '6'  => ['name' => 'Muhammad Julian Ikhlusul Amal',  'divisi' => 'kasir',    'shift' => $pagi,  'gaji' => 3_800_000, 'libur' => [5]],
+            '7'  => ['name' => 'Zulfiki Al Khafid',              'divisi' => 'kasir',    'shift' => $malam, 'gaji' => 3_800_000, 'libur' => [0]],
+            '8'  => ['name' => 'Nurdiansyah',                    'divisi' => 'waiter',   'shift' => $pagi,  'gaji' => 3_500_000, 'libur' => [1]],
+            '9'  => ['name' => 'Rifqi Ubaidillah',               'divisi' => 'waiter',   'shift' => $malam, 'gaji' => 3_500_000, 'libur' => [2]],
+            '10' => ['name' => 'Abdila Riansyah',                'divisi' => 'waiter',   'shift' => $malam, 'gaji' => 3_500_000, 'libur' => [3]],
+            '11' => ['name' => 'Fikri Imamy',                    'divisi' => 'waiter',   'shift' => $pagi,  'gaji' => 3_500_000, 'libur' => [4]],
+            '12' => ['name' => 'Muhammad Nasdana Faza',          'divisi' => 'cleaning', 'shift' => $pagi,  'gaji' => 3_200_000, 'libur' => [5]],
+            '13' => ['name' => '21 Bryan',                       'divisi' => 'cleaning', 'shift' => $pagi,  'gaji' => 3_200_000, 'libur' => [6]],
+            '14' => ['name' => 'Jihan Yuni Ariszqi',             'divisi' => 'barista',  'shift' => $malam, 'gaji' => 4_000_000, 'libur' => [0]],
+            '15' => ['name' => 'Setia Pribadi Bogel',            'divisi' => 'waiter',   'shift' => $pagi,  'gaji' => 3_500_000, 'libur' => [1]],
         ];
 
         $cloudId = config('fingerspot.cloud_id') ?: 'GQ5179086';
