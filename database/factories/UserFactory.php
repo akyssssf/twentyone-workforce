@@ -31,14 +31,19 @@ class UserFactory extends Factory
             'email_verified_at' => now(),
             'password' => static::$password ??= Hash::make('password'),
             'remember_token' => Str::random(10),
-            'role' => UserRole::Manager,
+            'role' => UserRole::Admin,
             'is_active' => true,
         ];
     }
 
     public function owner(): static
     {
-        return $this->state(fn () => ['role' => UserRole::Owner]);
+        return $this->state(fn () => ['role' => UserRole::Admin]);
+    }
+
+    public function admin(): static
+    {
+        return $this->state(fn () => ['role' => UserRole::Admin]);
     }
 
     public function nonaktif(): static

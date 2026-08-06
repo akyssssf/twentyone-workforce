@@ -142,13 +142,11 @@ class DashboardTest extends TestCase
 
     public function test_peran_tersimpan_sebagai_enum(): void
     {
-        $owner = User::factory()->owner()->create();
-        $manajer = User::factory()->create();
+        $admin = User::factory()->admin()->create();
 
-        $this->assertSame(UserRole::Owner, $owner->role);
-        $this->assertTrue($owner->isOwner());
-        $this->assertFalse($manajer->isOwner());
-        $this->assertSame('Manajer', $manajer->role->label());
+        $this->assertSame(UserRole::Admin, $admin->role);
+        $this->assertTrue($admin->isAdmin());
+        $this->assertSame('Admin', $admin->role->label());
     }
 
     // -------------------------------------------------------------- dashboard
@@ -259,7 +257,7 @@ class DashboardTest extends TestCase
 
     public function test_manajer_juga_bisa_membuka_dashboard(): void
     {
-        $this->actingAs(User::factory()->create(['role' => UserRole::Manager]))
+        $this->actingAs(User::factory()->create(['role' => UserRole::Admin]))
             ->get('/dashboard')
             ->assertOk();
     }

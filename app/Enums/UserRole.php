@@ -11,28 +11,25 @@ namespace App\Enums;
  */
 enum UserRole: string
 {
-    case Owner = 'owner';
-    case Manager = 'manager';
+    case Admin = 'admin';
     case Karyawan = 'karyawan';
 
     public function label(): string
     {
         return match ($this) {
-            self::Owner => 'Owner',
-            self::Manager => 'Manajer',
+            self::Admin => 'Admin',
             self::Karyawan => 'Karyawan',
         };
     }
 
-    /**
-     * Brief meminta hanya dua peran: Manager dan Karyawan. Owner tetap ada di
-     * database sebagai manager-plus (boleh mengelola akun dan mengubah gaji),
-     * tapi di mata pengguna keduanya sama-sama "Manajer". Biaya menyimpan peran
-     * ketiga hampir nol; biaya menghapusnya lalu membutuhkannya lagi tidak nol.
-     */
+    public function isAdmin(): bool
+    {
+        return $this === self::Admin;
+    }
+
     public function isManagement(): bool
     {
-        return $this !== self::Karyawan;
+        return $this === self::Admin;
     }
 
     public function isEmployee(): bool
@@ -40,13 +37,9 @@ enum UserRole: string
         return $this === self::Karyawan;
     }
 
-    /**
-     * Owner memegang hal-hal yang berakibat permanen atau menyangkut uang:
-     * mengelola akun dashboard, mengubah gaji pokok, menonaktifkan karyawan.
-     */
     public function isOwner(): bool
     {
-        return $this === self::Owner;
+        return $this === self::Admin;
     }
 
     /**

@@ -18,9 +18,9 @@ class AddUser extends Command
     protected $signature = 'user:add
                             {--name= : Nama pengguna}
                             {--email= : Alamat email untuk login}
-                            {--role= : owner atau manager}';
+                            {--role= : admin atau karyawan}';
 
-    protected $description = 'Buat akun dashboard untuk owner atau manajer';
+    protected $description = 'Buat akun dashboard untuk admin atau karyawan';
 
     public function handle(): int
     {
@@ -30,7 +30,7 @@ class AddUser extends Command
         $role = $this->option('role') ?: $this->choice(
             'Peran',
             array_keys(UserRole::options()),
-            User::query()->doesntExist() ? 'owner' : 'manager',
+            'admin',
         );
 
         $validator = Validator::make(
@@ -38,7 +38,7 @@ class AddUser extends Command
             [
                 'name' => ['required', 'string', 'max:255'],
                 'email' => ['required', 'email', 'unique:users,email'],
-                'role' => ['required', 'in:owner,manager'],
+                'role' => ['required', 'in:admin,karyawan'],
             ],
         );
 

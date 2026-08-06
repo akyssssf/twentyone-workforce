@@ -33,10 +33,9 @@ class ListUsers extends Command
             ])->all(),
         );
 
-        if (User::where('role', 'owner')->where('is_active', true)->doesntExist()) {
-            // Tanpa owner aktif, tidak ada yang bisa mengelola akun lain.
+        if (User::where('role', 'admin')->where('is_active', true)->doesntExist()) {
             $this->newLine();
-            $this->warn('Tidak ada owner aktif. Buat satu sebelum terkunci dari pengelolaan akun.');
+            $this->warn('Tidak ada admin aktif. Buat satu sebelum terkunci dari pengelolaan akun.');
         }
 
         return self::SUCCESS;

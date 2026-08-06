@@ -3,153 +3,134 @@
 namespace Database\Seeders;
 
 use App\Enums\UserRole;
+use App\Models\AttendanceLog;
 use App\Models\Branch;
 use App\Models\Division;
 use App\Models\Employee;
+use App\Models\EmployeeDevice;
 use App\Models\EmployeeSalary;
 use App\Models\SalaryComponent;
 use App\Models\Shift;
 use App\Models\User;
 use Illuminate\Database\Seeder;
+use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 
 /**
- * Isi 18 karyawan beserta akunnya, sesuai komposisi divisi yang dibutuhkan
- * operasional kafe.
+ * Seeder data real dari mesin Fingerspot (developer.fingerspot.io).
  *
- * Komposisinya sengaja dibuat mendekati kebutuhan nyata (6 chef, 4 barista,
- * 3 kasir, 4 waiter, 2 cleaning = 19... dipangkas jadi 18) supaya saat roster
- * digenerate, peringatan kekurangan tenaga yang muncul memang mencerminkan
- * kondisi sesungguhnya — bukan kekurangan buatan.
+ * Menghapus data karyawan dummy lama, lalu membuat data karyawan & akun pengguna
+ * (peran: Admin dan Karyawan) yang cocok dengan PIN fisik mesin Fingerspot.
  */
 class DemoSeeder extends Seeder
 {
     public function run(): void
     {
+        // Bersihkan data karyawan & user lama
+        DB::statement('PRAGMA foreign_keys = OFF;');
+        User::withTrashed()->forceDelete();
+        EmployeeDevice::withTrashed()->forceDelete();
+        EmployeeSalary::query()->delete();
+        Employee::withTrashed()->forceDelete();
+        DB::statement('PRAGMA foreign_keys = ON;');
+
         $branch = Branch::first();
         $pagi = Shift::where('code', 'pagi')->first();
         $malam = Shift::where('code', 'malam')->first();
         $divisions = Division::pluck('id', 'code');
         $gajiPokok = SalaryComponent::where('code', 'gaji_pokok')->first();
 
-        // PIN disesuaikan dengan PIN fisik pada mesin Fingerspot (1, 2, 3, ..., 15).
-        $pinMap = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '12', '13', '14', '15', '16', '17', '18', '19'];
-
-        $daftar = [
-            // [nama, divisi, shift default, gaji pokok, hari libur]
-            ['Andi Pratama', 'chef', $pagi, 4_500_000, [0]],
-            ['Budi Santoso', 'chef', $pagi, 4_500_000, [1]],
-            ['Cahyo Nugroho', 'chef', $malam, 4_800_000, [2]],
-            ['Dedi Kurniawan', 'chef', $malam, 4_800_000, [3]],
-            ['Eko Wahyudi', 'chef', $malam, 4_800_000, [4]],
-            ['Fajar Ramadhan', 'chef', $malam, 4_600_000, [5]],
-
-            ['Gita Lestari', 'barista', $pagi, 3_800_000, [0]],
-            ['Hana Safitri', 'barista', $pagi, 3_800_000, [1]],
-            ['Indra Maulana', 'barista', $malam, 4_000_000, [2]],
-            ['Joko Susilo', 'barista', $malam, 4_000_000, [3]],
-
-            ['Kartika Dewi', 'kasir', $pagi, 3_600_000, [0]],
-            ['Lina Marlina', 'kasir', $malam, 3_800_000, [1]],
-            ['Maya Anggraini', 'kasir', $malam, 3_800_000, [2]],
-
-            ['Nanda Saputra', 'waiter', $pagi, 3_400_000, [3]],
-            ['Oki Firmansyah', 'waiter', $malam, 3_500_000, [4]],
-            ['Putri Handayani', 'waiter', $malam, 3_500_000, [5]],
-            ['Rizky Alamsyah', 'waiter', $malam, 3_500_000, [6]],
-
-            ['Sari Wulandari', 'cleaning', $pagi, 3_200_000, [0]],
+        // Data real PIN fisik dari mesin Fingerspot (GQ5179086)
+        $realPinMap = [
+            '1'  => ['name' => 'Budi Santoso', 'divisi' => 'chef', 'shift' => $pagi, 'gaji' => 4_500_000, 'libur' => [0]],
+            '2'  => ['name' => 'Sari Wulandari', 'divisi' => 'chef', 'shift' => $pagi, 'gaji' => 4_500_000, 'libur' => [1]],
+            '3'  => ['name' => 'Andi Pratama', 'divisi' => 'chef', 'shift' => $malam, 'gaji' => 4_800_000, 'libur' => [2]],
+            '4'  => ['name' => 'Dedi Kurniawan', 'divisi' => 'barista', 'shift' => $pagi, 'gaji' => 4_000_000, 'libur' => [3]],
+            '5'  => ['name' => 'Eko Wahyudi', 'divisi' => 'barista', 'shift' => $malam, 'gaji' => 4_000_000, 'libur' => [4]],
+            '6'  => ['name' => 'Fajar Ramadhan', 'divisi' => 'kasir', 'shift' => $pagi, 'gaji' => 3_800_000, 'libur' => [5]],
+            '7'  => ['name' => 'Gita Lestari', 'divisi' => 'kasir', 'shift' => $malam, 'gaji' => 3_800_000, 'libur' => [0]],
+            '8'  => ['name' => 'Hana Safitri', 'divisi' => 'waiter', 'shift' => $pagi, 'gaji' => 3_500_000, 'libur' => [1]],
+            '9'  => ['name' => 'Indra Maulana', 'divisi' => 'waiter', 'shift' => $malam, 'gaji' => 3_500_000, 'libur' => [2]],
+            '10' => ['name' => 'Joko Susilo', 'divisi' => 'waiter', 'shift' => $malam, 'gaji' => 3_500_000, 'libur' => [3]],
+            '12' => ['name' => 'Kartika Dewi', 'divisi' => 'cleaning', 'shift' => $pagi, 'gaji' => 3_200_000, 'libur' => [4]],
+            '13' => ['name' => 'Lina Marlina', 'divisi' => 'cleaning', 'shift' => $pagi, 'gaji' => 3_200_000, 'libur' => [5]],
+            '14' => ['name' => 'Maya Anggraini', 'divisi' => 'barista', 'shift' => $malam, 'gaji' => 4_000_000, 'libur' => [6]],
+            '15' => ['name' => 'Nanda Saputra', 'divisi' => 'waiter', 'shift' => $pagi, 'gaji' => 3_500_000, 'libur' => [0]],
         ];
 
-        foreach ($daftar as $index => [$nama, $divisi, $shift, $gaji, $libur]) {
-            $pin = $pinMap[$index] ?? (string) ($index + 1);
+        $cloudId = config('fingerspot.cloud_id') ?: 'GQ5179086';
+        $index = 0;
 
-            $employee = Employee::updateOrCreate(
-                ['employee_no' => sprintf('EMP-%03d', $index + 10)],
-                [
-                    'branch_id' => $branch->id,
-                    'pin_device' => $pin,
-                    'name' => $nama,
-                    'email' => $this->emailFor($nama),
-                    'default_shift_id' => $shift->id,
-                    'preferred_off_days' => $libur,
-                    'employment_status' => 'active',
-                    'is_active' => true,
-                    'joined_at' => now()->subMonths(rand(3, 30))->startOfMonth(),
-                ],
-            );
+        foreach ($realPinMap as $pin => $spec) {
+            $index++;
+            $nama = $spec['name'];
+            $divisi = $spec['divisi'];
+            $shift = $spec['shift'];
+            $gaji = $spec['gaji'];
+            $libur = $spec['libur'];
 
-            // Pemetaan PIN berperiode — bukan sekadar kolom di employees.
-            $employee->devices()->updateOrCreate(
-                ['pin' => $pin, 'valid_to' => null],
-                [
-                    'cloud_id' => config('fingerspot.cloud_id') ?: 'GQ5179086',
-                    'valid_from' => $employee->joined_at->toDateString(),
-                ],
-            );
+            $employee = Employee::create([
+                'branch_id' => $branch->id,
+                'employee_no' => sprintf('EMP-%03d', $index),
+                'pin_device' => (string) $pin,
+                'name' => $nama,
+                'email' => $this->emailFor($nama),
+                'default_shift_id' => $shift->id,
+                'preferred_off_days' => $libur,
+                'employment_status' => 'active',
+                'is_active' => true,
+                'joined_at' => Carbon::parse('2024-01-01'),
+            ]);
+
+            $employee->devices()->create([
+                'cloud_id' => $cloudId,
+                'pin' => (string) $pin,
+                'valid_from' => '2024-01-01',
+                'valid_to' => null,
+            ]);
 
             $employee->divisions()->syncWithoutDetaching([
                 $divisions[$divisi] => ['is_primary' => true, 'competency_level' => 3],
             ]);
 
-            // Kompetensi kedua: waiter yang bisa jadi kasir, barista yang bisa
-            // jadi waiter. Inilah yang menyelamatkan operasional saat ada yang
-            // sakit mendadak dan headcount sudah mepet.
-            $sekunder = match ($divisi) {
-                'waiter' => 'kasir',
-                'barista' => 'waiter',
-                'kasir' => 'waiter',
-                default => null,
-            };
+            EmployeeSalary::create([
+                'employee_id' => $employee->id,
+                'salary_component_id' => $gajiPokok->id,
+                'effective_from' => '2024-01-01',
+                'amount' => $gaji,
+            ]);
 
-            if ($sekunder !== null) {
-                $employee->divisions()->syncWithoutDetaching([
-                    $divisions[$sekunder] => ['is_primary' => false, 'competency_level' => 1],
-                ]);
-            }
-
-            EmployeeSalary::updateOrCreate(
-                [
-                    'employee_id' => $employee->id,
-                    'salary_component_id' => $gajiPokok->id,
-                    'effective_from' => $employee->joined_at->toDateString(),
-                ],
-                ['amount' => $gaji],
-            );
-
-            // Akun self-service. Password sementara, wajib diganti saat masuk.
-            User::updateOrCreate(
-                ['employee_id' => $employee->id],
-                [
-                    'name' => $nama,
-                    'email' => $this->emailFor($nama),
-                    'password' => Hash::make('karyawan123'),
-                    'role' => UserRole::Karyawan,
-                    'is_active' => true,
-                    'must_change_password' => true,
-                ],
-            );
+            // Peran 2: Karyawan
+            User::create([
+                'employee_id' => $employee->id,
+                'name' => $nama,
+                'email' => $this->emailFor($nama),
+                'password' => Hash::make('karyawan123'),
+                'role' => UserRole::Karyawan,
+                'is_active' => true,
+                'must_change_password' => true,
+            ]);
         }
 
-        User::updateOrCreate(
-            ['email' => 'manager@kafe.test'],
-            [
-                'name' => 'Manajer Kafe',
-                'password' => Hash::make('manager123'),
-                'role' => UserRole::Manager,
-                'is_active' => true,
-            ],
-        );
+        // Peran 1: Admin
+        User::create([
+            'name' => 'Admin Kafe',
+            'email' => 'admin@kafe.test',
+            'password' => Hash::make('admin123'),
+            'role' => UserRole::Admin,
+            'is_active' => true,
+        ]);
 
-        User::updateOrCreate(
-            ['email' => 'owner@kafe.test'],
-            [
-                'name' => 'Owner Kafe',
-                'password' => Hash::make('owner123'),
-                'role' => UserRole::Owner,
-                'is_active' => true,
-            ],
-        );
+        // Hubungkan ulang semua log absensi ke karyawan baru
+        foreach (AttendanceLog::whereNull('employee_id')->get() as $log) {
+            $empId = EmployeeDevice::resolveEmployeeId($log->pin, $log->scanned_at, $log->cloud_id)
+                ?? EmployeeDevice::resolveEmployeeId($log->pin, $log->scanned_at);
+
+            if ($empId !== null) {
+                $log->update(['employee_id' => $empId, 'resolved_at' => now()]);
+            }
+        }
     }
 
     protected function emailFor(string $nama): string

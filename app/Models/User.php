@@ -52,10 +52,14 @@ class User extends Authenticatable
         return $this->hasMany(Notification::class);
     }
 
-    /** Manager dan owner. Dipakai gerbang RBAC di seluruh aplikasi. */
     public function isManagement(): bool
     {
         return $this->role->isManagement();
+    }
+
+    public function isAdmin(): bool
+    {
+        return $this->role->isAdmin();
     }
 
     public function isEmployee(): bool
@@ -65,7 +69,7 @@ class User extends Authenticatable
 
     public function isOwner(): bool
     {
-        return $this->role === UserRole::Owner;
+        return $this->role->isOwner();
     }
 
     public function scopeActive($query)

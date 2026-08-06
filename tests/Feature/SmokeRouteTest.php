@@ -45,7 +45,7 @@ class SmokeRouteTest extends TestCase
         $this->seed(MasterDataSeeder::class);
 
         $this->manajer = User::factory()->create([
-            'role' => UserRole::Manager,
+            'role' => UserRole::Admin,
             'is_active' => true,
         ]);
 

@@ -42,12 +42,12 @@ class Notifier
         return $notification;
     }
 
-    /** Kirim ke semua manager dan owner. Dipakai saat ada pengajuan masuk. */
+    /** Kirim ke semua admin. Dipakai saat ada pengajuan masuk. */
     public function sendToManagement(string $title, ?string $body = null, ?string $link = null, array $payload = []): void
     {
         User::query()
             ->active()
-            ->whereIn('role', ['owner', 'manager'])
+            ->whereIn('role', ['admin', 'owner', 'manager'])
             ->get()
             ->each(fn (User $user) => $this->send($user, $title, $body, $link, $payload));
     }
