@@ -96,6 +96,32 @@ class EmployeeController extends Controller
             ->with('sandi_untuk', $akun->username);
     }
 
+    /**
+     * Ubah nomor WhatsApp karyawan.
+     *
+     * Tanpa nomor, kode lembur dan pemberitahuan pengajuan tidak pernah sampai
+     * — dan kegagalannya tidak menimbulkan error apa pun, cuma orang yang
+     * bertanya-tanya kenapa tidak dapat kabar.
+     */
+    public function updatePhone(Employee $employee, Request $request)
+    {
+        $data = $request->validate([
+            'phone' => ['nullable', 'string', 'max:32'],
+        ]);
+
+        $lama = $employee->phone;
+
+        // Diseragamkan otomatis oleh mutator di model Employee.
+        $employee->update(['phone' => $data['phone'] ?: null]);
+
+        AuditLogger::record('employee.phone_changed', $employee,
+            ['phone' => $lama],
+            ['phone' => $employee->fresh()->phone],
+        );
+
+        return back()->with('status', 'Nomor WhatsApp diperbarui.');
+    }
+
     /** Ubah nama panggilan untuk login. */
     public function updateUsername(Employee $employee, Request $request)
     {

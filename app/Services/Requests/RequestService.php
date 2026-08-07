@@ -80,11 +80,20 @@ class RequestService
             return;
         }
 
+        $ringkas = "{$request->employee->name} mengajukan {$request->type->shortLabel()} ({$request->code}) dan menunjuk Anda sebagai pengganti.";
+
         $this->notifier->send(
             $user,
             'Anda diminta jadi pengganti',
-            "{$request->employee->name} mengajukan {$request->type->shortLabel()} ({$request->code}) dan menunjuk Anda sebagai pengganti.",
+            $ringkas,
             route('karyawan.pengajuan.show', $request),
+            whatsapp: implode("\n", [
+                '[' . config('app.name') . '] Anda diminta jadi pengganti',
+                '',
+                $ringkas,
+                '',
+                'Buka aplikasi untuk menjawab. Selama belum dijawab, pengajuannya tertahan.',
+            ]),
         );
     }
 
@@ -467,6 +476,18 @@ class RequestService
     {
         $overtime = $request->overtime;
 
+        // Kode dikirim ke orangnya begitu disetujui.
+        //
+        // Ini bagian yang paling menentukan apakah fitur kode berguna atau
+        // justru menghalangi: kode yang harus dibacakan lisan berarti admin
+        // wajib berada di tempat. Dengan dikirim otomatis, penugasan lembur
+        // bisa dilakukan dari mana saja.
+        $this->notifier->whatsappToEmployee(
+            $request->employee,
+            'Kode lembur Anda',
+            $this->pesanKodeLembur($request, $overtime),
+        );
+
         OvertimeRecord::updateOrCreate(
             [
                 'employee_id' => $request->employee_id,
@@ -574,6 +595,26 @@ class RequestService
         }
     }
 
+    /** Isi pesan WhatsApp berisi kode lembur. */
+    protected function pesanKodeLembur(Request $request, $overtime): string
+    {
+        $tanggal = $overtime->work_date->translatedFormat('l, d F Y');
+        $jam = substr($overtime->planned_start, 0, 5) . '–' . substr($overtime->planned_end, 0, 5);
+
+        return implode("\n", [
+            'Halo ' . $request->employee->name . ',',
+            '',
+            'Anda ditugaskan lembur:',
+            $tanggal,
+            'Jam ' . $jam . ' (' . $overtime->planned_minutes . ' menit)',
+            '',
+            'KODE LEMBUR: ' . $overtime->secret_code,
+            '',
+            'Buka menu Lembur di aplikasi dan masukkan kode ini sebelum mulai bekerja.',
+            'Tanpa diaktifkan, lembur tidak dibayar walaupun Anda tetap scan.',
+        ]);
+    }
+
     // ---------------------------------------------------------------- utils
 
     protected function createRequest(
@@ -603,11 +644,21 @@ class RequestService
 
     protected function announce(Request $request, string $title): void
     {
+        $ringkas = "{$request->employee->name} — {$request->type->label()} ({$request->code})";
+
         $this->notifier->sendToManagement(
             $title,
-            "{$request->employee->name} — {$request->type->label()} ({$request->code})",
+            $ringkas,
             route('manajer.pengajuan.show', $request),
             ['request_id' => $request->id],
+            whatsapp: implode("\n", [
+                '[' . config('app.name') . '] ' . $title,
+                '',
+                $ringkas,
+                'Pengganti: ' . ($request->substitute?->name ?? 'belum ditunjuk'),
+                '',
+                route('manajer.pengajuan.show', $request),
+            ]),
         );
     }
 
@@ -619,11 +670,19 @@ class RequestService
             return;
         }
 
+        $ringkas = "{$request->type->label()} ({$request->code}) — {$request->status->label()}";
+
         $this->notifier->send(
             $user,
             $title,
-            "{$request->type->label()} ({$request->code}) — {$request->status->label()}",
+            $ringkas,
             route('karyawan.pengajuan.show', $request),
+            whatsapp: implode("\n", array_filter([
+                '[' . config('app.name') . '] ' . $title,
+                '',
+                $ringkas,
+                $request->decision_note ? 'Catatan: ' . $request->decision_note : null,
+            ])),
         );
     }
 }

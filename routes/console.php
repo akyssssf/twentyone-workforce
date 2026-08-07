@@ -44,3 +44,22 @@ Schedule::command('attendance:sync --days=2')
     ->dailyAt('02:00')
     ->withoutOverlapping()
     ->runInBackground();
+
+// Salinan database tiap hari jam 03:00.
+//
+// Jam 03:00 dipilih karena shift malam sudah bubar (pulang 01:00) dan sinkron
+// cadangan get_attlog jam 02:00 sudah selesai — jadi salinannya memuat hari
+// kemarin secara utuh.
+Schedule::command('db:backup')
+    ->dailyAt('03:00')
+    ->withoutOverlapping()
+    ->runInBackground();
+
+// Tutup hari kemarin jam 06:00.
+//
+// Jendela shift malam baru benar-benar tutup jam 05:00, jadi sebelum itu
+// "tidak ada scan" belum tentu berarti alpha.
+Schedule::command('attendance:compute --days=2')
+    ->dailyAt('06:00')
+    ->withoutOverlapping()
+    ->runInBackground();

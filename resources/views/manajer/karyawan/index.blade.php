@@ -51,6 +51,11 @@
                             @unless ($e->tracks_attendance)
                                 <span class="ml-1"><x-status-badge warna="indigo" label="Tidak diabsen" /></span>
                             @endunless
+                            @if (blank($e->phone))
+                                <span class="ml-1" title="Kode lembur & pemberitahuan tidak akan sampai">
+                                    <x-status-badge warna="amber" label="Tanpa WA" />
+                                </span>
+                            @endif
                         </td>
                         <td class="text-right">
                             <a href="{{ route('manajer.karyawan.show', $e) }}" class="font-medium text-slate-700 hover:underline">Detail</a>

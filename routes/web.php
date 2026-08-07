@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Auth\LoginController;
+use App\Http\Controllers\Auth\PasswordController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\Karyawan\EmployeePortalController;
 use App\Http\Controllers\Karyawan\EmployeeRequestController;
@@ -15,6 +16,7 @@ use App\Http\Controllers\ReportController;
 use App\Http\Controllers\ScanActivityController;
 use App\Http\Middleware\EnsureUserIsActive;
 use App\Http\Middleware\EnsureUserIsEmployee;
+use App\Http\Middleware\EnsurePasswordIsChanged;
 use App\Http\Middleware\EnsureUserIsManagement;
 use Illuminate\Support\Facades\Route;
 
@@ -41,8 +43,14 @@ Route::middleware('guest')->group(function () {
     Route::post('masuk', [LoginController::class, 'store'])->name('login.store');
 });
 
-Route::middleware(['auth', EnsureUserIsActive::class])->group(function () {
+Route::middleware(['auth', EnsureUserIsActive::class, EnsurePasswordIsChanged::class])->group(function () {
     Route::post('keluar', [LoginController::class, 'destroy'])->name('logout');
+
+    // Ganti kata sandi. Rutenya di dalam gerbang paksa-ganti, tapi middleware
+    // itu sendiri mengizinkannya lewat — kalau tidak, penggunanya terkunci
+    // dalam lingkaran pengalihan.
+    Route::get('sandi', [PasswordController::class, 'edit'])->name('sandi.edit');
+    Route::post('sandi', [PasswordController::class, 'update'])->name('sandi.update');
 
     // Pintu masuk bersama: manager diarahkan ke dashboard, karyawan ke portal.
     Route::get('beranda', function () {
@@ -98,6 +106,7 @@ Route::middleware(['auth', EnsureUserIsActive::class])->group(function () {
             Route::post('karyawan/{employee}/absensi', [EmployeeController::class, 'updateTracking'])->name('karyawan.absensi');
             Route::post('karyawan/{employee}/sandi', [EmployeeController::class, 'resetPassword'])->name('karyawan.sandi');
             Route::post('karyawan/{employee}/username', [EmployeeController::class, 'updateUsername'])->name('karyawan.username');
+            Route::post('karyawan/{employee}/telepon', [EmployeeController::class, 'updatePhone'])->name('karyawan.telepon');
 
             // Aturan & setelan yang bisa diubah manager
             Route::get('aturan', [RuleController::class, 'index'])->name('aturan.index');

@@ -82,6 +82,40 @@
         @endif
     </div>
 
+    {{-- Kontak --}}
+    <div class="kartu">
+        <div class="kartu-judul">
+            <div>
+                <h2 class="font-semibold">WhatsApp</h2>
+                <p class="text-xs text-slate-500">
+                    Tujuan kode lembur dan pemberitahuan pengajuan.
+                </p>
+            </div>
+            @if (blank($employee->phone))
+                <x-status-badge warna="amber" label="Belum diisi" />
+            @endif
+        </div>
+
+        <form method="POST" action="{{ route('manajer.karyawan.telepon', $employee) }}"
+              class="kartu-isi flex flex-col gap-2 sm:flex-row sm:items-end">
+            @csrf
+            <div class="flex-1">
+                <label class="label">Nomor WhatsApp</label>
+                <input type="tel" name="phone" value="{{ \App\Support\PhoneNumber::forDisplay($employee->phone) }}"
+                       placeholder="0812-3456-7890" inputmode="tel" class="kolom mt-1">
+            </div>
+            <button class="btn-netral">Simpan</button>
+        </form>
+
+        @if (blank($employee->phone))
+            <div class="border-t border-slate-100 bg-amber-50 px-4 py-3 text-xs text-amber-900 sm:px-5">
+                Tanpa nomor, {{ $employee->name }} tidak akan menerima kode lembur maupun
+                kabar pengajuan lewat WhatsApp — dan kegagalannya tidak menimbulkan
+                peringatan apa pun selain catatan di riwayat pengiriman.
+            </div>
+        @endif
+    </div>
+
     {{-- Data --}}
     <div class="kartu">
         <div class="kartu-judul"><h2 class="font-semibold">Data</h2></div>
