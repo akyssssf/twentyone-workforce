@@ -16,6 +16,24 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Ambang pergantian hari di dashboard
+    |--------------------------------------------------------------------------
+    |
+    | "Hari Ini" di dashboard & beranda karyawan tidak pindah tanggal persis
+    | tengah malam — baru pindah begitu lewat jam ini. Shift malam berakhir
+    | 01:00 dan jendela absensinya baru benar-benar tutup 05:00 (lihat
+    | window.after_shift_hours), jadi sebelum jam segini "hari ini" yang
+    | sebenarnya masih relevan justru tanggal kemarin. Lihat App\Support\OperationalDate.
+    |
+    | Sengaja disamakan dengan jam cron attendance:compute --days=2 di
+    | routes/console.php, bukan angka baru — satu konvensi, bukan dua.
+    |
+    */
+
+    'dashboard_cutover_hour' => (int) env('ATTENDANCE_DASHBOARD_CUTOVER_HOUR', 6),
+
+    /*
+    |--------------------------------------------------------------------------
     | Tanggal mulai pelacakan
     |--------------------------------------------------------------------------
     |

@@ -10,6 +10,7 @@ use App\Models\Request as PengajuanModel;
 use App\Models\RosterAssignment;
 use App\Models\Shift;
 use App\Support\DateInput;
+use App\Support\OperationalDate;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\View\View;
@@ -141,7 +142,11 @@ class DashboardController extends Controller
         // Tanggal ngawur di URL cukup dikembalikan ke hari ini, bukan bikin
         // halaman error. DateInput menolak juga tanggal yang "hampir sah"
         // seperti 2026-02-31, yang kalau lolos akan bergeser diam-diam.
+        //
+        // Default-nya (tanpa parameter) BUKAN Carbon::today() — lihat
+        // OperationalDate untuk alasannya: sebelum jam cutover, "hari ini"
+        // yang relevan masih tanggal kemarin karena shift malam belum kelar.
         return DateInput::parse($request->query('tanggal'), $timezone)
-            ?? Carbon::today($timezone);
+            ?? OperationalDate::today($timezone);
     }
 }

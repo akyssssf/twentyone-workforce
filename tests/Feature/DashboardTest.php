@@ -257,6 +257,38 @@ class DashboardTest extends TestCase
             ->assertSee(Carbon::today('Asia/Jakarta')->translatedFormat('d F Y'));
     }
 
+    /**
+     * Jam 2 pagi, shift malam kemarin baru saja kelar (pulang 00:30) — kalau
+     * "hari ini" pindah tanggal persis tengah malam, dashboard tanpa
+     * parameter akan menampilkan tanggal baru yang masih kosong sama
+     * sekali, padahal yang relevan justru shift malam yang baru pulang itu.
+     */
+    public function test_dashboard_tanpa_parameter_masih_tampilkan_kemarin_sebelum_cutover(): void
+    {
+        $this->siapkanData();
+
+        Carbon::setTestNow(Carbon::parse('2026-08-07 02:00:00', 'Asia/Jakarta'));
+
+        $this->actingAs(User::factory()->create())
+            ->get('/dashboard')
+            ->assertOk()
+            ->assertSee('06 Agustus 2026')
+            ->assertSee('Budi')
+            ->assertSee('Sari');
+    }
+
+    public function test_dashboard_tanpa_parameter_pindah_tanggal_setelah_cutover(): void
+    {
+        $this->siapkanData();
+
+        Carbon::setTestNow(Carbon::parse('2026-08-07 06:00:00', 'Asia/Jakarta'));
+
+        $this->actingAs(User::factory()->create())
+            ->get('/dashboard')
+            ->assertOk()
+            ->assertSee('07 Agustus 2026');
+    }
+
     public function test_dashboard_memberi_petunjuk_kalau_rekap_belum_dihitung(): void
     {
         Employee::factory()->create(['default_shift_id' => Shift::factory()->create()->id]);

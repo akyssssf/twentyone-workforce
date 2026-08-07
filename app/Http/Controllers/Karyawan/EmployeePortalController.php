@@ -9,6 +9,7 @@ use App\Models\Payslip;
 use App\Models\Request as PengajuanModel;
 use App\Models\Roster;
 use App\Models\RosterAssignment;
+use App\Support\OperationalDate;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 
@@ -24,7 +25,11 @@ class EmployeePortalController extends Controller
     public function index(Request $request)
     {
         $employee = $request->user()->employee;
-        $hariIni = Carbon::today(config('attendance.timezone'));
+
+        // Bukan Carbon::today() — sebelum jam cutover (default 06:00),
+        // "hari ini" yang relevan masih tanggal kemarin karena shift malam
+        // belum benar-benar kelar. Lihat App\Support\OperationalDate.
+        $hariIni = OperationalDate::today();
 
         return view('karyawan.beranda', [
             'employee' => $employee,
