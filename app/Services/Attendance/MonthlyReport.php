@@ -30,7 +30,24 @@ class MonthlyReport
 
     public function periodeAwal(): Carbon
     {
-        return Carbon::create($this->year, $this->month, 1, 0, 0, 0, config('attendance.timezone'));
+        $awalBulan = Carbon::create($this->year, $this->month, 1, 0, 0, 0, config('attendance.timezone'));
+
+        $mulaiPelacakan = config('attendance.tracking_starts_on');
+
+        if ($mulaiPelacakan === null) {
+            return $awalBulan;
+        }
+
+        // Cuma relevan kalau tanggal mulai jatuh di bulan yang sama dengan
+        // yang diminta — periode dimulai dari situ, bukan tanggal 1, supaya
+        // bulan pertama sistem ini jalan tidak dipenuhi alpha dari sebelum
+        // mesin terpasang. Bulan-bulan lain (sebelum atau sesudah) tidak
+        // disentuh: bulan sebelumnya memang tidak akan punya data sama
+        // sekali (AttendanceComputer melewatinya), jadi tanggal 1 biasa
+        // sudah cukup — whereBetween otomatis kosong.
+        $mulai = Carbon::parse($mulaiPelacakan, config('attendance.timezone'))->startOfDay();
+
+        return $mulai->isSameMonth($awalBulan) ? $mulai : $awalBulan;
     }
 
     public function periodeAkhir(): Carbon

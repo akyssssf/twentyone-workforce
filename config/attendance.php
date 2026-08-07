@@ -16,6 +16,24 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Tanggal mulai pelacakan
+    |--------------------------------------------------------------------------
+    |
+    | Tanggal sebelum ini tidak pernah dihitung sama sekali — bukan cuma
+    | disembunyikan, tapi computeDate() melewatinya begitu saja, persis
+    | seperti penjagaan joined_at per karyawan tapi berlaku untuk seluruh
+    | perusahaan. Dipakai juga sebagai batas bawah periode di rekap bulanan.
+    |
+    | Alasannya: mesin baru terpasang beberapa hari lalu, dan sebelum tanggal
+    | ini "tidak ada scan" bukan berarti alpha — ya iyalah, mesinnya memang
+    | belum ada. Null berarti tidak ada batas.
+    |
+    */
+
+    'tracking_starts_on' => env('ATTENDANCE_TRACKING_STARTS_ON'),
+
+    /*
+    |--------------------------------------------------------------------------
     | Aturan keterlambatan
     |--------------------------------------------------------------------------
     |
@@ -87,6 +105,49 @@ return [
     */
 
     'check_in_out_strategy' => env('ATTENDANCE_INOUT_STRATEGY', 'earliest_latest'),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Jendela tangkap jam pulang
+    |--------------------------------------------------------------------------
+    |
+    | Dipakai strategi earliest_latest saja. Scan terakhir di hari itu baru
+    | dianggap jam pulang kalau jaraknya ke scheduled_out tidak lebih dari
+    | sekian menit ini. Tanpa batas ini, scan nyasar di tengah shift (orang
+    | lewat depan kamera, ketiban wajah orang lain, dsb) bisa terbaca sebagai
+    | scan pulang paling akhir dan menuduh pulang cepat berjam-jam padahal
+    | orangnya masih kerja. Kalau tidak ada scan dalam jendela ini,
+    | check_out_at dibiarkan null — sama seperti lupa fingerprint, tidak kena
+    | potongan pulang cepat.
+    |
+    | Scan setelah scheduled_out tetap diterima tanpa batas atas (dibatasi
+    | window_after_hours milik shift), dan tidak otomatis jadi lembur —
+    | lembur cuma dari approval (BR-14).
+    |
+    */
+
+    'checkout_capture_minutes' => (int) env('ATTENDANCE_CHECKOUT_CAPTURE_MINUTES', 60),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Tebak shift dari jam scan (tanpa roster)
+    |--------------------------------------------------------------------------
+    |
+    | Dipakai kalau karyawan belum punya RosterAssignment untuk tanggal itu.
+    | Cuma aktif kalau persis ada 2 shift aktif di master data.
+    |
+    | detection_start_hour : mulai cari scan pertama dari jam berapa. Sebelum
+    |                        jam ini diabaikan supaya scan pulang shift malam
+    |                        kemarin (lewat tengah malam) tidak ikut kehitung.
+    | boundary_hour        : scan sebelum jam ini = shift dengan start_time
+    |                        paling pagi. Jam ini ke atas = shift paling malam.
+    |
+    */
+
+    'shift_guess' => [
+        'detection_start_hour' => (int) env('ATTENDANCE_SHIFT_GUESS_START_HOUR', 6),
+        'boundary_hour' => (int) env('ATTENDANCE_SHIFT_GUESS_BOUNDARY_HOUR', 12),
+    ],
 
     /*
     |--------------------------------------------------------------------------

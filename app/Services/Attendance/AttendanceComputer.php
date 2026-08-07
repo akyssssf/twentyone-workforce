@@ -81,6 +81,19 @@ class AttendanceComputer
         $timezone = config('attendance.timezone', 'Asia/Jakarta');
         $date = $workDate->copy()->setTimezone($timezone)->startOfDay();
 
+        // Batas bawah perusahaan, bukan per karyawan. Sebelum tanggal ini
+        // mesin belum terpasang, jadi "tidak ada scan" bukan alpha — tidak
+        // pernah ada yang bisa scan. pruneStaleAttendances dipanggil di sini
+        // (bukan cuma return kosong) supaya rekap lama dari sebelum batas ini
+        // ikut tersapu kalau masih ada sisa dari sebelum batas ini dipasang.
+        $mulaiPelacakan = config('attendance.tracking_starts_on');
+
+        if ($mulaiPelacakan !== null && $date->lessThan(Carbon::parse($mulaiPelacakan, $timezone)->startOfDay())) {
+            $this->pruneStaleAttendances($employee, $date, collect());
+
+            return collect();
+        }
+
         // Admin punya akun dan tetap pegawai aktif, tapi tidak menempel jari
         // di mesin. Tanpa penjagaan ini mereka jadi Alpha setiap hari.
         if (! $employee->is_active || ! $employee->tracks_attendance) {
@@ -92,10 +105,34 @@ class AttendanceComputer
             return collect();
         }
 
-        return $this->assignmentsFor($employee, $date)
+        $hasil = $this->assignmentsFor($employee, $date)
             ->map(fn (?RosterAssignment $assignment) => $this->computeAssignment($employee, $date, $assignment))
             ->filter()
             ->values();
+
+        $this->pruneStaleAttendances($employee, $date, $hasil);
+
+        return $hasil;
+    }
+
+    /**
+     * Buang baris attendances lama milik employee+tanggal ini yang tidak ikut
+     * kebuat lagi di hitungan barusan.
+     *
+     * Perlu karena shift_key ikut jadi bagian primary key (double shift boleh
+     * dalam satu hari), dan guessShift() bisa pindah pilihan shift dari satu
+     * hitungan ke hitungan berikutnya begitu scan baru masuk lewat sync yang
+     * menyusul webhook. Tanpa ini, baris hasil tebakan lama jadi anak hilang:
+     * tidak pernah ketiban updateOrCreate lagi, tapi tetap nongol di laporan
+     * jadi duplikat orang yang sama untuk tanggal yang sama.
+     */
+    protected function pruneStaleAttendances(Employee $employee, Carbon $date, Collection $fresh): void
+    {
+        Attendance::query()
+            ->where('employee_id', $employee->id)
+            ->where('work_date', $date)
+            ->whereNotIn('id', $fresh->pluck('id'))
+            ->delete();
     }
 
     /**
@@ -122,7 +159,7 @@ class AttendanceComputer
     protected function computeAssignment(Employee $employee, Carbon $date, ?RosterAssignment $assignment): ?Attendance
     {
         /** @var ?Shift $shift */
-        $shift = $assignment?->shift ?? $employee->defaultShift;
+        $shift = $assignment?->shift ?? $this->guessShift($employee, $date);
 
         // Tidak punya shift sama sekali: bukan urusan hari ini, dan itu berbeda
         // dari alpha. Alpha berarti seharusnya masuk tapi tidak ada scan.
@@ -141,7 +178,7 @@ class AttendanceComputer
             return null;
         }
 
-        [$checkIn, $checkOut, $firstLog, $lastLog] = $this->resolveCheckInOut($logs);
+        [$checkIn, $checkOut, $firstLog, $lastLog] = $this->resolveCheckInOut($logs, $window->scheduledOut);
 
         $libur = $this->isNonWorkingDay($employee, $date, $assignment);
 
@@ -220,6 +257,58 @@ class AttendanceComputer
     }
 
     /**
+     * Tanpa roster, tebak shift dari jam scan pertama hari itu, bukan
+     * langsung percaya default_shift_id.
+     *
+     * default_shift_id gampang basi: kafe cuma buka dua shift dan orang
+     * kadang dapat giliran beda dari biasanya, roster belum diisi per hari.
+     * Kalau tetap dipaksa ke default lama, orang yang biasanya shift pagi
+     * tapi hari ini masuk shift malam akan terbaca telat berjam-jam padahal
+     * dia datang tepat waktu untuk shift yang dia jalani hari ini.
+     *
+     * Cuma jalan kalau persis ada 2 shift aktif (kondisi kafe ini). Kalau
+     * jumlahnya lain, terlalu berisiko menebak — mundur ke default_shift_id.
+     */
+    protected function guessShift(Employee $employee, Carbon $date): ?Shift
+    {
+        $default = $employee->defaultShift;
+
+        $aktif = Shift::active()->orderBy('start_time')->get();
+
+        if ($aktif->count() !== 2) {
+            return $default;
+        }
+
+        $timezone = config('attendance.timezone', 'Asia/Jakarta');
+
+        // Mulai pencarian beberapa jam setelah tengah malam, bukan dari
+        // 00:00, supaya scan pulang shift malam kemarin (bisa jatuh sampai
+        // sekitar jam 01:00-05:00 karena window_after_hours) tidak salah
+        // kebaca sebagai scan masuk hari ini.
+        $mulaiJam = (int) config('attendance.shift_guess.detection_start_hour', 6);
+        $batasJam = (int) config('attendance.shift_guess.boundary_hour', 12);
+
+        $scanPertama = AttendanceLog::query()
+            ->where('employee_id', $employee->id)
+            ->whereBetween('scanned_at', [
+                $date->copy()->setTimezone($timezone)->startOfDay()->addHours($mulaiJam),
+                $date->copy()->setTimezone($timezone)->endOfDay(),
+            ])
+            ->orderBy('scanned_at')
+            ->first();
+
+        // Tidak ada scan sama sekali: tidak ada dasar buat menebak, kembali
+        // ke default supaya tetap bisa dilaporkan alpha atas shift yang benar.
+        if ($scanPertama === null) {
+            return $default;
+        }
+
+        $jamScan = $scanPertama->scanned_at->copy()->setTimezone($timezone)->hour;
+
+        return $jamScan < $batasJam ? $aktif->first() : $aktif->last();
+    }
+
+    /**
      * Scan milik karyawan ini di dalam jendela kerja.
      *
      * Dijodohkan lewat employee_id — hasil pemetaan employee_devices yang
@@ -242,7 +331,7 @@ class AttendanceComputer
      * @param  Collection<int, AttendanceLog>  $logs
      * @return array{0: ?Carbon, 1: ?Carbon, 2: ?AttendanceLog, 3: ?AttendanceLog}
      */
-    protected function resolveCheckInOut(Collection $logs): array
+    protected function resolveCheckInOut(Collection $logs, Carbon $scheduledOut): array
     {
         if ($logs->isEmpty()) {
             return [null, null, null, null];
@@ -261,7 +350,17 @@ class AttendanceComputer
         }
 
         $first = $logs->first();
-        $last = $logs->count() > 1 ? $logs->last() : null;
+
+        // Scan pulang cuma diambil dari jendela dekat scheduled_out. Scan
+        // nyasar di tengah shift jangan sampai terbaca sebagai jam pulang
+        // hanya karena dia yang paling akhir hari itu.
+        $captureFrom = $scheduledOut->copy()->subMinutes(
+            (int) config('attendance.checkout_capture_minutes', 60)
+        );
+
+        $last = $logs->count() > 1
+            ? $logs->last(fn ($log) => $log->scanned_at->greaterThanOrEqualTo($captureFrom))
+            : null;
 
         return [$first->scanned_at, $last?->scanned_at, $first, $last];
     }

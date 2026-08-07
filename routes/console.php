@@ -45,6 +45,18 @@ Schedule::command('attendance:sync --days=2')
     ->withoutOverlapping()
     ->runInBackground();
 
+// Tambalan near-realtime selama webhook belum terdaftar ke aplikasi ini
+// (masih mengarah ke webhook.site / APP_URL masih localhost).
+//
+// Bukan pengganti webhook — cuma menutup jarak sampai aplikasi ini punya
+// alamat publik dan webhook Fingerspot didaftarkan ke sana. Setelah itu,
+// entri ini boleh dihapus atau dijarangkan lagi, cukup mengandalkan sinkron
+// harian jam 02:00 di atas sebagai penambal biasa.
+Schedule::command('attendance:sync --days=1')
+    ->everyFiveMinutes()
+    ->withoutOverlapping()
+    ->runInBackground();
+
 // Salinan database tiap hari jam 03:00.
 //
 // Jam 03:00 dipilih karena shift malam sudah bubar (pulang 01:00) dan sinkron
