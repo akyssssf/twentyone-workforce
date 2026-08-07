@@ -68,6 +68,21 @@ class RequestApprovalController extends Controller
         return back()->with('status', "Pengajuan {$request->code} disetujui.");
     }
 
+    /**
+     * Admin menandai pengganti sudah setuju setelah dihubungi langsung
+     * (telepon/WA pribadi), tanpa penggantinya login dan klik apa pun.
+     */
+    public function confirmSubstitute(PengajuanModel $request, Request $httpRequest)
+    {
+        try {
+            $this->service->confirmSubstituteByAdmin($request, $httpRequest->user(), $httpRequest->input('note'));
+        } catch (RuntimeException $e) {
+            return back()->withErrors(['pengajuan' => $e->getMessage()]);
+        }
+
+        return back()->with('status', "Pengganti untuk {$request->code} ditandai sudah setuju.");
+    }
+
     public function reject(PengajuanModel $request, Request $httpRequest)
     {
         // Alasan penolakan wajib. Penolakan tanpa penjelasan adalah cara

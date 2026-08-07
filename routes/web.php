@@ -80,6 +80,7 @@ Route::middleware(['auth', EnsureUserIsActive::class, EnsurePasswordIsChanged::c
             // Pengajuan
             Route::get('pengajuan', [RequestApprovalController::class, 'index'])->name('pengajuan.index');
             Route::get('pengajuan/{request}', [RequestApprovalController::class, 'show'])->name('pengajuan.show');
+            Route::post('pengajuan/{request}/pengganti-setuju', [RequestApprovalController::class, 'confirmSubstitute'])->name('pengajuan.confirm-substitute');
             Route::post('pengajuan/{request}/setujui', [RequestApprovalController::class, 'approve'])->name('pengajuan.approve');
             Route::post('pengajuan/{request}/tolak', [RequestApprovalController::class, 'reject'])->name('pengajuan.reject');
 

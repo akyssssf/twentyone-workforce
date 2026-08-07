@@ -74,13 +74,21 @@ class RequestService
     /** Beri tahu pengganti bahwa dia sedang ditunggu jawabannya. */
     protected function askSubstitute(Request $request): void
     {
+        $ringkas = "{$request->employee->name} mengajukan {$request->type->shortLabel()} ({$request->code}) dan menunjuk {$request->substitute?->name} sebagai pengganti.";
+
+        // Admin selalu diberi tahu, terlepas dari apakah penggantinya punya
+        // akun sendiri — banyak yang lebih gampang dihubungi langsung lewat
+        // telepon/WA pribadi daripada disuruh buka aplikasi. Admin bisa
+        // tandai bersedia secara manual dari halaman pengajuan ini kalau
+        // sudah dapat kepastian lisan, tidak perlu menunggu penggantinya
+        // login sendiri.
+        $this->announce($request, 'Menunggu konfirmasi pengganti');
+
         $user = $request->substitute?->user;
 
         if ($user === null) {
             return;
         }
-
-        $ringkas = "{$request->employee->name} mengajukan {$request->type->shortLabel()} ({$request->code}) dan menunjuk Anda sebagai pengganti.";
 
         $this->notifier->send(
             $user,
@@ -301,6 +309,52 @@ class RequestService
     }
 
     // --------------------------------------------------------------- decide
+
+    /**
+     * Pengganti menerima atau menolak permintaan.
+     *
+     * Berlaku untuk SEMUA jenis pengajuan, bukan cuma tukar shift. Selama
+     * pengganti belum menjawab, manajer bahkan tidak melihat pengajuannya —
+     * tidak ada gunanya memutuskan cuti yang belum jelas siapa penutup
+     * shift-nya.
+     */
+    /**
+     * Admin menandai pengganti sudah setuju, TANPA pengganti itu sendiri
+     * login dan klik apa pun di aplikasi.
+     *
+     * Alasan ini ada: banyak pengganti yang lebih mudah dihubungi langsung
+     * lewat telepon/WhatsApp pribadi daripada disuruh buka aplikasi cuma
+     * untuk satu kali klik "bersedia". Admin yang sudah dapat kepastian
+     * lisan tinggal catat di sini — efeknya identik dengan pengganti
+     * menjawab "bersedia" sendiri (status maju ke PendingManager), cuma
+     * jejaknya tercatat sebagai konfirmasi admin, bukan konfirmasi mandiri,
+     * supaya kalau nanti ditanya "kok si B tidak pernah klik apa-apa"
+     * jawabannya tetap tercatat jelas di audit log.
+     */
+    public function confirmSubstituteByAdmin(Request $request, User $admin, ?string $note = null): Request
+    {
+        if ($request->status !== RequestStatus::PendingPeer) {
+            throw new RuntimeException('Pengajuan ini tidak sedang menunggu jawaban pengganti.');
+        }
+
+        return DB::transaction(function () use ($request, $admin, $note) {
+            $catatan = $note !== null && trim($note) !== ''
+                ? $note
+                : "Dikonfirmasi manual oleh admin ({$admin->name}), bukan oleh penggantinya sendiri.";
+
+            $request->update([
+                'substitute_accepted_at' => now(),
+                'substitute_note' => $catatan,
+                'status' => RequestStatus::PendingManager,
+            ]);
+
+            $request->swap?->update(['partner_accepted_at' => now(), 'partner_note' => $catatan]);
+
+            AuditLogger::record('request.substitute_confirmed_by_admin', $request, [], ['admin' => $admin->name]);
+
+            return $request;
+        });
+    }
 
     /**
      * Pengganti menerima atau menolak permintaan.
