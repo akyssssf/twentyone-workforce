@@ -162,10 +162,14 @@ class RequestService
         $pengganti = $this->assertSubstitute($employee, $data['substitute_employee_id'] ?? null);
 
         return DB::transaction(function () use ($employee, $data, $workDate, $minutes, $initiatedBy, $pengganti) {
-            // Lembur yang ditugaskan manajer tetap butuh pengganti — orang yang
-            // tinggal lebih lama malam ini biasanya perlu digantikan besok.
+            // Lembur yang manajer sendiri yang menunjuk langsung SAH sejak
+            // dibuat — tidak menunggu klik "setujui" terpisah untuk
+            // keputusan yang baru saja diambilnya sendiri. Jalur
+            // employee-initiated tetap dua tahap (pengganti dulu, baru
+            // manajer LAIN yang menyetujui), karena di situ memang perlu
+            // ada yang mengecek dari luar.
             $status = $initiatedBy === 'manager'
-                ? RequestStatus::PendingManager
+                ? RequestStatus::Approved
                 : RequestStatus::PendingPeer;
 
             $request = $this->createRequest($employee, RequestType::Overtime, $status, $pengganti);
@@ -173,7 +177,12 @@ class RequestService
             // Manajer yang menunjuk langsung berarti pengganti sudah dibicarakan
             // di lapangan; jangan menahan penugasan mendesak menunggu balasan.
             if ($initiatedBy === 'manager') {
-                $request->update(['substitute_accepted_at' => now()]);
+                $request->update([
+                    'substitute_accepted_at' => now(),
+                    'decided_by' => auth()->id(),
+                    'decided_at' => now(),
+                    'decision_note' => 'Ditunjuk langsung oleh manajer.',
+                ]);
             }
 
             $request->overtime()->create([
@@ -197,9 +206,19 @@ class RequestService
                 'secret_code' => OvertimeRequest::generateCode(),
             ]);
 
-            $initiatedBy === 'manager'
-                ? $this->announce($request, 'Penugasan lembur menunggu persetujuan')
-                : $this->askSubstitute($request);
+            if ($initiatedBy === 'manager') {
+                // Efek yang biasanya baru terjadi saat approve() dipanggil
+                // (kirim kode, buat OvertimeRecord) langsung dipicu di sini,
+                // karena request ini memang sudah berstatus Approved.
+                $this->applyOvertime($request->fresh());
+
+                AuditLogger::record('request.approved', $request, [], [
+                    'type' => $request->type->value,
+                    'employee' => $request->employee->name,
+                ]);
+            } else {
+                $this->askSubstitute($request);
+            }
 
             return $request;
         });

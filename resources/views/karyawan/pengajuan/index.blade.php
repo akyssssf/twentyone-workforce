@@ -24,7 +24,26 @@
     </div>
 @endif
 
-<div class="overflow-hidden kartu">
+{{-- Sama seperti Absensi Saya: di ponsel jadi kartu, tabel penuh dari
+     layar sedang ke atas. --}}
+<div class="space-y-2 sm:hidden">
+    @forelse ($requests as $r)
+        <a href="{{ route('karyawan.pengajuan.show', $r) }}" class="kartu block p-3">
+            <div class="flex items-center justify-between gap-2">
+                <span class="font-medium">{{ $r->type->shortLabel() }}</span>
+                <x-status-badge :warna="$r->status->color()" :label="$r->status->label()" />
+            </div>
+            <div class="mt-1 flex items-center justify-between gap-2 text-xs text-slate-500">
+                <span class="font-mono">{{ $r->code }}</span>
+                <span>{{ $r->submitted_at?->translatedFormat('d M Y') }}</span>
+            </div>
+        </a>
+    @empty
+        <x-kosong pesan="Belum ada pengajuan." />
+    @endforelse
+</div>
+
+<div class="hidden overflow-hidden kartu sm:block">
     <div class="tabel-bungkus">
     <table class="tabel">
         <thead>

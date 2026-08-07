@@ -221,22 +221,10 @@ class MonthlyReport
         }
 
         foreach ($baris as $b) {
-            $catatan = ["H{$b['hadir']}"];
-
-            if ($b['telat'] > 0) {
-                $catatan[] = "T{$b['telat']}";
-            }
-            if ($b['alpha'] > 0) {
-                $catatan[] = "A{$b['alpha']}";
-            }
-            if ($b['libur'] > 0) {
-                $catatan[] = "L{$b['libur']}";
-            }
-
-            $teks .= "• {$b['nama']} — ".implode(' ', $catatan)."\n";
+            $teks .= "*{$b['nama']}*\n";
+            $teks .= "Hadir {$b['hadir']} Telat {$b['telat']} Libur {$b['libur']} Alpha {$b['alpha']}\n\n";
         }
 
-        $teks .= "\n_H=Hadir · T=Telat · A=Alpha · L=Libur_\n\n";
         $teks .= "*Total:* {$total['karyawan']} karyawan · {$total['hadir']} hadir · {$total['telat']} telat · {$total['alpha']} alpha";
 
         if ($total['total_lembur_menit'] > 0) {

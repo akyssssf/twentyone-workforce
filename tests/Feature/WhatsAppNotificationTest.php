@@ -71,15 +71,15 @@ class WhatsAppNotificationTest extends TestCase
 
         $service = app(RequestService::class);
 
-        $pengajuan = $service->submitOvertime($this->karyawan, [
+        // Ditunjuk manajer sudah otomatis Approved sejak dibuat — tidak ada
+        // approve() terpisah lagi untuk jalur ini.
+        $service->submitOvertime($this->karyawan, [
             'work_date' => today()->toDateString(),
             'planned_start' => '01:00',
             'planned_end' => '03:00',
             'reason' => 'Persiapan katering pesanan besar',
             'substitute_employee_id' => $this->pengganti->id,
         ], 'manager');
-
-        $service->approve($pengajuan->fresh(), $this->admin, 'Disetujui');
     }
 
     public function test_kode_lembur_dikirim_lewat_antrean(): void

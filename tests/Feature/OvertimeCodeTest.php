@@ -70,15 +70,15 @@ class OvertimeCodeTest extends TestCase
 
         $service = app(RequestService::class);
 
-        $pengajuan = $service->submitOvertime($untuk ?? $this->rifqi, [
+        // Ditunjuk manajer sudah otomatis Approved sejak dibuat — tidak ada
+        // approve() terpisah lagi untuk jalur ini.
+        $service->submitOvertime($untuk ?? $this->rifqi, [
             'work_date' => today()->toDateString(),
             'planned_start' => '01:00',
             'planned_end' => '03:00',
             'reason' => 'Persiapan katering pesanan besar',
             'substitute_employee_id' => $this->rekan->id,
         ], 'manager');
-
-        $service->approve($pengajuan->fresh(), $this->admin, 'Disetujui');
 
         return OvertimeRecord::where('employee_id', ($untuk ?? $this->rifqi)->id)->latest('id')->first();
     }
@@ -115,6 +115,19 @@ class OvertimeCodeTest extends TestCase
         $hasil = app(OvertimeCodeService::class)->activate($this->rifqi, ' ' . strtolower($kode) . ' ');
 
         $this->assertTrue($hasil->isActivated());
+    }
+
+    /**
+     * Lembur yang manajer sendiri yang menunjuk sudah otomatis Approved
+     * sejak dibuat — tidak perlu klik "setujui" terpisah untuk keputusan
+     * yang baru saja diambil manajer itu sendiri.
+     */
+    public function test_lembur_tunjukan_manajer_langsung_approved(): void
+    {
+        $record = $this->tugaskan();
+
+        $this->assertSame('approved', $record->overtimeRequest->request->status->value);
+        $this->assertNotNull($record->overtimeRequest->request->decided_at);
     }
 
     public function test_kode_orang_lain_ditolak(): void

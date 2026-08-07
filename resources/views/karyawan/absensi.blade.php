@@ -23,7 +23,42 @@
     <x-kartu label="Lembur" :nilai="round($ringkasan['lembur_menit']/60, 1).' j'" warna="text-indigo-600" />
 </div>
 
-<div class="overflow-hidden kartu">
+{{-- Di ponsel, 7 kolom dipaksa muat jadi tabel cuma bikin geser ke samping
+     tanpa petunjuk kalau bisa digeser — orangnya cuma lihat kolom
+     "Pulang" kepotong dan mengira datanya hilang. Jadi di layar sempit
+     ganti jadi kartu satu per hari (semua info tersusun vertikal, tidak
+     ada yang kepotong); tabel penuh baru muncul dari layar sedang ke atas
+     tempat 7 kolom memang muat wajar. --}}
+<div class="space-y-2 sm:hidden">
+    @forelse ($attendances as $a)
+        <div class="kartu p-3">
+            <div class="flex items-center justify-between gap-2">
+                <span class="font-medium">{{ $a->work_date->translatedFormat('D, d M') }}</span>
+                <x-status-badge :warna="$a->status->color()" :label="$a->status->label()" />
+            </div>
+            <div class="mt-2 grid grid-cols-2 gap-x-3 gap-y-1.5 text-sm">
+                <div><span class="text-slate-400">Shift</span><br>{{ $a->shift?->name ?? '—' }}</div>
+                <div><span class="text-slate-400">Jadwal</span><br>{{ $a->scheduled_in?->format('H:i') ?? '—' }}</div>
+                <div><span class="text-slate-400">Masuk</span><br>{{ $a->check_in_at?->format('H:i') ?? '—' }}</div>
+                <div><span class="text-slate-400">Pulang</span><br>{{ $a->check_out_at?->format('H:i') ?? '—' }}</div>
+            </div>
+            @if ($a->late_minutes > 0 || $a->has_adjustment)
+                <div class="mt-2 flex items-center gap-2 border-t border-slate-100 pt-2 text-xs">
+                    @if ($a->late_minutes > 0)
+                        <span class="font-medium text-amber-700">Telat {{ $a->late_minutes }} menit</span>
+                    @endif
+                    @if ($a->has_adjustment)
+                        <span class="text-slate-400">dikoreksi</span>
+                    @endif
+                </div>
+            @endif
+        </div>
+    @empty
+        <x-kosong pesan="Belum ada data." />
+    @endforelse
+</div>
+
+<div class="hidden overflow-hidden kartu sm:block">
     <div class="tabel-bungkus">
         <table class="tabel">
             <thead>

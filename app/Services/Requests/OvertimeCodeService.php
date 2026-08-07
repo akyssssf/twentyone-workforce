@@ -58,6 +58,11 @@ class OvertimeCodeService
             throw new RuntimeException('Kode ini bukan untuk Anda.');
         }
 
+        // Lembur yang manajer sendiri yang menunjuk sudah berstatus Approved
+        // sejak dibuat (lihat RequestService::submitOvertime) — jadi baris
+        // ini otomatis lolos tanpa perlu kasus khusus. Yang masih tertahan
+        // di sini cuma jalur employee-initiated (kalau nanti dipakai), yang
+        // memang wajib disetujui manajer lain dulu.
         if ($request->status->value !== 'approved') {
             throw new RuntimeException('Lembur ini belum disetujui manajer, jadi belum bisa diaktifkan.');
         }

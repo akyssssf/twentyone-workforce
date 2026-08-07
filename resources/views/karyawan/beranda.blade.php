@@ -80,7 +80,9 @@
                             <span class="text-sm text-slate-600">
                                 {{ substr($j->shift->start_time, 0, 5) }} – {{ substr($j->shift->end_time, 0, 5) }}
                             </span>
-                            <span class="text-sm text-slate-400">sebagai {{ $j->division?->name }}</span>
+                            @if ($j->division)
+                                <span class="text-sm text-slate-400">sebagai {{ $j->division->name }}</span>
+                            @endif
                         @else
                             <x-status-badge warna="slate" :label="$j->status->label()" />
                         @endif
@@ -90,16 +92,45 @@
                 @endforelse
 
                 @foreach ($absensiHariIni as $a)
-                    <div class="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1.5 rounded-xl bg-slate-50 px-3.5 py-2.5 text-sm">
-                        <span>Masuk <strong class="tabular-nums">{{ $a->check_in_at?->format('H:i') ?? '—' }}</strong></span>
-                        <span>Pulang <strong class="tabular-nums">{{ $a->check_out_at?->format('H:i') ?? '—' }}</strong></span>
-                        @if ($a->late_minutes > 0)
-                            <span class="text-amber-700">Telat {{ $a->late_minutes }} menit</span>
+                    @php
+                        $sudahPulang = (bool) $a->check_out_at;
+                        $sudahMasuk = (bool) $a->check_in_at;
+                        $warnaKartu = $sudahPulang
+                            ? 'border border-emerald-200 bg-emerald-50'
+                            : ($sudahMasuk ? 'border border-amber-200 bg-amber-50' : 'bg-slate-50');
+                    @endphp
+                    <div class="mt-3 rounded-xl {{ $warnaKartu }} px-3.5 py-2.5 text-sm">
+                        <div class="flex flex-wrap items-center gap-x-4 gap-y-1.5">
+                            <span class="inline-flex items-center gap-1">
+                                @if ($sudahMasuk)
+                                    <svg class="h-4 w-4 shrink-0 text-emerald-600" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M16.704 4.153a.75.75 0 01.143 1.052l-8 10.5a.75.75 0 01-1.127.075l-4.5-4.5a.75.75 0 011.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 011.05-.143z" clip-rule="evenodd" /></svg>
+                                @endif
+                                Masuk <strong class="tabular-nums">{{ $a->check_in_at?->format('H:i') ?? '—' }}</strong>
+                            </span>
+                            <span class="inline-flex items-center gap-1">
+                                @if ($sudahPulang)
+                                    <svg class="h-4 w-4 shrink-0 text-emerald-600" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M16.704 4.153a.75.75 0 01.143 1.052l-8 10.5a.75.75 0 01-1.127.075l-4.5-4.5a.75.75 0 011.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 011.05-.143z" clip-rule="evenodd" /></svg>
+                                @endif
+                                Pulang <strong class="tabular-nums">{{ $a->check_out_at?->format('H:i') ?? '—' }}</strong>
+                            </span>
+                            @if ($a->late_minutes > 0)
+                                <span class="text-amber-700">Telat {{ $a->late_minutes }} menit</span>
+                            @endif
+                            @if ($a->overtime_minutes > 0)
+                                <span class="text-indigo-700">Lembur {{ round($a->overtime_minutes / 60, 1) }} jam</span>
+                            @endif
+                            <x-status-badge :warna="$a->status->color()" :label="$a->status->label()" />
+                        </div>
+
+                        {{-- Pengingat pulang: cuma muncul kalau sudah tercatat masuk
+                             tapi belum ada scan pulang sama sekali — supaya tidak
+                             ada yang lupa nempel jari sebelum pulang beneran. --}}
+                        @if ($sudahMasuk && ! $sudahPulang)
+                            <p class="mt-2 flex items-center gap-1.5 border-t border-amber-200 pt-2 text-xs font-medium text-amber-800">
+                                <svg class="h-4 w-4 shrink-0" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 2a6 6 0 00-6 6c0 1.887-.454 3.665-1.257 5.234a.75.75 0 00.515 1.076 32.91 32.91 0 003.256.508 3.5 3.5 0 006.972 0 32.903 32.903 0 003.256-.508.75.75 0 00.515-1.076A11.448 11.448 0 0116 8a6 6 0 00-6-6zM8.05 14.943a33.54 33.54 0 003.9 0 2 2 0 01-3.9 0z" clip-rule="evenodd" /></svg>
+                                Jangan lupa absen pulang sebelum selesai shift.
+                            </p>
                         @endif
-                        @if ($a->overtime_minutes > 0)
-                            <span class="text-indigo-700">Lembur {{ round($a->overtime_minutes / 60, 1) }} jam</span>
-                        @endif
-                        <x-status-badge :warna="$a->status->color()" :label="$a->status->label()" />
                     </div>
                 @endforeach
             </div>
