@@ -242,7 +242,50 @@
 
 {{-- Rekap absensi --}}
 <div class="kartu mt-5 overflow-hidden">
-    <div class="kartu-judul"><h2 class="font-semibold">Absensi Hari Ini</h2></div>
+    <div class="kartu-judul">
+        <h2 class="font-semibold">Absensi Hari Ini</h2>
+        <span class="text-xs text-slate-500">{{ $rekapTabel->count() }} dari {{ $rekap->count() }}</span>
+    </div>
+
+    <form method="GET" class="flex flex-wrap items-center gap-2 border-b border-slate-100 px-4 py-2.5 sm:px-5">
+        <input type="hidden" name="tanggal" value="{{ $tanggal->toDateString() }}">
+
+        <select name="urutan" onchange="this.form.submit()"
+                class="rounded-lg border border-slate-300 px-2.5 py-1.5 text-xs shadow-sm focus:border-slate-900 focus:outline-none focus:ring-1 focus:ring-slate-900">
+            <option value="nama" @selected($filter['urutan'] === 'nama')>Urutkan: Nama</option>
+            <option value="telat" @selected($filter['urutan'] === 'telat')>Urutkan: Paling telat</option>
+            <option value="shift" @selected($filter['urutan'] === 'shift')>Urutkan: Shift</option>
+            <option value="jam_masuk" @selected($filter['urutan'] === 'jam_masuk')>Urutkan: Jam masuk</option>
+            <option value="status" @selected($filter['urutan'] === 'status')>Urutkan: Status</option>
+        </select>
+
+        <select name="shift_id" onchange="this.form.submit()"
+                class="rounded-lg border border-slate-300 px-2.5 py-1.5 text-xs shadow-sm focus:border-slate-900 focus:outline-none focus:ring-1 focus:ring-slate-900">
+            <option value="">Semua shift</option>
+            @foreach ($shifts as $s)
+                <option value="{{ $s->id }}" @selected((string) $filter['shift_id'] === (string) $s->id)>{{ $s->name }}</option>
+            @endforeach
+        </select>
+
+        <select name="kondisi" onchange="this.form.submit()"
+                class="rounded-lg border border-slate-300 px-2.5 py-1.5 text-xs shadow-sm focus:border-slate-900 focus:outline-none focus:ring-1 focus:ring-slate-900">
+            <option value="" @selected($filter['kondisi'] === '')>Semua kondisi</option>
+            <option value="telat" @selected($filter['kondisi'] === 'telat')>Telat saja</option>
+            <option value="pulang_cepat" @selected($filter['kondisi'] === 'pulang_cepat')>Pulang cepat saja</option>
+            <option value="lembur" @selected($filter['kondisi'] === 'lembur')>Lembur saja</option>
+            <option value="hadir" @selected($filter['kondisi'] === 'hadir')>Status: Hadir</option>
+            <option value="alpha" @selected($filter['kondisi'] === 'alpha')>Status: Alpha</option>
+            <option value="izin" @selected($filter['kondisi'] === 'izin')>Status: Izin</option>
+            <option value="sakit" @selected($filter['kondisi'] === 'sakit')>Status: Sakit</option>
+            <option value="cuti" @selected($filter['kondisi'] === 'cuti')>Status: Cuti</option>
+            <option value="libur" @selected($filter['kondisi'] === 'libur')>Status: Libur</option>
+        </select>
+
+        @if ($filter['shift_id'] !== '' || $filter['kondisi'] !== '' || $filter['urutan'] !== 'nama')
+            <a href="{{ route('dashboard', ['tanggal' => $tanggal->toDateString()]) }}"
+               class="text-xs text-slate-500 underline hover:text-slate-900">Reset</a>
+        @endif
+    </form>
 
     <div class="tabel-bungkus">
         <table class="tabel">
@@ -260,7 +303,7 @@
                 </tr>
             </thead>
             <tbody>
-                @forelse ($rekap as $a)
+                @forelse ($rekapTabel as $a)
                     <tr>
                         <td>
                             <div class="flex items-center gap-2.5">
@@ -321,7 +364,11 @@
                         </td>
                     </tr>
                 @empty
-                    <tr><td colspan="9"><x-kosong pesan="Belum ada data absensi untuk tanggal ini." /></td></tr>
+                    <tr><td colspan="9">
+                        <x-kosong :pesan="$rekap->isEmpty()
+                            ? 'Belum ada data absensi untuk tanggal ini.'
+                            : 'Tidak ada yang cocok dengan filter ini.'" />
+                    </td></tr>
                 @endforelse
             </tbody>
         </table>

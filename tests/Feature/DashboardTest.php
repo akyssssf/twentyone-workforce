@@ -211,6 +211,39 @@ class DashboardTest extends TestCase
             ->assertSee('Terlambat');
     }
 
+    public function test_tabel_absensi_bisa_diurutkan_dari_paling_telat(): void
+    {
+        // Budi telat 7 menit (scan 09:07, jadwal 09:00), Sari tepat waktu.
+        $this->siapkanData();
+
+        $html = $this->actingAs(User::factory()->create())
+            ->get('/dashboard?tanggal=2026-08-06&urutan=telat')
+            ->assertOk()
+            ->getContent();
+
+        // Budi (yang telat) harus muncul lebih dulu di HTML daripada Sari.
+        $this->assertLessThan(strpos($html, 'Sari'), strpos($html, 'Budi'));
+    }
+
+    public function test_tabel_absensi_bisa_disaring_per_shift(): void
+    {
+        $this->siapkanData();
+
+        $malam = \App\Models\Shift::where('name', 'Shift 2')->first();
+
+        // Budi TETAP muncul di halaman ini (mis. bagian Aktivitas Scan
+        // mentah, yang tidak ikut kena filter tabel) — jadi yang dijaga di
+        // sini bukan "Budi hilang total", tapi tabel Absensi Hari Ini-nya
+        // yang menyusut jadi cuma 1 baris dari 2.
+        $this->actingAs(User::factory()->create())
+            ->get("/dashboard?tanggal=2026-08-06&shift_id={$malam->id}")
+            ->assertOk()
+            ->assertSee('Sari')
+            // Filter cuma memengaruhi tabel, bukan kartu ringkasan di atas —
+            // itu sebabnya "1 dari 2", bukan "1 dari 1".
+            ->assertSee('1 dari 2');
+    }
+
     public function test_dashboard_menandai_pin_yang_belum_terdaftar(): void
     {
         $this->scan('99', '2026-08-06 10:00:00');

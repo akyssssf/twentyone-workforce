@@ -13,6 +13,7 @@ use App\Support\DateInput;
 use App\Support\OperationalDate;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Collection;
 use Illuminate\View\View;
 
 /**
@@ -52,9 +53,19 @@ class DashboardController extends Controller
             ->get()
             ->groupBy('shift_id');
 
+        $urutan = $request->query('urutan', 'nama');
+        $kondisi = $request->query('kondisi', '');
+        $shiftFilter = $request->query('shift_id', '');
+
         return view('dashboard.index', [
             'tanggal' => $tanggal,
             'rekap' => $rekap,
+            'rekapTabel' => $this->saringDanUrutkan($rekap, $shiftFilter, $kondisi, $urutan),
+            'filter' => [
+                'urutan' => $urutan,
+                'kondisi' => $kondisi,
+                'shift_id' => $shiftFilter,
+            ],
             'scan' => $scan,
             'jadwal' => $jadwal,
             'shifts' => Shift::query()->where('is_active', true)->get(),
@@ -102,6 +113,46 @@ class DashboardController extends Controller
 
             'belumDihitung' => $rekap->isEmpty() && Employee::tracked()->exists(),
         ]);
+    }
+
+    /**
+     * Saring & urutkan khusus untuk tabel "Absensi Hari Ini".
+     *
+     * Sengaja dipisah dari $rekap yang dipakai kartu ringkasan & tren —
+     * kartu "Kehadiran: 15" harus tetap menghitung SEMUA orang hari itu
+     * biarpun tabelnya lagi disaring cuma Shift Malam, kalau tidak angkanya
+     * jadi menyesatkan seolah cuma segitu total karyawan yang masuk.
+     *
+     * @param  Collection<int, Attendance>  $rekap
+     * @return Collection<int, Attendance>
+     */
+    protected function saringDanUrutkan(Collection $rekap, string $shiftFilter, string $kondisi, string $urutan): Collection
+    {
+        $hasil = $rekap
+            ->when($shiftFilter !== '', fn ($q) => $q->where('shift_id', (int) $shiftFilter))
+            ->when($kondisi !== '', fn ($q) => $q->filter(fn (Attendance $a) => match ($kondisi) {
+                'telat' => $a->late_minutes > 0,
+                'pulang_cepat' => $a->early_leave_minutes > 0,
+                'lembur' => $a->overtime_minutes > 0,
+                default => $a->status->value === $kondisi,
+            }));
+
+        $terurut = match ($urutan) {
+            // Yang paling telat duluan — itulah gunanya urut dari telat.
+            'telat' => $hasil->sortByDesc(fn (Attendance $a) => $a->late_minutes),
+            'shift' => $hasil->sortBy([
+                fn ($a, $b) => strcmp((string) $a->shift?->name, (string) $b->shift?->name),
+                fn ($a, $b) => strcmp((string) $a->employee?->name, (string) $b->employee?->name),
+            ]),
+            'jam_masuk' => $hasil->sortBy(fn (Attendance $a) => $a->check_in_at?->timestamp ?? PHP_INT_MAX),
+            'status' => $hasil->sortBy([
+                fn ($a, $b) => strcmp((string) $a->status->value, (string) $b->status->value),
+                fn ($a, $b) => strcmp((string) $a->employee?->name, (string) $b->employee?->name),
+            ]),
+            default => $hasil->sortBy(fn (Attendance $a) => $a->employee?->name),
+        };
+
+        return $terurut->values();
     }
 
     /**
