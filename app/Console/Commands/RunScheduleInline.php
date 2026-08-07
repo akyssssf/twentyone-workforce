@@ -56,6 +56,14 @@ class RunScheduleInline extends Command
         try {
             $now = Carbon::now(config('attendance.timezone', 'Asia/Jakarta'));
 
+            // Penanda kapan cron terakhir benar-benar memanggil command ini.
+            // Bukan buat aplikasi, cuma buat operator cek lewat SSH kalau
+            // curiga cron berhenti jalan: `cat storage/framework/schedule-run-inline.heartbeat`.
+            @file_put_contents(
+                storage_path('framework/schedule-run-inline.heartbeat'),
+                $now->toDateTimeString()
+            );
+
             foreach ($this->tugas as $t) {
                 if (! $this->cocokJadwal($t['cron'], $now)) {
                     continue;
