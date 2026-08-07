@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Manajer;
 use App\Http\Controllers\Controller;
 use App\Models\Division;
 use App\Models\Employee;
+use App\Models\Shift;
 use App\Services\Audit\AuditLogger;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
@@ -12,14 +13,38 @@ use Illuminate\Validation\Rule;
 
 class EmployeeController extends Controller
 {
-    public function index()
+    public function index(Request $request)
     {
+        $cari = trim((string) $request->query('cari', ''));
+        $divisiId = $request->query('divisi');
+        $shiftId = $request->query('shift');
+        $status = $request->query('status');
+
+        $employees = Employee::query()
+            ->with(['divisions', 'defaultShift', 'devices', 'user'])
+            ->when($cari !== '', fn ($q) => $q->where(function ($q) use ($cari) {
+                $q->where('name', 'like', "%{$cari}%")
+                    ->orWhereHas('devices', fn ($q) => $q->where('pin', 'like', "%{$cari}%"));
+            }))
+            ->when($divisiId, fn ($q) => $q->whereHas('divisions', fn ($q) => $q->where('divisions.id', $divisiId)))
+            ->when($shiftId, fn ($q) => $q->where('default_shift_id', $shiftId))
+            ->when($status === 'aktif', fn ($q) => $q->where('is_active', true))
+            ->when($status === 'nonaktif', fn ($q) => $q->where('is_active', false))
+            ->when($status === 'tidak_diabsen', fn ($q) => $q->where('tracks_attendance', false))
+            ->when($status === 'tanpa_wa', fn ($q) => $q->where(fn ($q) => $q->whereNull('phone')->orWhere('phone', '')))
+            ->orderBy('name')
+            ->get();
+
         return view('manajer.karyawan.index', [
-            'employees' => Employee::query()
-                ->with(['divisions', 'defaultShift', 'devices', 'user'])
-                ->orderBy('name')
-                ->get(),
+            'employees' => $employees,
             'divisions' => Division::query()->active()->orderBy('sort_order')->get(),
+            'shifts' => Shift::query()->active()->orderBy('start_time')->get(),
+            'filter' => [
+                'cari' => $cari,
+                'divisi' => $divisiId,
+                'shift' => $shiftId,
+                'status' => $status,
+            ],
         ]);
     }
 

@@ -4,7 +4,64 @@
 
 @section('content')
 
+<div class="mb-6">
+    <h1 class="text-xl font-semibold tracking-tight sm:text-2xl">Karyawan</h1>
+    <p class="mt-1 text-sm text-slate-500">{{ $employees->count() }} orang cocok dengan filter ini.</p>
+</div>
+
+{{-- Penyaring --}}
+<form method="GET" class="mb-6 kartu p-4">
+    <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+        <div class="lg:col-span-2">
+            <label for="cari" class="label">Cari nama / PIN</label>
+            <input id="cari" type="text" name="cari" value="{{ $filter['cari'] }}" placeholder="ketik nama atau PIN..."
+                   class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-1.5 text-sm shadow-sm focus:border-slate-900 focus:outline-none focus:ring-1 focus:ring-slate-900">
+        </div>
+        <div>
+            <label for="divisi" class="label">Divisi</label>
+            <select id="divisi" name="divisi"
+                    class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-1.5 text-sm shadow-sm focus:border-slate-900 focus:outline-none focus:ring-1 focus:ring-slate-900">
+                <option value="">Semua</option>
+                @foreach ($divisions as $d)
+                    <option value="{{ $d->id }}" @selected((string) $filter['divisi'] === (string) $d->id)>{{ $d->name }}</option>
+                @endforeach
+            </select>
+        </div>
+        <div>
+            <label for="shift" class="label">Shift</label>
+            <select id="shift" name="shift"
+                    class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-1.5 text-sm shadow-sm focus:border-slate-900 focus:outline-none focus:ring-1 focus:ring-slate-900">
+                <option value="">Semua</option>
+                @foreach ($shifts as $s)
+                    <option value="{{ $s->id }}" @selected((string) $filter['shift'] === (string) $s->id)>{{ $s->name }}</option>
+                @endforeach
+            </select>
+        </div>
+        <div>
+            <label for="status" class="label">Status</label>
+            <select id="status" name="status"
+                    class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-1.5 text-sm shadow-sm focus:border-slate-900 focus:outline-none focus:ring-1 focus:ring-slate-900">
+                <option value="">Semua</option>
+                <option value="aktif" @selected($filter['status'] === 'aktif')>Aktif</option>
+                <option value="nonaktif" @selected($filter['status'] === 'nonaktif')>Nonaktif</option>
+                <option value="tidak_diabsen" @selected($filter['status'] === 'tidak_diabsen')>Tidak diabsen</option>
+                <option value="tanpa_wa" @selected($filter['status'] === 'tanpa_wa')>Tanpa nomor WA</option>
+            </select>
+        </div>
+        <div class="flex items-end gap-2 lg:col-span-5">
+            <button type="submit" class="btn-utama">Saring</button>
+            <a href="{{ route('manajer.karyawan.index') }}"
+               class="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100">
+                Reset
+            </a>
+        </div>
+    </div>
+</form>
+
 <div class="overflow-hidden kartu">
+    @if ($employees->isEmpty())
+        <x-kosong pesan="Tidak ada karyawan yang cocok dengan filter ini." />
+    @else
     <div class="tabel-bungkus">
         <table class="tabel">
             <thead>
@@ -65,6 +122,7 @@
             </tbody>
         </table>
     </div>
+    @endif
 </div>
 <p class="mt-3 text-xs text-slate-500">* divisi sekunder — bisa membantu di divisi itu saat kekurangan orang.</p>
 @endsection
