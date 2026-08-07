@@ -123,17 +123,33 @@
                     @endif
                 </div>
 
+                @php $saran = $r->saranMenit(); @endphp
+
+                @if ($saran !== null)
+                    <p class="mb-2 text-xs text-slate-500">
+                        Saran dari jam scan pulang asli: <strong class="text-slate-700">{{ $saran }} menit</strong>
+                        lewat jadwal pulang. Sudah keisi otomatis di bawah, tinggal cek lalu sahkan (atau ubah manual
+                        kalau tidak sesuai).
+                    </p>
+                @else
+                    <p class="mb-2 text-xs text-amber-700">
+                        Belum ada scan pulang tercatat untuk tanggal ini — isi manual berdasarkan laporan orangnya.
+                    </p>
+                @endif
+
                 <form method="POST" action="{{ route('manajer.lembur.confirm', $r) }}"
                       class="flex flex-wrap items-end gap-2">
                     @csrf
                     <div>
                         <label class="label">Aktual (menit)</label>
-                        <input type="number" name="actual_minutes" min="0" value="{{ $r->approved_minutes }}" required
+                        <input type="number" name="actual_minutes" min="0"
+                               value="{{ $saran ?? $r->approved_minutes }}" required
                                class="kolom mt-0.5 w-24">
                     </div>
                     <div>
                         <label class="label">Dibayar (menit)</label>
-                        <input type="number" name="payable_minutes" min="0" value="{{ $r->approved_minutes }}" required
+                        <input type="number" name="payable_minutes" min="0"
+                               value="{{ min($saran ?? $r->approved_minutes, $r->approved_minutes) }}" required
                                class="kolom mt-0.5 w-24">
                     </div>
                     <input type="text" name="note" placeholder="Catatan" class="kolom min-w-40 flex-1">

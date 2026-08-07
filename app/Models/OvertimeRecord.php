@@ -49,6 +49,37 @@ class OvertimeRecord extends Model
         return $this->activated_at !== null;
     }
 
+    /**
+     * Saran menit lembur dari jam scan pulang ASLI, dibanding jadwal pulang
+     * shift orangnya hari itu — bukan tebakan baru, tinggal baca dari
+     * Attendance yang sudah dihitung attendance:compute.
+     *
+     * Satu formula ini otomatis mencakup dua situasi yang kelihatannya beda:
+     * lembur beberapa menit lewat jadwal, MAUPUN yang sampai "nyambung" ke
+     * shift berikutnya (mis. Shift Pagi yang pulangnya jauh masuk ke jam
+     * Shift Malam) — keduanya sama-sama cuma selisih jam pulang asli
+     * terhadap jadwal, cuma beda besar angkanya.
+     *
+     * Cuma SARAN: admin tetap bisa timpa manual di form pengesahan. Null
+     * kalau belum ada scan pulang sama sekali, supaya tidak ada yang
+     * ketuker antara "belum scan" dengan "lembur 0 menit".
+     */
+    public function saranMenit(): ?int
+    {
+        $absensi = Attendance::query()
+            ->where('employee_id', $this->employee_id)
+            ->whereDate('work_date', $this->work_date)
+            ->first();
+
+        if ($absensi === null || $absensi->check_out_at === null || $absensi->scheduled_out === null) {
+            return null;
+        }
+
+        $selisih = $absensi->check_out_at->diffInMinutes($absensi->scheduled_out, false);
+
+        return max(0, -$selisih);
+    }
+
     public function scopeConfirmed($query)
     {
         return $query->where('status', 'confirmed');

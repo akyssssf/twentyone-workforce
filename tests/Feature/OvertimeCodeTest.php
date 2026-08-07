@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Enums\UserRole;
+use App\Models\Attendance;
 use App\Models\Branch;
 use App\Models\Employee;
 use App\Models\OvertimeRecord;
@@ -128,6 +129,64 @@ class OvertimeCodeTest extends TestCase
 
         $this->assertSame('approved', $record->overtimeRequest->request->status->value);
         $this->assertNotNull($record->overtimeRequest->request->decided_at);
+    }
+
+    /**
+     * @return array{0: int, 1: int, 2: int|null} [checkout_hour, checkout_minute, saran_menit_diharap]
+     */
+    public static function skenarioSaranMenit(): array
+    {
+        return [
+            'pulang tepat jadwal -> 0' => [17, 0, 0],
+            'pulang 45 menit lewat jadwal -> 45' => [17, 45, 45],
+            // "Nyambung" ke shift berikutnya cuma beda BESAR angkanya, bukan
+            // beda rumus — pulang 3 jam lewat jadwal ya 180 menit.
+            'pulang nyambung shift berikutnya -> 180' => [20, 0, 180],
+        ];
+    }
+
+    #[\PHPUnit\Framework\Attributes\DataProvider('skenarioSaranMenit')]
+    public function test_saran_menit_dari_jam_scan_pulang_asli(int $jamPulang, int $menitPulang, int $diharap): void
+    {
+        $record = $this->tugaskan();
+
+        Attendance::create([
+            'employee_id' => $this->rifqi->id,
+            'shift_id' => $this->rifqi->default_shift_id,
+            'work_date' => today(),
+            'scheduled_in' => today()->setTime(17, 0),
+            'scheduled_out' => today()->setTime(17, 0),
+            'check_in_at' => today()->setTime(16, 55),
+            'check_out_at' => today()->setTime($jamPulang, $menitPulang),
+            'status' => 'hadir',
+        ]);
+
+        $this->assertSame($diharap, $record->saranMenit());
+    }
+
+    public function test_saran_menit_null_kalau_belum_ada_scan_pulang(): void
+    {
+        $record = $this->tugaskan();
+
+        Attendance::create([
+            'employee_id' => $this->rifqi->id,
+            'shift_id' => $this->rifqi->default_shift_id,
+            'work_date' => today(),
+            'scheduled_in' => today()->setTime(17, 0),
+            'scheduled_out' => today()->setTime(17, 0),
+            'check_in_at' => today()->setTime(16, 55),
+            'check_out_at' => null,
+            'status' => 'hadir',
+        ]);
+
+        $this->assertNull($record->saranMenit());
+    }
+
+    public function test_saran_menit_null_kalau_tidak_ada_absensi_sama_sekali(): void
+    {
+        $record = $this->tugaskan();
+
+        $this->assertNull($record->saranMenit());
     }
 
     public function test_kode_orang_lain_ditolak(): void
