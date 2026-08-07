@@ -16,8 +16,8 @@ enum RequestStatus: string
     {
         return match ($this) {
             self::Draft => 'Draf',
-            self::PendingPeer => 'Menunggu Rekan',
-            self::PendingManager => 'Menunggu Manager',
+            self::PendingPeer => 'Menunggu Pengganti',
+            self::PendingManager => 'Menunggu Admin',
             self::Approved => 'Disetujui',
             self::Rejected => 'Ditolak',
             self::Cancelled => 'Dibatalkan',

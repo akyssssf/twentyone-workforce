@@ -19,18 +19,27 @@ class LoginController extends Controller
 
     public function store(Request $request): RedirectResponse
     {
-        $kredensial = $request->validate([
-            'email' => ['required', 'email'],
+        $data = $request->validate([
+            'username' => ['required', 'string', 'max:32'],
             'password' => ['required', 'string'],
         ]);
 
-        // Pembatas percobaan: 5 kali per kombinasi email dan IP. Tanpa ini
-        // kata sandi bisa ditebak terus-menerus tanpa hambatan.
-        $kunci = 'login:'.mb_strtolower($kredensial['email']).'|'.$request->ip();
+        // Nama panggilan diperlakukan tanpa peduli huruf besar-kecil. Orang
+        // mengetik "Dian" di ponsel yang otomatis mengapitalkan huruf pertama,
+        // dan gagal login karena itu adalah cara tercepat membuat mereka
+        // berhenti memakai aplikasi ini.
+        $kredensial = [
+            'username' => mb_strtolower(trim($data['username'])),
+            'password' => $data['password'],
+        ];
+
+        // Pembatas percobaan: 5 kali per kombinasi nama pengguna dan IP.
+        // Tanpa ini kata sandi bisa ditebak terus-menerus tanpa hambatan.
+        $kunci = 'login:'.$kredensial['username'].'|'.$request->ip();
 
         if (RateLimiter::tooManyAttempts($kunci, 5)) {
             throw ValidationException::withMessages([
-                'email' => 'Terlalu banyak percobaan. Coba lagi dalam '.RateLimiter::availableIn($kunci).' detik.',
+                'username' => 'Terlalu banyak percobaan. Coba lagi dalam '.RateLimiter::availableIn($kunci).' detik.',
             ]);
         }
 
@@ -38,10 +47,10 @@ class LoginController extends Controller
             RateLimiter::hit($kunci, 60);
 
             throw ValidationException::withMessages([
-                // Pesan sengaja tidak memisahkan "email tidak ada" dari
-                // "sandi salah", supaya tidak bisa dipakai menebak email mana
-                // yang terdaftar.
-                'email' => 'Email atau kata sandi salah.',
+                // Pesan sengaja tidak memisahkan "nama tidak ada" dari "sandi
+                // salah", supaya tidak bisa dipakai menebak siapa yang punya
+                // akun di sini.
+                'username' => 'Nama atau kata sandi salah.',
             ]);
         }
 
@@ -49,7 +58,7 @@ class LoginController extends Controller
             Auth::logout();
 
             throw ValidationException::withMessages([
-                'email' => 'Akun ini sudah dinonaktifkan.',
+                'username' => 'Akun ini sudah dinonaktifkan.',
             ]);
         }
 
@@ -59,7 +68,11 @@ class LoginController extends Controller
         // lagi kalau sempat bocor.
         $request->session()->regenerate();
 
-        return redirect()->intended(route('dashboard'));
+        $request->user()->forceFill(['last_login_at' => now()])->save();
+
+        // Karyawan dan manajer punya beranda yang berbeda; /beranda yang
+        // memutuskan, bukan controller ini.
+        return redirect()->intended(route('beranda'));
     }
 
     public function destroy(Request $request): RedirectResponse

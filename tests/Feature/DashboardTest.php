@@ -43,63 +43,75 @@ class DashboardTest extends TestCase
 
     public function test_bisa_masuk_dengan_kredensial_benar(): void
     {
-        $user = User::factory()->create(['email' => 'owner@kafe.test']);
+        $user = User::factory()->create(['username' => 'admin']);
 
         $this->post(route('login.store'), [
-            'email' => 'owner@kafe.test',
+            'username' => 'admin',
             'password' => 'password',
-        ])->assertRedirect(route('dashboard'));
+        ])->assertRedirect(route('beranda'));
 
         $this->assertAuthenticatedAs($user);
     }
 
     public function test_kredensial_salah_ditolak(): void
     {
-        User::factory()->create(['email' => 'owner@kafe.test']);
+        User::factory()->create(['username' => 'admin']);
 
         $this->post(route('login.store'), [
-            'email' => 'owner@kafe.test',
+            'username' => 'admin',
             'password' => 'salah',
-        ])->assertSessionHasErrors('email');
+        ])->assertSessionHasErrors('username');
 
         $this->assertGuest();
     }
 
     /**
-     * Pesan galat tidak boleh membedakan "email tidak ada" dari "sandi salah",
-     * karena bedanya bisa dipakai menebak email mana yang terdaftar.
+     * Pesan galat tidak boleh membedakan "nama tidak ada" dari "sandi salah",
+     * karena bedanya bisa dipakai menebak siapa saja yang punya akun.
      */
-    public function test_pesan_galat_tidak_membocorkan_email_terdaftar(): void
+    public function test_pesan_galat_tidak_membocorkan_akun_terdaftar(): void
     {
-        User::factory()->create(['email' => 'ada@kafe.test']);
+        User::factory()->create(['username' => 'ada']);
 
         $adaTapiSalah = $this->post(route('login.store'), [
-            'email' => 'ada@kafe.test', 'password' => 'salah',
-        ])->assertSessionHasErrors('email');
+            'username' => 'ada', 'password' => 'salah',
+        ])->assertSessionHasErrors('username');
 
         $this->flushSession();
 
         $tidakAda = $this->post(route('login.store'), [
-            'email' => 'tidakada@kafe.test', 'password' => 'salah',
-        ])->assertSessionHasErrors('email');
+            'username' => 'tidakada', 'password' => 'salah',
+        ])->assertSessionHasErrors('username');
 
         $this->assertSame(
-            $adaTapiSalah->getSession()->get('errors')->first('email'),
-            $tidakAda->getSession()->get('errors')->first('email'),
+            $adaTapiSalah->getSession()->get('errors')->first('username'),
+            $tidakAda->getSession()->get('errors')->first('username'),
         );
+    }
+
+    /** Huruf besar tidak boleh bikin gagal masuk: ponsel mengapitalkan sendiri. */
+    public function test_nama_panggilan_tidak_peka_huruf_besar(): void
+    {
+        $user = User::factory()->create(['username' => 'dian']);
+
+        $this->post(route('login.store'), [
+            'username' => 'Dian', 'password' => 'password',
+        ])->assertRedirect(route('beranda'));
+
+        $this->assertAuthenticatedAs($user);
     }
 
     public function test_percobaan_masuk_dibatasi(): void
     {
-        User::factory()->create(['email' => 'owner@kafe.test']);
+        User::factory()->create(['username' => 'admin']);
 
         for ($i = 0; $i < 5; $i++) {
-            $this->post(route('login.store'), ['email' => 'owner@kafe.test', 'password' => 'salah']);
+            $this->post(route('login.store'), ['username' => 'admin', 'password' => 'salah']);
             $this->flushSession();
         }
 
-        $this->post(route('login.store'), ['email' => 'owner@kafe.test', 'password' => 'password'])
-            ->assertSessionHasErrors('email');
+        $this->post(route('login.store'), ['username' => 'admin', 'password' => 'password'])
+            ->assertSessionHasErrors('username');
 
         // Sandi benar pun ditolak selama masih dalam masa tunggu.
         $this->assertGuest();
@@ -107,11 +119,11 @@ class DashboardTest extends TestCase
 
     public function test_akun_nonaktif_tidak_bisa_masuk(): void
     {
-        User::factory()->nonaktif()->create(['email' => 'resign@kafe.test']);
+        User::factory()->nonaktif()->create(['username' => 'resign']);
 
         $this->post(route('login.store'), [
-            'email' => 'resign@kafe.test', 'password' => 'password',
-        ])->assertSessionHasErrors('email');
+            'username' => 'resign', 'password' => 'password',
+        ])->assertSessionHasErrors('username');
 
         $this->assertGuest();
     }

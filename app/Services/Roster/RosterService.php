@@ -62,7 +62,7 @@ class RosterService
     {
         $this->ensureEditable($roster);
 
-        $employees = Employee::query()->active()->with('divisions')->get();
+        $employees = Employee::query()->tracked()->with('divisions')->get();
         $start = $roster->startDate();
         $end = $roster->endDate();
 
@@ -251,8 +251,11 @@ class RosterService
             ->get()
             ->groupBy(fn (RosterAssignment $a) => $a->employee_id . '|' . $a->work_date->toDateString());
 
+        // Grid roster hanya berisi orang yang memang dijadwalkan. Admin tidak
+        // muncul di sini sama sekali, bukan muncul dengan baris kosong —
+        // baris kosong akan terbaca seperti jadwal yang lupa diisi.
         $employees = Employee::query()
-            ->active()
+            ->tracked()
             ->with('divisions')
             ->orderBy('name')
             ->get();

@@ -42,6 +42,20 @@ class EmployeePortalController extends Controller
                 ->whereDate('work_date', $hariIni)
                 ->get(),
 
+            // Siapa saja yang bertugas hari ini, dikelompokkan per shift.
+            // Karyawan perlu tahu ini untuk hal sesederhana "hari ini aku
+            // sedapur sama siapa" — dan untuk memilih pengganti saat mau
+            // mengajukan cuti.
+            'rosterHariIni' => RosterAssignment::query()
+                ->with(['employee', 'shift', 'division'])
+                ->whereDate('work_date', $hariIni)
+                ->working()
+                ->whereHas('roster', fn ($q) => $q->visibleToEmployee())
+                ->get()
+                ->groupBy('shift_id'),
+
+            'shifts' => \App\Models\Shift::query()->where('is_active', true)->orderBy('start_time')->get(),
+
             'jadwalMendatang' => RosterAssignment::query()
                 ->with(['shift', 'division'])
                 ->where('employee_id', $employee->id)
@@ -57,11 +71,13 @@ class EmployeePortalController extends Controller
                 ->latest('id')
                 ->get(),
 
-            // Tukar shift yang menunggu jawaban SAYA sebagai rekan.
+            // Pengajuan yang menunjuk SAYA sebagai pengganti. Ditaruh paling
+            // atas di beranda karena inilah satu-satunya hal di aplikasi ini
+            // yang menahan orang lain selama belum dijawab.
             'menungguJawaban' => PengajuanModel::query()
-                ->with(['employee', 'swap.requesterAssignment.shift'])
+                ->with(['employee', 'leave.leaveType', 'overtime', 'swap.requesterAssignment.shift', 'correction'])
                 ->where('status', 'pending_peer')
-                ->whereHas('swap', fn ($q) => $q->where('partner_employee_id', $employee->id))
+                ->where('substitute_employee_id', $employee->id)
                 ->get(),
 
             'saldoCuti' => $employee->leaveBalances()->with('leaveType')->where('year', now()->year)->get(),
@@ -72,6 +88,9 @@ class EmployeePortalController extends Controller
                 ->published()
                 ->latest('id')
                 ->first(),
+
+            // Lembur yang sudah disetujui tapi kodenya belum dipakai.
+            'lemburBelumAktif' => app(\App\Services\Requests\OvertimeCodeService::class)->pendingFor($employee),
 
             'notifikasi' => Notification::query()
                 ->where('user_id', $request->user()->id)
@@ -105,11 +124,61 @@ class EmployeePortalController extends Controller
                 ->keyBy(fn ($a) => $a->work_date->toDateString())
             : collect();
 
+        // Tanggal yang sedang dibuka rinciannya. Dipakai query string, bukan
+        // JavaScript, supaya tautannya bisa dibagikan dan tetap jalan kalau
+        // koneksi di kafe sedang buruk.
+        $pilih = $request->query('tanggal')
+            ? Carbon::parse($request->query('tanggal'))->startOfDay()
+            : null;
+
+        $rekanHariItu = $pilih
+            ? RosterAssignment::query()
+                ->with(['employee', 'shift', 'division'])
+                ->whereDate('work_date', $pilih)
+                ->working()
+                ->when($roster, fn ($q) => $q->where('roster_id', $roster->id))
+                ->get()
+                ->groupBy('shift_id')
+            : collect();
+
         return view('karyawan.jadwal', [
             'employee' => $employee,
             'roster' => $roster,
             'bulan' => $bulan,
             'assignments' => $assignments,
+            'pilih' => $pilih,
+            'rekanHariItu' => $rekanHariItu,
+
+            // Dipakai keterangan warna di bawah kalender. Wajib ada karena di
+            // ponsel selnya cuma memuat satu huruf kode shift.
+            'shifts' => \App\Models\Shift::query()->where('is_active', true)->orderBy('start_time')->get(),
+        ]);
+    }
+
+    /**
+     * Halaman lembur karyawan.
+     *
+     * Dibuat sebagai halaman tersendiri, bukan sekadar kartu di beranda, karena
+     * inilah satu-satunya cara lembur jadi terhitung. Kalau tersembunyi di
+     * antara kartu lain, orang yang ditunjuk malam itu harus mencari-cari
+     * tempat memasukkan kodenya — dan yang tidak ketemu akhirnya bekerja tanpa
+     * dibayar.
+     */
+    public function overtime(Request $request)
+    {
+        $employee = $request->user()->employee;
+
+        return view('karyawan.lembur', [
+            'employee' => $employee,
+
+            'belumAktif' => app(\App\Services\Requests\OvertimeCodeService::class)->pendingFor($employee),
+
+            'riwayat' => \App\Models\OvertimeRecord::query()
+                ->with('overtimeRequest')
+                ->where('employee_id', $employee->id)
+                ->orderByDesc('work_date')
+                ->limit(30)
+                ->get(),
         ]);
     }
 

@@ -7,12 +7,12 @@
 <div class="mx-auto max-w-3xl">
     <div class="mb-3 flex items-center justify-between print:hidden">
         <a href="{{ $kembali }}" class="text-sm text-slate-500 hover:underline">&larr; Kembali</a>
-        <button onclick="window.print()" class="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium hover:bg-slate-50">
+        <button onclick="window.print()" class="btn-netral">
             Cetak / Simpan PDF
         </button>
     </div>
 
-    <div class="rounded-xl border border-slate-200 bg-white p-6 print:border-0">
+    <div class="kartu p-6 print:border-0">
         <div class="flex flex-wrap items-start justify-between gap-4 border-b border-slate-200 pb-4">
             <div>
                 <h1 class="text-lg font-semibold">Slip Gaji</h1>
@@ -61,7 +61,7 @@
                 <div class="py-4">
                     <h2 class="mb-2 text-sm font-semibold {{ $warna }}">{{ $judul }}</h2>
                     <table class="w-full text-sm">
-                        <tbody class="divide-y divide-slate-100">
+                        <tbody>
                             @foreach ($items as $item)
                                 <tr>
                                     <td class="py-1.5">

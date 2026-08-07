@@ -10,8 +10,8 @@
 
 <div class="space-y-6">
     @foreach ($ruleSets as $rs)
-        <div class="rounded-xl border border-slate-200 bg-white">
-            <div class="border-b border-slate-200 px-5 py-3">
+        <div class="kartu">
+            <div class="kartu-judul">
                 <h2 class="font-semibold">{{ $rs->type->label() }}</h2>
                 <p class="text-xs text-slate-500">
                     {{ $rs->name }} &middot; berlaku sejak {{ $rs->effective_from->translatedFormat('d M Y') }}
@@ -28,7 +28,7 @@
                             <th class="pb-2 text-right font-medium">Nilai</th>
                         </tr>
                     </thead>
-                    <tbody class="divide-y divide-slate-100">
+                    <tbody>
                         @foreach ($rs->tiers as $i => $tier)
                             <tr>
                                 <td class="py-2">
@@ -46,38 +46,38 @@
                                 <td class="py-2 text-right">
                                     <input type="number" step="0.01" min="0" name="tiers[{{ $i }}][value]"
                                            value="{{ rtrim(rtrim(number_format((float) $tier->value, 2, '.', ''), '0'), '.') }}"
-                                           class="w-32 rounded-lg border border-slate-300 px-2 py-1 text-right text-sm">
+                                           class="kolom w-32 text-right">
                                 </td>
                             </tr>
                         @endforeach
                     </tbody>
                 </table>
-                <button class="mt-3 rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800">Simpan</button>
+                <button class="btn-utama mt-3">Simpan</button>
             </form>
         </div>
     @endforeach
 
-    <div class="rounded-xl border border-slate-200 bg-white">
-        <div class="border-b border-slate-200 px-5 py-3"><h2 class="font-semibold">Setelan Operasional</h2></div>
+    <div class="kartu">
+        <div class="kartu-judul"><h2 class="font-semibold">Setelan Operasional</h2></div>
         <form method="POST" action="{{ route('manajer.setelan.update') }}" class="px-5 py-4">
             @csrf
             <div class="grid gap-4 sm:grid-cols-2">
                 @foreach ($settings as $key => $value)
                     <div>
-                        <label class="block text-xs font-medium text-slate-500">{{ $key }}</label>
+                        <label class="label">{{ $key }}</label>
                         @if (is_bool($value))
-                            <select name="settings[{{ $key }}]" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-1.5 text-sm">
+                            <select name="settings[{{ $key }}]" class="kolom mt-1">
                                 <option value="true" @selected($value)>Ya</option>
                                 <option value="false" @selected(! $value)>Tidak</option>
                             </select>
                         @else
                             <input type="text" name="settings[{{ $key }}]" value="{{ $value }}"
-                                   class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-1.5 text-sm">
+                                   class="kolom mt-1">
                         @endif
                     </div>
                 @endforeach
             </div>
-            <button class="mt-4 rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800">Simpan setelan</button>
+            <button class="btn-utama mt-4">Simpan setelan</button>
         </form>
     </div>
 </div>

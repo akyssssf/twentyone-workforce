@@ -32,3 +32,12 @@ _ide_helper.php
 Homestead.json
 Homestead.yaml
 Thumbs.db
+
+# Foto wajah karyawan.
+#
+# Repo ini publik, dan berkas di sini adalah foto wajah orang sungguhan yang
+# tidak pernah menyetujui wajahnya dipublikasikan. Aplikasi tetap jalan tanpa
+# berkas ini: avatarUrl() mundur ke foto scan dari mesin, lalu ke inisial nama.
+#
+# Salin folder ini langsung ke server saat deploy, jangan lewat git.
+/public/avatars/

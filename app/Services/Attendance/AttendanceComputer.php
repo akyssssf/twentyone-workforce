@@ -56,7 +56,7 @@ class AttendanceComputer
             $ringkasan[$case->value] = 0;
         }
 
-        $employees = Employee::query()->active()->employed()->with('defaultShift')->get();
+        $employees = Employee::query()->tracked()->employed()->with('defaultShift')->get();
 
         foreach ($employees as $employee) {
             foreach ($this->computeEmployee($employee, $workDate) as $attendance) {
@@ -81,7 +81,9 @@ class AttendanceComputer
         $timezone = config('attendance.timezone', 'Asia/Jakarta');
         $date = $workDate->copy()->setTimezone($timezone)->startOfDay();
 
-        if (! $employee->is_active) {
+        // Admin punya akun dan tetap pegawai aktif, tapi tidak menempel jari
+        // di mesin. Tanpa penjagaan ini mereka jadi Alpha setiap hari.
+        if (! $employee->is_active || ! $employee->tracks_attendance) {
             return collect();
         }
 

@@ -26,6 +26,7 @@ class EmployeeFactory extends Factory
             'default_shift_id' => Shift::factory(),
 
             'employment_status' => 'active',
+            'tracks_attendance' => true,
             'is_active' => true,
             'joined_at' => null,
         ];
@@ -54,6 +55,12 @@ class EmployeeFactory extends Factory
     public function nonaktif(): static
     {
         return $this->state(fn () => ['is_active' => false, 'employment_status' => 'resigned']);
+    }
+
+    /** Admin: punya akun dan digaji, tapi tidak menempel jari di mesin. */
+    public function tanpaAbsensi(): static
+    {
+        return $this->state(fn () => ['tracks_attendance' => false]);
     }
 
     public function tanpaShift(): static

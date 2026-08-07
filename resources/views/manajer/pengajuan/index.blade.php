@@ -2,9 +2,9 @@
 @section('title', 'Pengajuan')
 
 @section('content')
-<div class="mb-6 flex flex-wrap items-end justify-between gap-4">
+<div class="mb-5 flex flex-wrap items-end justify-between gap-3">
     <div>
-        <h1 class="text-2xl font-semibold tracking-tight">Pengajuan</h1>
+        <h1 class="text-xl font-semibold tracking-tight sm:text-2xl">Pengajuan</h1>
         <p class="mt-1 text-sm text-slate-500">{{ $jumlahPending }} menunggu keputusan Anda</p>
     </div>
 
@@ -20,25 +20,31 @@
     </div>
 </div>
 
-<div class="overflow-hidden rounded-xl border border-slate-200 bg-white">
-    <table class="min-w-full divide-y divide-slate-200 text-sm">
-        <thead class="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
+<div class="overflow-hidden kartu">
+    <table class="tabel">
+        <thead>
             <tr>
-                <th class="px-4 py-2 font-medium">Kode</th>
-                <th class="px-4 py-2 font-medium">Karyawan</th>
-                <th class="px-4 py-2 font-medium">Jenis</th>
-                <th class="px-4 py-2 font-medium">Rincian</th>
-                <th class="px-4 py-2 font-medium">Status</th>
-                <th class="px-4 py-2"></th>
+                <th >Kode</th>
+                <th >Karyawan</th>
+                <th >Jenis</th>
+                <th >Rincian</th>
+                <th>Pengganti</th>
+                <th>Status</th>
+                <th ></th>
             </tr>
         </thead>
-        <tbody class="divide-y divide-slate-100">
+        <tbody>
             @forelse ($requests as $r)
-                <tr class="hover:bg-slate-50">
-                    <td class="px-4 py-2 font-mono text-xs">{{ $r->code }}</td>
-                    <td class="px-4 py-2 font-medium">{{ $r->employee?->name }}</td>
-                    <td class="px-4 py-2">{{ $r->type->shortLabel() }}</td>
-                    <td class="px-4 py-2 text-slate-500">
+                <tr >
+                    <td class="font-mono text-xs">{{ $r->code }}</td>
+                    <td >
+                        <div class="flex items-center gap-2.5">
+                            <x-avatar :employee="$r->employee" ukuran="sm" />
+                            <span class="font-medium">{{ $r->employee?->name }}</span>
+                        </div>
+                    </td>
+                    <td >{{ $r->type->shortLabel() }}</td>
+                    <td class="text-slate-500">
                         @switch($r->type->value)
                             @case('leave')
                                 {{ $r->leave?->leaveType?->name }},
@@ -58,8 +64,23 @@
                                 @break
                         @endswitch
                     </td>
-                    <td class="px-4 py-2"><x-status-badge :warna="$r->status->color()" :label="$r->status->label()" /></td>
-                    <td class="px-4 py-2 text-right">
+                    <td>
+                        @if ($r->substitute)
+                            <div class="flex items-center gap-1.5">
+                                <x-avatar :employee="$r->substitute" ukuran="xs" />
+                                <span class="truncate">{{ $r->substitute->name }}</span>
+                                @if ($r->substitute_accepted_at)
+                                    <span class="text-emerald-600" title="Bersedia">&check;</span>
+                                @elseif ($r->substitute_rejected_at)
+                                    <span class="text-red-600" title="Tidak bisa">&times;</span>
+                                @endif
+                            </div>
+                        @else
+                            <span class="text-slate-300">—</span>
+                        @endif
+                    </td>
+                    <td><x-status-badge :warna="$r->status->color()" :label="$r->status->label()" /></td>
+                    <td class="text-right">
                         <a href="{{ route('manajer.pengajuan.show', $r) }}" class="font-medium text-slate-700 hover:underline">Periksa</a>
                     </td>
                 </tr>

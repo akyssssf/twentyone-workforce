@@ -5,14 +5,17 @@
 <div class="mx-auto max-w-3xl">
     <a href="{{ route('manajer.pengajuan.index') }}" class="text-sm text-slate-500 hover:underline">&larr; Kembali</a>
 
-    <div class="mt-3 rounded-xl border border-slate-200 bg-white">
+    <div class="mt-3 kartu">
         <div class="flex flex-wrap items-start justify-between gap-3 border-b border-slate-200 px-5 py-4">
-            <div>
-                <h1 class="text-lg font-semibold">{{ $pengajuan->type->label() }}</h1>
-                <p class="text-sm text-slate-500">
-                    {{ $pengajuan->code }} &middot; {{ $pengajuan->employee?->name }} &middot;
-                    diajukan {{ $pengajuan->submitted_at?->translatedFormat('d M Y H:i') }}
-                </p>
+            <div class="flex items-center gap-3">
+                <x-avatar :employee="$pengajuan->employee" ukuran="md" :bisa-diklik="true" />
+                <div>
+                    <h1 class="text-lg font-semibold">{{ $pengajuan->type->label() }}</h1>
+                    <p class="text-sm text-slate-500">
+                        {{ $pengajuan->code }} &middot; {{ $pengajuan->employee?->name }} &middot;
+                        diajukan {{ $pengajuan->submitted_at?->translatedFormat('d M Y H:i') }}
+                    </p>
+                </div>
             </div>
             <x-status-badge :warna="$pengajuan->status->color()" :label="$pengajuan->status->label()" />
         </div>
@@ -58,6 +61,49 @@
 
             <div class="flex px-5 py-3"><dt class="w-40 shrink-0 text-slate-500">Alasan</dt><dd>{{ $d?->reason }}</dd></div>
 
+            {{-- Pengganti: penentu apakah pengajuan ini boleh disetujui. --}}
+            <div class="flex px-5 py-3">
+                <dt class="w-40 shrink-0 text-slate-500">Pengganti</dt>
+                <dd class="min-w-0">
+                    @if ($pengajuan->substitute)
+                        <div class="flex items-center gap-2">
+                            <x-avatar :employee="$pengajuan->substitute" ukuran="xs" />
+                            <span class="font-medium">{{ $pengajuan->substitute->name }}</span>
+                        </div>
+                        <div class="mt-1">
+                            @if ($pengajuan->substitute_accepted_at)
+                                <x-status-badge warna="emerald"
+                                                :label="'Bersedia · ' . $pengajuan->substitute_accepted_at->translatedFormat('d M H:i')" />
+                            @elseif ($pengajuan->substitute_rejected_at)
+                                <x-status-badge warna="red" label="Tidak bisa" />
+                            @else
+                                <x-status-badge warna="amber" label="Menunggu jawaban pengganti" />
+                            @endif
+                        </div>
+                        @if ($pengajuan->substitute_note)
+                            <p class="mt-1 text-xs text-slate-500">"{{ $pengajuan->substitute_note }}"</p>
+                        @endif
+                    @else
+                        <span class="text-red-600">Belum ditunjuk — pengajuan tidak bisa disetujui.</span>
+                    @endif
+                </dd>
+            </div>
+
+            {{-- Kode lembur, supaya admin bisa membacakannya ke orangnya. --}}
+            @if ($pengajuan->type->value === 'overtime' && $d?->secret_code)
+                <div class="flex px-5 py-3">
+                    <dt class="w-40 shrink-0 text-slate-500">Kode lembur</dt>
+                    <dd>
+                        <span class="rounded-lg bg-indigo-50 px-2.5 py-1 font-mono text-base font-bold tracking-[0.2em] text-indigo-900">
+                            {{ $d->secret_code }}
+                        </span>
+                        <p class="mt-1 text-xs text-slate-500">
+                            Bacakan ke {{ $pengajuan->employee?->name }}. Tanpa diaktifkan, lemburnya tidak dibayar.
+                        </p>
+                    </dd>
+                </div>
+            @endif
+
             @if ($pengajuan->decided_at)
                 <div class="flex px-5 py-3"><dt class="w-40 text-slate-500">Diputuskan</dt>
                     <dd>{{ $pengajuan->decider?->name }} — {{ $pengajuan->decided_at->translatedFormat('d M Y H:i') }}
@@ -66,11 +112,18 @@
             @endif
         </dl>
 
+        @if ($pengajuan->status->value === 'pending_peer')
+            <div class="border-t border-slate-100 bg-amber-50 px-5 py-4 text-sm text-amber-900">
+                Menunggu {{ $pengajuan->substitute?->name ?? 'pengganti' }} menyatakan bersedia.
+                Selama itu belum dijawab, pengajuan ini belum bisa Anda putuskan.
+            </div>
+        @endif
+
         @if ($pengajuan->status->value === 'pending_manager')
             <div class="flex flex-wrap gap-3 border-t border-slate-200 bg-slate-50 px-5 py-4">
                 <form method="POST" action="{{ route('manajer.pengajuan.approve', $pengajuan) }}">
                     @csrf
-                    <button class="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700">
+                    <button class="btn-setuju">
                         Setujui
                     </button>
                 </form>
@@ -80,8 +133,8 @@
                     {{-- Alasan penolakan wajib: menolak tanpa penjelasan adalah
                          cara tercepat membuat orang berhenti memakai sistem. --}}
                     <input type="text" name="note" required minlength="5" placeholder="Alasan penolakan (wajib)"
-                           class="flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm">
-                    <button class="rounded-lg border border-red-300 bg-white px-4 py-2 text-sm font-medium text-red-700 hover:bg-red-50">
+                           class="kolom flex-1">
+                    <button class="btn-tolak">
                         Tolak
                     </button>
                 </form>

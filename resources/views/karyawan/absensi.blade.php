@@ -2,15 +2,15 @@
 @section('title', 'Absensi Saya')
 
 @section('content')
-<div class="mb-6 flex flex-wrap items-end justify-between gap-4">
+<div class="mb-5 flex flex-wrap items-end justify-between gap-3">
     <div>
-        <h1 class="text-2xl font-semibold tracking-tight">Absensi Saya</h1>
+        <h1 class="text-xl font-semibold tracking-tight sm:text-2xl">Absensi Saya</h1>
         <p class="mt-1 text-sm text-slate-500">{{ $bulan->translatedFormat('F Y') }}</p>
     </div>
     <form method="GET" class="flex items-end gap-2">
         <input type="month" name="bulan" value="{{ $bulan->format('Y-m') }}"
-               class="rounded-lg border border-slate-300 px-3 py-1.5 text-sm">
-        <button class="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800">Lihat</button>
+               class="kolom">
+        <button class="btn-utama">Lihat</button>
     </form>
 </div>
 
@@ -23,32 +23,32 @@
     <x-kartu label="Lembur" :nilai="round($ringkasan['lembur_menit']/60, 1).' j'" warna="text-indigo-600" />
 </div>
 
-<div class="overflow-hidden rounded-xl border border-slate-200 bg-white">
-    <div class="overflow-x-auto">
-        <table class="min-w-full divide-y divide-slate-200 text-sm">
-            <thead class="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
+<div class="overflow-hidden kartu">
+    <div class="tabel-bungkus">
+        <table class="tabel">
+            <thead>
                 <tr>
-                    <th class="px-4 py-2 font-medium">Tanggal</th>
-                    <th class="px-4 py-2 font-medium">Shift</th>
-                    <th class="px-4 py-2 font-medium">Jadwal</th>
-                    <th class="px-4 py-2 font-medium">Masuk</th>
-                    <th class="px-4 py-2 font-medium">Pulang</th>
-                    <th class="px-4 py-2 font-medium">Telat</th>
-                    <th class="px-4 py-2 font-medium">Status</th>
+                    <th >Tanggal</th>
+                    <th >Shift</th>
+                    <th >Jadwal</th>
+                    <th >Masuk</th>
+                    <th >Pulang</th>
+                    <th >Telat</th>
+                    <th >Status</th>
                 </tr>
             </thead>
-            <tbody class="divide-y divide-slate-100">
+            <tbody>
                 @forelse ($attendances as $a)
-                    <tr class="hover:bg-slate-50">
-                        <td class="px-4 py-2">{{ $a->work_date->translatedFormat('D, d M') }}</td>
-                        <td class="px-4 py-2 text-slate-500">{{ $a->shift?->name ?? '—' }}</td>
-                        <td class="px-4 py-2 text-slate-500">{{ $a->scheduled_in?->format('H:i') ?? '—' }}</td>
-                        <td class="px-4 py-2">{{ $a->check_in_at?->format('H:i') ?? '—' }}</td>
-                        <td class="px-4 py-2">{{ $a->check_out_at?->format('H:i') ?? '—' }}</td>
-                        <td class="px-4 py-2 {{ $a->late_minutes > 0 ? 'text-amber-700' : 'text-slate-400' }}">
+                    <tr >
+                        <td >{{ $a->work_date->translatedFormat('D, d M') }}</td>
+                        <td class="text-slate-500">{{ $a->shift?->name ?? '—' }}</td>
+                        <td class="text-slate-500">{{ $a->scheduled_in?->format('H:i') ?? '—' }}</td>
+                        <td >{{ $a->check_in_at?->format('H:i') ?? '—' }}</td>
+                        <td >{{ $a->check_out_at?->format('H:i') ?? '—' }}</td>
+                        <td class="{{ $a->late_minutes > 0 ? 'text-amber-700' : 'text-slate-400' }}">
                             {{ $a->late_minutes > 0 ? $a->late_minutes.' m' : '—' }}
                         </td>
-                        <td class="px-4 py-2">
+                        <td >
                             <x-status-badge :warna="$a->status->color()" :label="$a->status->label()" />
                             @if ($a->has_adjustment)<span class="ml-1 text-xs text-slate-400">dikoreksi</span>@endif
                         </td>

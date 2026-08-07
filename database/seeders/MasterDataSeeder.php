@@ -48,6 +48,7 @@ class MasterDataSeeder extends Seeder
     protected function divisions(): void
     {
         $data = [
+            ['code' => 'admin', 'name' => 'Admin Dept.', 'color' => '#6366f1', 'sort_order' => 0],
             ['code' => 'chef', 'name' => 'Chef', 'color' => '#ef4444', 'sort_order' => 1],
             ['code' => 'barista', 'name' => 'Barista', 'color' => '#f59e0b', 'sort_order' => 2],
             ['code' => 'kasir', 'name' => 'Kasir', 'color' => '#3b82f6', 'sort_order' => 3],
@@ -144,6 +145,11 @@ class MasterDataSeeder extends Seeder
             ['payroll.period_start_day', 21, 'int', 'Tanggal mulai periode gaji'],
             ['payroll.pay_day', 21, 'int', 'Tanggal pembayaran gaji'],
             ['payroll.working_days_basis', 'scheduled', 'string', 'Dasar hari kerja'],
+
+            // Nomor yang dihubungi karyawan untuk mengonfirmasi pengajuan.
+            // Ditaruh di setelan, bukan ditanam di tampilan, supaya ganti
+            // nomor tidak perlu ganti kode.
+            ['kontak.whatsapp_admin', '6285876163554', 'string', 'WhatsApp admin untuk konfirmasi pengajuan'],
         ];
 
         foreach ($data as [$key, $value, $type, $label]) {

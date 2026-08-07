@@ -2,9 +2,9 @@
 @section('title', 'Payroll')
 
 @section('content')
-<div class="mb-6 flex flex-wrap items-end justify-between gap-4">
+<div class="mb-5 flex flex-wrap items-end justify-between gap-3">
     <div>
-        <h1 class="text-2xl font-semibold tracking-tight">Payroll</h1>
+        <h1 class="text-xl font-semibold tracking-tight sm:text-2xl">Payroll</h1>
         <p class="mt-1 text-sm text-slate-500">
             Periode berjalan dari tanggal 21 bulan sebelumnya sampai tanggal 20, dibayar tanggal 21.
         </p>
@@ -13,38 +13,38 @@
     <form method="POST" action="{{ route('manajer.payroll.store') }}" class="flex items-end gap-2">
         @csrf
         <div>
-            <label class="block text-xs font-medium text-slate-500">Bulan pembayaran</label>
+            <label class="label">Bulan pembayaran</label>
             <input type="month" name="bulan" id="bulan" value="{{ $bulanIni->format('Y-m') }}"
-                   class="mt-1 rounded-lg border border-slate-300 px-3 py-1.5 text-sm"
+                   class="kolom mt-1"
                    onchange="document.getElementById('year').value=this.value.split('-')[0];document.getElementById('month').value=this.value.split('-')[1];">
         </div>
         <input type="hidden" name="year" id="year" value="{{ $bulanIni->year }}">
         <input type="hidden" name="month" id="month" value="{{ $bulanIni->month }}">
-        <button class="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800">Buat periode</button>
+        <button class="btn-utama">Buat periode</button>
     </form>
 </div>
 
-<div class="overflow-hidden rounded-xl border border-slate-200 bg-white">
-    <table class="min-w-full divide-y divide-slate-200 text-sm">
-        <thead class="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
+<div class="overflow-hidden kartu">
+    <table class="tabel">
+        <thead>
             <tr>
-                <th class="px-4 py-2 font-medium">Kode</th>
-                <th class="px-4 py-2 font-medium">Periode kerja</th>
-                <th class="px-4 py-2 font-medium">Dibayar</th>
-                <th class="px-4 py-2 font-medium">Status</th>
-                <th class="px-4 py-2 font-medium">Versi</th>
-                <th class="px-4 py-2"></th>
+                <th >Kode</th>
+                <th >Periode kerja</th>
+                <th >Dibayar</th>
+                <th >Status</th>
+                <th >Versi</th>
+                <th ></th>
             </tr>
         </thead>
-        <tbody class="divide-y divide-slate-100">
+        <tbody>
             @forelse ($periods as $p)
-                <tr class="hover:bg-slate-50">
-                    <td class="px-4 py-2 font-mono text-xs">{{ $p->code }}</td>
-                    <td class="px-4 py-2">{{ $p->label() }}</td>
-                    <td class="px-4 py-2 text-slate-500">{{ $p->pay_date->translatedFormat('d M Y') }}</td>
-                    <td class="px-4 py-2"><x-status-badge :warna="$p->status->color()" :label="$p->status->label()" /></td>
-                    <td class="px-4 py-2 text-slate-500">{{ $p->runs->max('version') ?? '—' }}</td>
-                    <td class="px-4 py-2 text-right">
+                <tr >
+                    <td class="font-mono text-xs">{{ $p->code }}</td>
+                    <td >{{ $p->label() }}</td>
+                    <td class="text-slate-500">{{ $p->pay_date->translatedFormat('d M Y') }}</td>
+                    <td ><x-status-badge :warna="$p->status->color()" :label="$p->status->label()" /></td>
+                    <td class="text-slate-500">{{ $p->runs->max('version') ?? '—' }}</td>
+                    <td class="text-right">
                         <a href="{{ route('manajer.payroll.show', $p) }}" class="font-medium text-slate-700 hover:underline">Buka</a>
                     </td>
                 </tr>

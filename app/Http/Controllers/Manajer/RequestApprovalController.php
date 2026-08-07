@@ -23,7 +23,7 @@ class RequestApprovalController extends Controller
     public function index(Request $request)
     {
         $query = PengajuanModel::query()
-            ->with(['employee', 'leave.leaveType', 'overtime', 'swap.partner', 'correction'])
+            ->with(['employee', 'substitute', 'leave.leaveType', 'overtime', 'swap.partner', 'correction'])
             ->latest('id');
 
         $status = $request->query('status', 'pending');
@@ -49,7 +49,7 @@ class RequestApprovalController extends Controller
     {
         return view('manajer.pengajuan.show', [
             'pengajuan' => $request->load([
-                'employee', 'decider', 'attachments',
+                'employee', 'substitute', 'decider', 'attachments',
                 'leave.leaveType', 'overtime', 'swap.partner',
                 'swap.requesterAssignment.shift', 'swap.partnerAssignment.shift',
                 'correction',
@@ -102,8 +102,17 @@ class RequestApprovalController extends Controller
                 ->orderByDesc('work_date')
                 ->get(),
 
+            // Penugasan yang sudah disetujui tapi kodenya belum dipakai —
+            // daftar orang yang perlu diingatkan sebelum shift dimulai.
+            'belumAktif' => OvertimeRecord::query()
+                ->with(['employee', 'overtimeRequest'])
+                ->whereNull('activated_at')
+                ->whereDate('work_date', '>=', today()->subDay())
+                ->orderBy('work_date')
+                ->get(),
+
             'confirmed' => OvertimeRecord::query()
-                ->with('employee')
+                ->with(['employee', 'overtimeRequest'])
                 ->confirmed()
                 ->orderByDesc('work_date')
                 ->limit(30)
@@ -121,6 +130,7 @@ class RequestApprovalController extends Controller
             'planned_start' => ['required'],
             'planned_end' => ['required'],
             'shift_id' => ['nullable', 'exists:shifts,id'],
+            'substitute_employee_id' => ['required', 'exists:employees,id'],
             'reason' => ['required', 'string', 'min:5'],
         ]);
 
@@ -140,6 +150,7 @@ class RequestApprovalController extends Controller
                     'planned_start' => $data['planned_start'],
                     'planned_end' => $data['planned_end'],
                     'shift_id' => $data['shift_id'] ?? null,
+                    'substitute_employee_id' => $data['substitute_employee_id'],
                     'reason' => $data['reason'],
                 ], 'manager');
 
@@ -151,7 +162,9 @@ class RequestApprovalController extends Controller
             }
         }
 
-        return back()->with('status', "{$dibuat} penugasan lembur dibuat dan disetujui.");
+        return back()->with('status',
+            "{$dibuat} penugasan lembur dibuat dan disetujui. "
+            . 'Bagikan kode masing-masing ke orangnya — tanpa kode, lemburnya tidak bisa diaktifkan.');
     }
 
     /**
@@ -172,6 +185,15 @@ class RequestApprovalController extends Controller
         if ($data['payable_minutes'] > $record->approved_minutes && blank($data['note'])) {
             return back()->withErrors([
                 'lembur' => 'Menit dibayar melebihi yang disetujui. Isi catatan alasannya.',
+            ]);
+        }
+
+        // Lembur yang tidak pernah diaktifkan pakai kode berarti tidak ada
+        // bukti orang yang ditunjuk benar-benar yang mengerjakannya.
+        if (! $record->isActivated() && $data['payable_minutes'] > 0 && blank($data['note'])) {
+            return back()->withErrors([
+                'lembur' => "{$record->employee?->name} belum mengaktifkan lembur ini dengan kodenya. "
+                    . 'Isi catatan kalau tetap mau disahkan.',
             ]);
         }
 

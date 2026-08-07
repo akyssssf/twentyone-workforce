@@ -1,10 +1,11 @@
 @extends('layouts.app')
 @section('title', 'Roster ' . $roster->label())
+@section('lebar', 'max-w-none')
 
 @section('content')
-<div class="mb-6 flex flex-wrap items-end justify-between gap-4">
+<div class="mb-5 flex flex-wrap items-end justify-between gap-3">
     <div>
-        <h1 class="text-2xl font-semibold tracking-tight">Roster {{ $roster->label() }}</h1>
+        <h1 class="text-xl font-semibold tracking-tight sm:text-2xl">Roster {{ $roster->label() }}</h1>
         <p class="mt-1 flex items-center gap-2 text-sm text-slate-500">
             <x-status-badge :warna="$roster->status->value === 'published' ? 'emerald' : 'amber'" :label="$roster->status->label()" />
             {{ $employees->count() }} karyawan &middot; {{ count($dates) }} hari
@@ -15,7 +16,7 @@
         <form method="POST" action="{{ route('manajer.roster.generate', $roster) }}">
             @csrf
             <input type="hidden" name="overwrite" value="1">
-            <button class="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium hover:bg-slate-50">
+            <button class="btn-netral">
                 Isi otomatis
             </button>
         </form>
@@ -23,7 +24,7 @@
         @if ($roster->status->isEditable())
             <form method="POST" action="{{ route('manajer.roster.publish', $roster) }}">
                 @csrf
-                <button class="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800">
+                <button class="btn-utama">
                     Terbitkan
                 </button>
             </form>
@@ -35,7 +36,7 @@
      18 orang, roster yang memenuhi semua kebutuhan minimum sekaligus libur
      mingguan memang mustahil. --}}
 @if ($issues['errors']->isNotEmpty())
-    <div class="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+    <div class="pemberitahuan mb-4 border-red-200 bg-red-50 text-red-800">
         <p class="mb-1 font-semibold">{{ $issues['errors']->count() }} masalah memblokir penerbitan:</p>
         <ul class="list-inside list-disc space-y-0.5">
             @foreach ($issues['errors']->take(10) as $e)<li>{{ $e['message'] }}</li>@endforeach
@@ -44,7 +45,7 @@
 @endif
 
 @if ($issues['warnings']->isNotEmpty())
-    <details class="mb-6 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+    <details class="pemberitahuan mb-5 border-amber-200 bg-amber-50 text-amber-900">
         <summary class="cursor-pointer font-semibold">
             {{ $issues['warnings']->count() }} peringatan — roster tetap bisa diterbitkan
         </summary>
@@ -54,7 +55,7 @@
     </details>
 @endif
 
-<div class="overflow-x-auto rounded-xl border border-slate-200 bg-white">
+<div class="overflow-x-auto kartu">
     <table class="min-w-full text-xs">
         <thead class="bg-slate-50">
             <tr>
@@ -71,12 +72,17 @@
                 @endforeach
             </tr>
         </thead>
-        <tbody class="divide-y divide-slate-100">
+        <tbody>
             @foreach ($employees as $employee)
                 <tr class="hover:bg-slate-50/50">
                     <td class="sticky left-0 z-10 bg-white px-3 py-1.5 whitespace-nowrap">
-                        <div class="font-medium">{{ $employee->name }}</div>
-                        <div class="text-[10px] text-slate-400">{{ $employee->primaryDivision()?->name }}</div>
+                        <div class="flex items-center gap-2">
+                            <x-avatar :employee="$employee" ukuran="xs" />
+                            <div>
+                                <div class="font-medium">{{ $employee->name }}</div>
+                                <div class="text-[10px] text-slate-400">{{ $employee->primaryDivision()?->name }}</div>
+                            </div>
+                        </div>
                     </td>
 
                     @foreach ($dates as $d)
@@ -122,37 +128,37 @@
 </div>
 
 {{-- Ubah satu sel --}}
-<div class="mt-6 rounded-xl border border-slate-200 bg-white p-4">
+<div class="mt-6 kartu p-4">
     <h2 class="mb-3 font-semibold">Ubah Jadwal</h2>
     <form method="POST" action="{{ route('manajer.roster.assign', $roster) }}" class="flex flex-wrap items-end gap-3">
         @csrf
         <div>
-            <label class="block text-xs font-medium text-slate-500">Karyawan</label>
-            <select name="employee_id" required class="mt-1 rounded-lg border border-slate-300 px-3 py-1.5 text-sm">
+            <label class="label">Karyawan</label>
+            <select name="employee_id" required class="kolom mt-1">
                 @foreach ($employees as $e)<option value="{{ $e->id }}">{{ $e->name }}</option>@endforeach
             </select>
         </div>
         <div>
-            <label class="block text-xs font-medium text-slate-500">Tanggal</label>
+            <label class="label">Tanggal</label>
             <input type="date" name="work_date" required
                    min="{{ $roster->startDate()->toDateString() }}" max="{{ $roster->endDate()->toDateString() }}"
-                   class="mt-1 rounded-lg border border-slate-300 px-3 py-1.5 text-sm">
+                   class="kolom mt-1">
         </div>
         <div>
-            <label class="block text-xs font-medium text-slate-500">Shift</label>
-            <select name="shift_id" class="mt-1 rounded-lg border border-slate-300 px-3 py-1.5 text-sm">
+            <label class="label">Shift</label>
+            <select name="shift_id" class="kolom mt-1">
                 <option value="">Libur</option>
                 @foreach ($shifts as $s)<option value="{{ $s->id }}">{{ $s->name }}</option>@endforeach
             </select>
         </div>
         <div>
-            <label class="block text-xs font-medium text-slate-500">Bertugas sebagai</label>
-            <select name="division_id" class="mt-1 rounded-lg border border-slate-300 px-3 py-1.5 text-sm">
+            <label class="label">Bertugas sebagai</label>
+            <select name="division_id" class="kolom mt-1">
                 <option value="">Divisi utama</option>
                 @foreach ($divisions as $d)<option value="{{ $d->id }}">{{ $d->name }}</option>@endforeach
             </select>
         </div>
-        <button class="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800">Simpan</button>
+        <button class="btn-utama">Simpan</button>
     </form>
 </div>
 @endsection

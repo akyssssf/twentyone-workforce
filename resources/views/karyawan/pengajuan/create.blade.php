@@ -1,150 +1,196 @@
 @extends('layouts.app')
 @section('title', 'Ajukan ' . $type->shortLabel())
+@section('lebar', 'max-w-2xl')
 
 @section('content')
-<div class="mx-auto max-w-2xl">
-    <a href="{{ route('karyawan.pengajuan.index') }}" class="text-sm text-slate-500 hover:underline">&larr; Kembali</a>
-    <h1 class="mb-6 mt-2 text-2xl font-semibold tracking-tight">Ajukan {{ $type->label() }}</h1>
 
-    <form method="POST" action="{{ route('karyawan.pengajuan.store', $type->value) }}"
-          class="space-y-4 rounded-xl border border-slate-200 bg-white p-6">
-        @csrf
+<x-judul-halaman :judul="'Ajukan ' . $type->label()"
+                 keterangan="Pengganti wajib dipilih dan harus bersedia lebih dulu, baru admin memutuskan."
+                 :kembali="route('karyawan.pengajuan.index')" />
 
-        @switch($type->value)
-            @case('leave')
-                @if ($saldoCuti->isNotEmpty())
-                    <div class="rounded-lg bg-slate-50 px-3 py-2 text-sm">
-                        <span class="text-slate-500">Sisa saldo:</span>
-                        @foreach ($saldoCuti as $s)
-                            <span class="ml-2 font-medium">{{ $s->leaveType?->name }}: {{ rtrim(rtrim(number_format($s->remaining(), 1), '0'), '.,') }} hari</span>
-                        @endforeach
-                    </div>
-                @endif
+<form method="POST" action="{{ route('karyawan.pengajuan.store', $type->value) }}" class="kartu space-y-5 p-5 sm:p-6">
+    @csrf
 
+    @switch($type->value)
+
+        {{-- ------------------------------------------------- cuti / izin --}}
+        @case('leave')
+            @if ($saldoCuti->isNotEmpty())
+                <div class="flex flex-wrap gap-x-4 gap-y-1 rounded-xl bg-slate-50 px-3.5 py-2.5 text-sm">
+                    <span class="text-slate-500">Sisa saldo</span>
+                    @foreach ($saldoCuti as $s)
+                        <span class="font-medium">
+                            {{ $s->leaveType?->name }}:
+                            {{ rtrim(rtrim(number_format($s->remaining(), 1), '0'), '.,') }} hari
+                        </span>
+                    @endforeach
+                </div>
+            @endif
+
+            <div>
+                <label class="block text-sm font-medium">Jenis</label>
+                <select name="leave_type_id" required class="kolom mt-1">
+                    @foreach ($leaveTypes as $lt)
+                        <option value="{{ $lt->id }}" @selected(old('leave_type_id') == $lt->id)>
+                            {{ $lt->name }}{{ $lt->is_paid ? '' : ' (tidak dibayar)' }}
+                        </option>
+                    @endforeach
+                </select>
+            </div>
+
+            <div class="grid gap-4 sm:grid-cols-2">
                 <div>
-                    <label class="block text-sm font-medium">Jenis</label>
-                    <select name="leave_type_id" required class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
-                        @foreach ($leaveTypes as $lt)
-                            <option value="{{ $lt->id }}">{{ $lt->name }}{{ $lt->is_paid ? '' : ' (tidak dibayar)' }}</option>
-                        @endforeach
-                    </select>
+                    <label class="block text-sm font-medium">Mulai</label>
+                    <input type="date" name="start_date" required value="{{ old('start_date') }}" class="kolom mt-1">
                 </div>
-
-                <div class="grid gap-4 sm:grid-cols-2">
-                    <div>
-                        <label class="block text-sm font-medium">Mulai</label>
-                        <input type="date" name="start_date" required value="{{ old('start_date') }}"
-                               class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
-                    </div>
-                    <div>
-                        <label class="block text-sm font-medium">Sampai</label>
-                        <input type="date" name="end_date" required value="{{ old('end_date') }}"
-                               class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
-                    </div>
-                </div>
-
                 <div>
-                    <label class="block text-sm font-medium">Serah terima pekerjaan</label>
-                    <input type="text" name="handover_note" value="{{ old('handover_note') }}"
-                           placeholder="Siapa yang menggantikan tugas Anda?"
-                           class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
+                    <label class="block text-sm font-medium">Sampai</label>
+                    <input type="date" name="end_date" required value="{{ old('end_date') }}" class="kolom mt-1">
                 </div>
-                @break
+            </div>
 
-            @case('overtime')
+            <div>
+                <label class="block text-sm font-medium">Serah terima pekerjaan</label>
+                <input type="text" name="handover_note" value="{{ old('handover_note') }}"
+                       placeholder="Hal yang perlu diteruskan ke pengganti" class="kolom mt-1">
+            </div>
+            @break
+
+        {{-- ------------------------------------------------------ lembur --}}
+        @case('overtime')
+            <div>
+                <label class="block text-sm font-medium">Tanggal</label>
+                <input type="date" name="work_date" required value="{{ old('work_date') }}" class="kolom mt-1">
+            </div>
+
+            <div class="grid gap-4 sm:grid-cols-2">
                 <div>
-                    <label class="block text-sm font-medium">Tanggal</label>
-                    <input type="date" name="work_date" required value="{{ old('work_date') }}"
-                           class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
+                    <label class="block text-sm font-medium">Mulai</label>
+                    <input type="time" name="planned_start" required value="{{ old('planned_start') }}" class="kolom mt-1">
                 </div>
-                <div class="grid gap-4 sm:grid-cols-2">
-                    <div>
-                        <label class="block text-sm font-medium">Mulai</label>
-                        <input type="time" name="planned_start" required value="{{ old('planned_start') }}"
-                               class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
-                    </div>
-                    <div>
-                        <label class="block text-sm font-medium">Selesai</label>
-                        <input type="time" name="planned_end" required value="{{ old('planned_end') }}"
-                               class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
-                    </div>
+                <div>
+                    <label class="block text-sm font-medium">Selesai</label>
+                    <input type="time" name="planned_end" required value="{{ old('planned_end') }}" class="kolom mt-1">
                 </div>
-                <p class="text-xs text-slate-500">
-                    Lembur harus disetujui manager lebih dulu. Waktu setelah jam pulang tanpa persetujuan tidak dihitung lembur.
+            </div>
+
+            <p class="rounded-xl bg-slate-50 px-3.5 py-2.5 text-xs text-slate-500">
+                Lembur harus disetujui admin lebih dulu. Setelah disetujui Anda menerima
+                <strong>kode lembur</strong> — selama kode itu belum diaktifkan, lemburnya tidak dibayar.
+            </p>
+            @break
+
+        {{-- ------------------------------------------------- tukar shift --}}
+        @case('swap')
+            <div>
+                <label class="block text-sm font-medium">Jadwal saya yang ingin ditukar</label>
+                <select name="requester_assignment_id" required class="kolom mt-1">
+                    @forelse ($jadwalSaya as $j)
+                        <option value="{{ $j->id }}">
+                            {{ $j->work_date->translatedFormat('D, d M Y') }} — {{ $j->shift?->name }} ({{ $j->division?->name }})
+                        </option>
+                    @empty
+                        <option value="">Tidak ada jadwal mendatang</option>
+                    @endforelse
+                </select>
+            </div>
+
+            <div class="rounded-xl border border-amber-200 bg-amber-50 p-4">
+                <label class="block text-sm font-semibold text-amber-900">
+                    Tukar dengan siapa? <span class="text-red-500">*</span>
+                </label>
+                <p class="mb-2 mt-0.5 text-xs text-amber-800">
+                    Dia sekaligus jadi pengganti Anda, dan harus menyatakan bersedia lebih dulu.
                 </p>
-                @break
+                <select name="partner_employee_id" required class="kolom">
+                    <option value="">— pilih rekan —</option>
+                    @foreach ($rekan as $r)
+                        <option value="{{ $r->id }}" @selected(old('partner_employee_id') == $r->id)>
+                            {{ $r->name }}{{ $r->primaryDivision() ? ' — ' . $r->primaryDivision()->name : '' }}
+                        </option>
+                    @endforeach
+                </select>
+            </div>
+            @break
 
-            @case('swap')
-                <div>
-                    <label class="block text-sm font-medium">Jadwal saya yang ingin ditukar</label>
-                    <select name="requester_assignment_id" required class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
-                        @forelse ($jadwalSaya as $j)
-                            <option value="{{ $j->id }}">
-                                {{ $j->work_date->translatedFormat('D, d M Y') }} — {{ $j->shift?->name }} ({{ $j->division?->name }})
-                            </option>
-                        @empty
-                            <option value="">Tidak ada jadwal mendatang</option>
-                        @endforelse
-                    </select>
-                </div>
-                <div>
-                    <label class="block text-sm font-medium">Tukar dengan</label>
-                    <select name="partner_employee_id" required class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
-                        @foreach ($rekan as $r)<option value="{{ $r->id }}">{{ $r->name }}</option>@endforeach
-                    </select>
-                </div>
-                <p class="text-xs text-slate-500">Rekan harus menerima dulu, baru manager memutuskan.</p>
-                @break
+        {{-- ----------------------------------------------------- koreksi --}}
+        @case('correction')
+            <div>
+                <label class="block text-sm font-medium">Tanggal absensi</label>
+                <select name="work_date" required class="kolom mt-1">
+                    @forelse ($absensiTerakhir as $a)
+                        <option value="{{ $a->work_date->toDateString() }}">
+                            {{ $a->work_date->translatedFormat('D, d M') }} —
+                            masuk {{ $a->check_in_at?->format('H:i') ?? 'kosong' }},
+                            pulang {{ $a->check_out_at?->format('H:i') ?? 'kosong' }}
+                            ({{ $a->status->label() }})
+                        </option>
+                    @empty
+                        <option value="">Tidak ada catatan 30 hari terakhir</option>
+                    @endforelse
+                </select>
+            </div>
 
-            @case('correction')
-                <div>
-                    <label class="block text-sm font-medium">Tanggal absensi</label>
-                    <select name="work_date" required class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
-                        @forelse ($absensiTerakhir as $a)
-                            <option value="{{ $a->work_date->toDateString() }}">
-                                {{ $a->work_date->translatedFormat('D, d M') }} —
-                                masuk {{ $a->check_in_at?->format('H:i') ?? 'kosong' }},
-                                pulang {{ $a->check_out_at?->format('H:i') ?? 'kosong' }}
-                                ({{ $a->status->label() }})
-                            </option>
-                        @empty
-                            <option value="">Tidak ada catatan 30 hari terakhir</option>
-                        @endforelse
-                    </select>
-                </div>
-                <div>
-                    <label class="block text-sm font-medium">Kasus</label>
-                    <select name="correction_type" required class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
-                        <option value="lupa_masuk">Lupa fingerprint masuk</option>
-                        <option value="lupa_pulang">Lupa fingerprint pulang</option>
-                        <option value="mesin_error">Mesin error</option>
-                        <option value="lainnya">Lainnya</option>
-                    </select>
-                </div>
-                <div class="grid gap-4 sm:grid-cols-2">
-                    <div>
-                        <label class="block text-sm font-medium">Jam masuk sebenarnya</label>
-                        <input type="datetime-local" name="proposed_check_in"
-                               class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
-                    </div>
-                    <div>
-                        <label class="block text-sm font-medium">Jam pulang sebenarnya</label>
-                        <input type="datetime-local" name="proposed_check_out"
-                               class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
-                    </div>
-                </div>
-                @break
-        @endswitch
+            <div>
+                <label class="block text-sm font-medium">Kasus</label>
+                <select name="correction_type" required class="kolom mt-1">
+                    <option value="lupa_masuk">Lupa fingerprint masuk</option>
+                    <option value="lupa_pulang">Lupa fingerprint pulang</option>
+                    <option value="mesin_error">Mesin error</option>
+                    <option value="lainnya">Lainnya</option>
+                </select>
+            </div>
 
-        <div>
-            <label class="block text-sm font-medium">Alasan <span class="text-red-500">*</span></label>
-            <textarea name="reason" rows="3" required minlength="5"
-                      class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">{{ old('reason') }}</textarea>
+            <div class="grid gap-4 sm:grid-cols-2">
+                <div>
+                    <label class="block text-sm font-medium">Jam masuk sebenarnya</label>
+                    <input type="datetime-local" name="proposed_check_in" class="kolom mt-1">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium">Jam pulang sebenarnya</label>
+                    <input type="datetime-local" name="proposed_check_out" class="kolom mt-1">
+                </div>
+            </div>
+            @break
+    @endswitch
+
+    {{-- Pengganti wajib untuk semua jenis. Pada tukar shift, rekan yang dipilih
+         di atas sudah berperan sebagai pengganti — tidak ditanya dua kali. --}}
+    @if ($type->value !== 'swap')
+        <div class="rounded-xl border border-amber-200 bg-amber-50 p-4">
+            <label class="block text-sm font-semibold text-amber-900">
+                Siapa penggantinya? <span class="text-red-500">*</span>
+            </label>
+            <p class="mb-2 mt-0.5 text-xs text-amber-800">
+                @if ($type->value === 'correction')
+                    Rekan yang bisa membenarkan kejadiannya. Dia dimintai konfirmasi lebih dulu.
+                @else
+                    Dia akan diminta menyatakan bersedia lebih dulu. Admin baru bisa menyetujui setelah itu.
+                @endif
+            </p>
+            <select name="substitute_employee_id" required class="kolom">
+                <option value="">— pilih rekan —</option>
+                @foreach ($rekan as $r)
+                    <option value="{{ $r->id }}" @selected(old('substitute_employee_id') == $r->id)>
+                        {{ $r->name }}{{ $r->primaryDivision() ? ' — ' . $r->primaryDivision()->name : '' }}
+                    </option>
+                @endforeach
+            </select>
         </div>
+    @endif
 
-        <button class="w-full rounded-lg bg-slate-900 px-4 py-2.5 text-sm font-medium text-white hover:bg-slate-800">
-            Kirim pengajuan
-        </button>
-    </form>
+    <div>
+        <label class="block text-sm font-medium">Alasan <span class="text-red-500">*</span></label>
+        <textarea name="reason" rows="3" required minlength="5" class="kolom mt-1">{{ old('reason') }}</textarea>
+    </div>
+
+    <button class="btn-utama w-full">Kirim pengajuan</button>
+</form>
+
+<div class="kartu mt-4 p-4 text-center">
+    <p class="mb-3 text-sm text-slate-500">Perlu dikonfirmasi lebih cepat? Hubungi admin langsung.</p>
+    <x-tombol-wa class="w-full sm:w-auto"
+                 :pesan="'Halo Admin, saya ' . $employee->name . ' mau konfirmasi pengajuan ' . $type->shortLabel() . '.'" />
 </div>
+
 @endsection

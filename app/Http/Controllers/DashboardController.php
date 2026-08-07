@@ -63,7 +63,7 @@ class DashboardController extends Controller
             'pinAsing' => $scan->whereNull('employee_id')->pluck('pin')->unique()->values(),
 
             'ringkasan' => [
-                'karyawan' => Employee::active()->count(),
+                'karyawan' => Employee::tracked()->count(),
                 'hadir' => $rekap->where('status', AttendanceStatus::Hadir)->count(),
                 'terlambat' => $rekap->filter(fn ($a) => $a->late_minutes > 0)->count(),
                 'pulang_cepat' => $rekap->filter(fn ($a) => $a->early_leave_minutes > 0)->count(),
@@ -83,9 +83,57 @@ class DashboardController extends Controller
                 ->get(),
 
             'jumlahPending' => PengajuanModel::query()->awaitingManager()->count(),
+            'menungguPengganti' => PengajuanModel::query()->where('status', 'pending_peer')->count(),
 
-            'belumDihitung' => $rekap->isEmpty() && Employee::active()->exists(),
+            // Tren tujuh hari. Angka satu hari tidak memberi tahu apa pun —
+            // "6 alpha" baru berarti setelah terlihat kemarin cuma 1.
+            'tren' => $this->tren($tanggal),
+
+            'lemburHariIni' => \App\Models\OvertimeRecord::query()
+                ->with('employee')
+                ->whereDate('work_date', $tanggal)
+                ->get(),
+
+            'periodeBerjalan' => \App\Models\PayrollPeriod::query()
+                ->whereDate('start_date', '<=', $tanggal)
+                ->whereDate('end_date', '>=', $tanggal)
+                ->first(),
+
+            'belumDihitung' => $rekap->isEmpty() && Employee::tracked()->exists(),
         ]);
+    }
+
+    /**
+     * Rekap tujuh hari terakhir untuk grafik batang.
+     *
+     * Dibaca dari tabel attendances, bukan dihitung ulang — angkanya harus
+     * sama persis dengan yang tampil di kartu dan di laporan.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    protected function tren(Carbon $sampai): array
+    {
+        $mulai = $sampai->copy()->subDays(6);
+
+        $rekap = Attendance::query()
+            ->whereBetween('work_date', [$mulai, $sampai])
+            ->get()
+            ->groupBy(fn (Attendance $a) => $a->work_date->toDateString());
+
+        $hasil = [];
+
+        for ($d = $mulai->copy(); $d->lessThanOrEqualTo($sampai); $d->addDay()) {
+            $baris = $rekap->get($d->toDateString(), collect());
+
+            $hasil[] = [
+                'tanggal' => $d->copy(),
+                'hadir' => $baris->where('status', AttendanceStatus::Hadir)->count(),
+                'telat' => $baris->filter(fn ($a) => $a->late_minutes > 0)->count(),
+                'alpha' => $baris->where('status', AttendanceStatus::Alpha)->count(),
+            ];
+        }
+
+        return $hasil;
     }
 
     protected function tanggalDiminta(Request $request, string $timezone): Carbon

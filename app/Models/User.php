@@ -20,7 +20,7 @@ use Illuminate\Notifications\Notifiable;
  * 1:1 ke barisnya di tabel employees lewat employee_id. Manager dan owner tidak
  * punya employee_id karena mereka bukan pegawai yang diabsen.
  */
-#[Fillable(['name', 'email', 'password', 'role', 'is_active', 'employee_id', 'must_change_password'])]
+#[Fillable(['username', 'name', 'email', 'password', 'role', 'is_active', 'employee_id', 'must_change_password'])]
 #[Hidden(['password', 'remember_token'])]
 class User extends Authenticatable
 {

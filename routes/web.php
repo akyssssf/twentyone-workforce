@@ -95,6 +95,9 @@ Route::middleware(['auth', EnsureUserIsActive::class])->group(function () {
             Route::get('karyawan', [EmployeeController::class, 'index'])->name('karyawan.index');
             Route::get('karyawan/{employee}', [EmployeeController::class, 'show'])->name('karyawan.show');
             Route::post('karyawan/{employee}/divisi', [EmployeeController::class, 'syncDivisions'])->name('karyawan.divisi');
+            Route::post('karyawan/{employee}/absensi', [EmployeeController::class, 'updateTracking'])->name('karyawan.absensi');
+            Route::post('karyawan/{employee}/sandi', [EmployeeController::class, 'resetPassword'])->name('karyawan.sandi');
+            Route::post('karyawan/{employee}/username', [EmployeeController::class, 'updateUsername'])->name('karyawan.username');
 
             // Aturan & setelan yang bisa diubah manager
             Route::get('aturan', [RuleController::class, 'index'])->name('aturan.index');
@@ -119,6 +122,9 @@ Route::middleware(['auth', EnsureUserIsActive::class])->group(function () {
         Route::get('pengajuan/{request}', [EmployeeRequestController::class, 'show'])->name('pengajuan.show');
         Route::post('pengajuan/{request}/batal', [EmployeeRequestController::class, 'cancel'])->name('pengajuan.cancel');
         Route::post('pengajuan/{request}/jawab', [EmployeeRequestController::class, 'respond'])->name('pengajuan.respond');
+
+        Route::get('lembur', [EmployeePortalController::class, 'overtime'])->name('lembur.index');
+        Route::post('lembur/aktivasi', [EmployeeRequestController::class, 'activateOvertime'])->name('lembur.aktivasi');
 
         Route::get('slip', [PayslipController::class, 'index'])->name('slip.index');
         Route::get('slip/{payslip}', [PayslipController::class, 'show'])->name('slip.show');

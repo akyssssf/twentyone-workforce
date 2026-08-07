@@ -24,6 +24,7 @@ class Request extends Model
     protected $fillable = [
         'code', 'branch_id', 'type', 'employee_id', 'status', 'submitted_at',
         'decided_by', 'decided_at', 'decision_note', 'expires_at', 'cancelled_at',
+        'substitute_employee_id', 'substitute_accepted_at', 'substitute_rejected_at', 'substitute_note',
     ];
 
     protected function casts(): array
@@ -35,6 +36,8 @@ class Request extends Model
             'decided_at' => 'datetime',
             'expires_at' => 'datetime',
             'cancelled_at' => 'datetime',
+            'substitute_accepted_at' => 'datetime',
+            'substitute_rejected_at' => 'datetime',
         ];
     }
 
@@ -46,6 +49,35 @@ class Request extends Model
     public function decider(): BelongsTo
     {
         return $this->belongsTo(User::class, 'decided_by');
+    }
+
+    /**
+     * Rekan yang menggantikan selama pengaju tidak ada.
+     *
+     * Wajib untuk SEMUA jenis pengajuan, bukan cuma cuti: lembur pun perlu
+     * tahu siapa yang menutup posisi kalau orangnya diminta tinggal lebih lama.
+     */
+    public function substitute(): BelongsTo
+    {
+        return $this->belongsTo(Employee::class, 'substitute_employee_id');
+    }
+
+    /** Pengganti sudah menyatakan bersedia? */
+    public function substituteConfirmed(): bool
+    {
+        return $this->substitute_accepted_at !== null;
+    }
+
+    /**
+     * Menunggu konfirmasi pengganti, bukan menunggu manajer.
+     *
+     * Dipisah karena keduanya menunggu orang yang berbeda, dan manajer tidak
+     * perlu melihat pengajuan yang penggantinya saja belum menjawab.
+     */
+    public function scopeAwaitingSubstitute($query)
+    {
+        return $query->where('status', RequestStatus::PendingPeer->value)
+            ->whereNotNull('substitute_employee_id');
     }
 
     public function leave(): HasOne

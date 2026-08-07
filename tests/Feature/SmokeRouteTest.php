@@ -102,7 +102,6 @@ class SmokeRouteTest extends TestCase
             '/karyawan/absensi',
             '/karyawan/pengajuan',
             '/karyawan/pengajuan/baru/leave',
-            '/karyawan/pengajuan/baru/overtime',
             '/karyawan/pengajuan/baru/swap',
             '/karyawan/pengajuan/baru/correction',
             '/karyawan/slip',
@@ -111,6 +110,29 @@ class SmokeRouteTest extends TestCase
         foreach ($rute as $url) {
             $this->get($url)->assertOk("Halaman {$url} gagal terbuka.");
         }
+    }
+
+    /**
+     * Lembur tidak bisa diajukan sendiri oleh karyawan.
+     *
+     * Sejak kebijakan kode rahasia, lembur selalu berawal dari penunjukan
+     * admin. Formulir pengajuannya sengaja ditutup supaya tidak ada jalur
+     * kedua menuju lembur yang dibayar tanpa kode.
+     */
+    public function test_karyawan_tidak_bisa_mengajukan_lembur_sendiri(): void
+    {
+        $this->actingAs($this->karyawan)
+            ->get('/karyawan/pengajuan/baru/overtime')
+            ->assertNotFound();
+
+        $this->actingAs($this->karyawan)
+            ->post('/karyawan/pengajuan/baru/overtime', [
+                'work_date' => now()->addDay()->toDateString(),
+                'planned_start' => '18:00',
+                'planned_end' => '20:00',
+                'reason' => 'Mau lembur sendiri',
+            ])
+            ->assertNotFound();
     }
 
     public function test_karyawan_tidak_bisa_masuk_area_manajer(): void
@@ -174,10 +196,13 @@ class SmokeRouteTest extends TestCase
 
     public function test_pengajuan_bisa_dibuka_pengaju_dan_manajer(): void
     {
+        $rekan = Employee::factory()->create(['branch_id' => Branch::current()->id]);
+
         $pengajuan = app(RequestService::class)->submitCorrection($this->employee, [
             'work_date' => now()->subDay()->toDateString(),
             'correction_type' => 'lupa_pulang',
             'reason' => 'Mesin tidak merespons saat pulang',
+            'substitute_employee_id' => $rekan->id,
         ]);
 
         $this->actingAs($this->karyawan)
@@ -189,14 +214,22 @@ class SmokeRouteTest extends TestCase
             ->assertOk();
     }
 
+    /**
+     * Pengajuan yang sama sekali tidak menyangkut saya tetap tertutup.
+     *
+     * Penggantinya sengaja orang ketiga: pengganti memang BERHAK melihat,
+     * karena dia yang harus memutuskan bersedia atau tidak.
+     */
     public function test_pengajuan_orang_lain_tidak_bisa_dibuka_karyawan(): void
     {
         $lain = Employee::factory()->create(['branch_id' => Branch::current()->id]);
+        $orangKetiga = Employee::factory()->create(['branch_id' => Branch::current()->id]);
 
         $pengajuan = app(RequestService::class)->submitCorrection($lain, [
             'work_date' => now()->subDay()->toDateString(),
             'correction_type' => 'lupa_masuk',
             'reason' => 'Antre panjang di mesin saat masuk',
+            'substitute_employee_id' => $orangKetiga->id,
         ]);
 
         $this->actingAs($this->karyawan)

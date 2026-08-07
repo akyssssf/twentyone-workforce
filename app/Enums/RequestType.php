@@ -42,4 +42,24 @@ enum RequestType: string
     {
         return $this === self::Swap;
     }
+
+    /**
+     * Jenis yang boleh diajukan sendiri oleh karyawan.
+     *
+     * Lembur TIDAK termasuk. Sejak kebijakan kode rahasia, lembur selalu
+     * berawal dari penunjukan admin — karyawan menerima kode, bukan mengajukan
+     * diri. Membiarkan keduanya berjalan bersamaan berarti ada dua jalur menuju
+     * lembur yang dibayar, dan yang satu tidak punya kode sama sekali.
+     *
+     * @return array<int, self>
+     */
+    public static function selfServiceCases(): array
+    {
+        return [self::Leave, self::Swap, self::Correction];
+    }
+
+    public function isSelfService(): bool
+    {
+        return in_array($this, self::selfServiceCases(), true);
+    }
 }

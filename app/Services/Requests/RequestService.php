@@ -11,6 +11,7 @@ use App\Models\Employee;
 use App\Models\LeaveBalance;
 use App\Models\LeaveLedger;
 use App\Models\OvertimeRecord;
+use App\Models\OvertimeRequest;
 use App\Models\Request;
 use App\Models\RosterAssignment;
 use App\Models\User;
@@ -25,6 +26,11 @@ use RuntimeException;
 /**
  * Satu mesin state untuk keempat jenis pengajuan.
  *
+ * Sejak kebijakan baru, SEMUA pengajuan menempuh dua tahap persetujuan:
+ * pengganti dulu, baru manajer. Alasannya operasional, bukan birokratis —
+ * pengajuan yang disetujui tanpa ada yang menutup shift-nya baru ketahuan pada
+ * hari H, saat sudah tidak ada waktu mencari orang.
+ *
  * Alur approval, audit, notifikasi, dan kedaluwarsa hidup di sini — satu jalur,
  * bukan enam salinan. Yang khas per jenis hanya dua hal: validasi sebelum
  * diajukan, dan efek setelah disetujui. Keduanya dipisah ke method sendiri
@@ -38,6 +44,49 @@ class RequestService
         protected Notifier $notifier,
         protected LeaveService $leave,
     ) {}
+
+    // ------------------------------------------------------------ pengganti
+
+    /**
+     * Pastikan pengganti sah sebelum pengajuan dibuat.
+     *
+     * @throws RuntimeException
+     */
+    protected function assertSubstitute(Employee $pengaju, ?int $substituteId): Employee
+    {
+        if ($substituteId === null) {
+            throw new RuntimeException('Pengganti wajib dipilih. Sebutkan siapa yang menutup posisi Anda.');
+        }
+
+        if ($substituteId === $pengaju->id) {
+            throw new RuntimeException('Pengganti tidak boleh diri sendiri.');
+        }
+
+        $pengganti = Employee::query()->tracked()->find($substituteId);
+
+        if ($pengganti === null) {
+            throw new RuntimeException('Pengganti yang dipilih tidak aktif atau tidak ikut diabsen.');
+        }
+
+        return $pengganti;
+    }
+
+    /** Beri tahu pengganti bahwa dia sedang ditunggu jawabannya. */
+    protected function askSubstitute(Request $request): void
+    {
+        $user = $request->substitute?->user;
+
+        if ($user === null) {
+            return;
+        }
+
+        $this->notifier->send(
+            $user,
+            'Anda diminta jadi pengganti',
+            "{$request->employee->name} mengajukan {$request->type->shortLabel()} ({$request->code}) dan menunjuk Anda sebagai pengganti.",
+            route('karyawan.pengajuan.show', $request),
+        );
+    }
 
     // ---------------------------------------------------------------- submit
 
@@ -58,8 +107,11 @@ class RequestService
         // sekarang — bukan tiga hari kemudian setelah manager membukanya.
         $this->leave->assertSufficientBalance($employee, (int) $data['leave_type_id'], $days);
 
-        return DB::transaction(function () use ($employee, $data, $start, $end, $days) {
-            $request = $this->createRequest($employee, RequestType::Leave, RequestStatus::PendingManager);
+        $pengganti = $this->assertSubstitute($employee, $data['substitute_employee_id'] ?? null);
+
+        return DB::transaction(function () use ($employee, $data, $start, $end, $days, $pengganti) {
+            // Menunggu pengganti dulu, bukan langsung ke manajer.
+            $request = $this->createRequest($employee, RequestType::Leave, RequestStatus::PendingPeer, $pengganti);
 
             $request->leave()->create([
                 'leave_type_id' => $data['leave_type_id'],
@@ -72,7 +124,7 @@ class RequestService
 
             $this->leave->holdPending($employee, (int) $data['leave_type_id'], $days, $request);
 
-            $this->announce($request, 'Pengajuan cuti baru');
+            $this->askSubstitute($request);
 
             return $request;
         });
@@ -98,8 +150,22 @@ class RequestService
             throw new RuntimeException("Lembur minimal {$minimum} menit. Pengajuan ini hanya {$minutes} menit.");
         }
 
-        return DB::transaction(function () use ($employee, $data, $workDate, $minutes, $initiatedBy) {
-            $request = $this->createRequest($employee, RequestType::Overtime, RequestStatus::PendingManager);
+        $pengganti = $this->assertSubstitute($employee, $data['substitute_employee_id'] ?? null);
+
+        return DB::transaction(function () use ($employee, $data, $workDate, $minutes, $initiatedBy, $pengganti) {
+            // Lembur yang ditugaskan manajer tetap butuh pengganti — orang yang
+            // tinggal lebih lama malam ini biasanya perlu digantikan besok.
+            $status = $initiatedBy === 'manager'
+                ? RequestStatus::PendingManager
+                : RequestStatus::PendingPeer;
+
+            $request = $this->createRequest($employee, RequestType::Overtime, $status, $pengganti);
+
+            // Manajer yang menunjuk langsung berarti pengganti sudah dibicarakan
+            // di lapangan; jangan menahan penugasan mendesak menunggu balasan.
+            if ($initiatedBy === 'manager') {
+                $request->update(['substitute_accepted_at' => now()]);
+            }
 
             $request->overtime()->create([
                 'batch_id' => $data['batch_id'] ?? null,
@@ -116,9 +182,15 @@ class RequestService
                 'is_backdated' => $workDate->lessThan(today()),
 
                 'reason' => $data['reason'],
+
+                // Kode dibuat saat pengajuan lahir, bukan saat disetujui,
+                // supaya nomor yang sama bisa dirujuk sejak awal percakapan.
+                'secret_code' => OvertimeRequest::generateCode(),
             ]);
 
-            $this->announce($request, 'Pengajuan lembur baru');
+            $initiatedBy === 'manager'
+                ? $this->announce($request, 'Penugasan lembur menunggu persetujuan')
+                : $this->askSubstitute($request);
 
             return $request;
         });
@@ -138,9 +210,11 @@ class RequestService
             throw new RuntimeException('Tidak bisa menukar shift yang tanggalnya sudah lewat.');
         }
 
-        return DB::transaction(function () use ($employee, $data, $assignment) {
-            // Tukar shift butuh rekan menerima DULU, baru manager.
-            $request = $this->createRequest($employee, RequestType::Swap, RequestStatus::PendingPeer);
+        // Pada tukar shift, rekan yang dituju SEKALIGUS penggantinya.
+        $pengganti = $this->assertSubstitute($employee, $data['partner_employee_id'] ?? null);
+
+        return DB::transaction(function () use ($employee, $data, $assignment, $pengganti) {
+            $request = $this->createRequest($employee, RequestType::Swap, RequestStatus::PendingPeer, $pengganti);
 
             // Pengajuan menggantung tidak boleh mengubah roster di menit
             // terakhir: kedaluwarsa sehari sebelum tanggal shift.
@@ -174,8 +248,13 @@ class RequestService
         $workDate = Carbon::parse($data['work_date'])->startOfDay();
         $this->lockGuard->ensureUnlocked($workDate);
 
-        return DB::transaction(function () use ($employee, $data, $workDate) {
-            $request = $this->createRequest($employee, RequestType::Correction, RequestStatus::PendingManager);
+        // Koreksi absensi tidak mengubah jadwal siapa pun, tapi kebijakan kafe
+        // menyeragamkan seluruh pengajuan: selalu ada rekan yang tahu dan
+        // membenarkan. Untuk koreksi, dia berperan sebagai saksi.
+        $pengganti = $this->assertSubstitute($employee, $data['substitute_employee_id'] ?? null);
+
+        return DB::transaction(function () use ($employee, $data, $workDate, $pengganti) {
+            $request = $this->createRequest($employee, RequestType::Correction, RequestStatus::PendingPeer, $pengganti);
 
             $request->correction()->create([
                 'work_date' => $workDate,
@@ -187,7 +266,7 @@ class RequestService
                 'reason' => $data['reason'],
             ]);
 
-            $this->announce($request, 'Pengajuan koreksi absensi');
+            $this->askSubstitute($request);
 
             return $request;
         });
@@ -195,41 +274,79 @@ class RequestService
 
     // --------------------------------------------------------------- decide
 
-    /** Rekan menerima atau menolak tukar shift. Tahap sebelum manager. */
-    public function peerRespond(Request $request, Employee $partner, bool $accepted, ?string $note = null): Request
+    /**
+     * Pengganti menerima atau menolak permintaan.
+     *
+     * Berlaku untuk SEMUA jenis pengajuan, bukan cuma tukar shift. Selama
+     * pengganti belum menjawab, manajer bahkan tidak melihat pengajuannya —
+     * tidak ada gunanya memutuskan cuti yang belum jelas siapa penutup
+     * shift-nya.
+     */
+    public function peerRespond(Request $request, Employee $pengganti, bool $accepted, ?string $note = null): Request
     {
         if ($request->status !== RequestStatus::PendingPeer) {
-            throw new RuntimeException('Pengajuan ini tidak sedang menunggu jawaban rekan.');
+            throw new RuntimeException('Pengajuan ini tidak sedang menunggu jawaban pengganti.');
         }
 
-        $swap = $request->swap;
-
-        if ($swap->partner_employee_id !== $partner->id) {
-            throw new RuntimeException('Anda bukan rekan yang diminta pada pengajuan ini.');
+        if ($request->substitute_employee_id !== $pengganti->id) {
+            throw new RuntimeException('Anda bukan pengganti yang ditunjuk pada pengajuan ini.');
         }
 
-        if (! $accepted) {
-            $swap->update(['partner_rejected_at' => now(), 'partner_note' => $note]);
-            $request->update(['status' => RequestStatus::Rejected, 'decision_note' => 'Ditolak rekan']);
+        return DB::transaction(function () use ($request, $accepted, $note) {
+            if (! $accepted) {
+                $request->update([
+                    'substitute_rejected_at' => now(),
+                    'substitute_note' => $note,
+                    'status' => RequestStatus::Rejected,
+                    'decision_note' => 'Pengganti tidak bersedia',
+                ]);
 
-            AuditLogger::record('request.peer_rejected', $request);
+                // Saldo cuti yang tadi ditahan harus dikembalikan.
+                if ($request->type === RequestType::Leave) {
+                    $this->leave->releasePending($request);
+                }
+
+                $request->swap?->update(['partner_rejected_at' => now(), 'partner_note' => $note]);
+
+                AuditLogger::record('request.substitute_rejected', $request);
+                $this->notifyRequester($request, 'Pengganti tidak bersedia');
+
+                return $request;
+            }
+
+            $request->update([
+                'substitute_accepted_at' => now(),
+                'substitute_note' => $note,
+                'status' => RequestStatus::PendingManager,
+            ]);
+
+            $request->swap?->update(['partner_accepted_at' => now(), 'partner_note' => $note]);
+
+            AuditLogger::record('request.substitute_accepted', $request);
+            $this->announce($request, 'Pengajuan menunggu persetujuan Anda');
 
             return $request;
-        }
-
-        $swap->update(['partner_accepted_at' => now(), 'partner_note' => $note]);
-        $request->update(['status' => RequestStatus::PendingManager]);
-
-        AuditLogger::record('request.peer_accepted', $request);
-        $this->announce($request, 'Tukar shift menunggu persetujuan Anda');
-
-        return $request;
+        });
     }
 
     public function approve(Request $request, User $decider, ?string $note = null): Request
     {
         if ($request->status !== RequestStatus::PendingManager) {
             throw new RuntimeException('Pengajuan ini tidak sedang menunggu persetujuan manager.');
+        }
+
+        // Penjaga terakhir. Status seharusnya sudah menjamin ini, tapi aturan
+        // yang menyangkut "siapa yang menutup shift" terlalu mahal kalau bocor
+        // lewat jalur yang tidak terduga — misalnya perubahan status manual.
+        if ($request->substitute_employee_id === null) {
+            throw new RuntimeException('Pengajuan ini belum menunjuk pengganti.');
+        }
+
+        if (! $request->substituteConfirmed()) {
+            throw new RuntimeException(
+                'Pengganti (' . ($request->substitute?->name ?? '-') . ') belum menyatakan bersedia. '
+                . 'Persetujuan menunggu konfirmasi pengganti lebih dulu.'
+            );
         }
 
         return DB::transaction(function () use ($request, $decider, $note) {
@@ -459,13 +576,18 @@ class RequestService
 
     // ---------------------------------------------------------------- utils
 
-    protected function createRequest(Employee $employee, RequestType $type, RequestStatus $status): Request
-    {
+    protected function createRequest(
+        Employee $employee,
+        RequestType $type,
+        RequestStatus $status,
+        ?Employee $pengganti = null,
+    ): Request {
         return Request::create([
             'code' => $this->nextCode(),
             'branch_id' => Branch::current()->id,
             'type' => $type,
             'employee_id' => $employee->id,
+            'substitute_employee_id' => $pengganti?->id,
             'status' => $status,
             'submitted_at' => now(),
         ]);

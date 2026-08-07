@@ -1,29 +1,29 @@
 @extends('layouts.app')
 @section('title', 'Karyawan')
+@section('lebar', 'max-w-6xl')
 
 @section('content')
-<h1 class="mb-6 text-2xl font-semibold tracking-tight">Karyawan</h1>
 
-<div class="overflow-hidden rounded-xl border border-slate-200 bg-white">
-    <div class="overflow-x-auto">
-        <table class="min-w-full divide-y divide-slate-200 text-sm">
-            <thead class="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
+<div class="overflow-hidden kartu">
+    <div class="tabel-bungkus">
+        <table class="tabel">
+            <thead>
                 <tr>
-                    <th class="px-4 py-2 font-medium">Foto</th>
-                    <th class="px-4 py-2 font-medium">No. Induk</th>
-                    <th class="px-4 py-2 font-medium">Nama</th>
-                    <th class="px-4 py-2 font-medium">Divisi</th>
-                    <th class="px-4 py-2 font-medium">PIN aktif</th>
-                    <th class="px-4 py-2 font-medium">Shift preferensi</th>
-                    <th class="px-4 py-2 font-medium">Status</th>
-                    <th class="px-4 py-2"></th>
+                    <th >Foto</th>
+                    <th >No. Induk</th>
+                    <th >Nama</th>
+                    <th >Divisi</th>
+                    <th >PIN aktif</th>
+                    <th >Shift preferensi</th>
+                    <th >Status</th>
+                    <th ></th>
                 </tr>
             </thead>
-            <tbody class="divide-y divide-slate-100">
+            <tbody>
                 @foreach ($employees as $e)
-                    <tr class="hover:bg-slate-50">
-                        <td class="px-4 py-2">
-                            @if ($photo = $e->latestPhotoUrl())
+                    <tr >
+                        <td >
+                            @if ($photo = $e->avatarUrl())
                                 <a href="{{ $photo }}" target="_blank" rel="noopener noreferrer">
                                     <img src="{{ $photo }}" alt="{{ $e->name }}" class="h-10 w-10 rounded-full object-cover ring-2 ring-slate-200 transition hover:scale-105">
                                 </a>
@@ -33,9 +33,9 @@
                                 </div>
                             @endif
                         </td>
-                        <td class="px-4 py-2 font-mono text-xs">{{ $e->employee_no }}</td>
-                        <td class="px-4 py-2 font-medium">{{ $e->name }}</td>
-                        <td class="px-4 py-2">
+                        <td class="font-mono text-xs">{{ $e->employee_no }}</td>
+                        <td >{{ $e->name }}</td>
+                        <td >
                             @foreach ($e->divisions as $d)
                                 <span class="mr-1 inline-flex items-center gap-1 rounded bg-slate-100 px-1.5 py-0.5 text-xs">
                                     <span class="h-2 w-2 rounded-full" style="background: {{ $d->color }}"></span>
@@ -43,13 +43,16 @@
                                 </span>
                             @endforeach
                         </td>
-                        <td class="px-4 py-2 font-mono text-xs">{{ $e->devices->firstWhere('valid_to', null)?->pin ?? '—' }}</td>
-                        <td class="px-4 py-2 text-slate-500">{{ $e->defaultShift?->name ?? '—' }}</td>
-                        <td class="px-4 py-2">
+                        <td class="font-mono text-xs">{{ $e->devices->firstWhere('valid_to', null)?->pin ?? '—' }}</td>
+                        <td class="text-slate-500">{{ $e->defaultShift?->name ?? '—' }}</td>
+                        <td >
                             <x-status-badge :warna="$e->employment_status === 'active' ? 'emerald' : 'slate'"
                                             :label="ucfirst($e->employment_status)" />
+                            @unless ($e->tracks_attendance)
+                                <span class="ml-1"><x-status-badge warna="indigo" label="Tidak diabsen" /></span>
+                            @endunless
                         </td>
-                        <td class="px-4 py-2 text-right">
+                        <td class="text-right">
                             <a href="{{ route('manajer.karyawan.show', $e) }}" class="font-medium text-slate-700 hover:underline">Detail</a>
                         </td>
                     </tr>
