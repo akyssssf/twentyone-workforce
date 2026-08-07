@@ -315,4 +315,70 @@ class MonthlyReportTest extends TestCase
             ->assertOk()
             ->assertSee('September 2026');
     }
+
+    // -------------------------------------------------------- harian & mingguan
+
+    public function test_rekap_harian_cuma_memuat_satu_tanggal(): void
+    {
+        $this->skenario();
+
+        $report = MonthlyReport::forDay(Carbon::parse('2026-08-04', 'Asia/Jakarta'));
+        $baris = $report->ringkasan()->sole();
+
+        $this->assertSame(1, $baris['hari_tercatat']);
+        $this->assertSame(1, $baris['telat']);
+        $this->assertSame('2026-08-04', $report->periodeAwal()->toDateString());
+        $this->assertSame('2026-08-04', $report->periodeAkhir()->toDateString());
+    }
+
+    public function test_rekap_mingguan_memuat_senin_sampai_minggu(): void
+    {
+        $this->skenario();
+
+        // 3-5 Agustus 2026 jatuh di pekan Senin 3 Agustus - Minggu 9 Agustus.
+        $report = MonthlyReport::forWeek(Carbon::parse('2026-08-05', 'Asia/Jakarta'));
+
+        $this->assertSame('2026-08-03', $report->periodeAwal()->toDateString());
+        $this->assertSame('2026-08-09', $report->periodeAkhir()->toDateString());
+
+        $baris = $report->ringkasan()->sole();
+        $this->assertSame(4, $baris['hari_tercatat']);
+    }
+
+    public function test_halaman_rekap_mingguan_dan_harian_terbuka(): void
+    {
+        $this->skenario();
+        $manajer = User::factory()->create();
+
+        $this->actingAs($manajer)
+            ->get('/laporan?tampilan=harian&tanggal=2026-08-04')
+            ->assertOk()
+            ->assertSee('Budi');
+
+        $this->actingAs($manajer)
+            ->get('/laporan?tampilan=mingguan&minggu=2026-W32')
+            ->assertOk()
+            ->assertSee('Budi');
+    }
+
+    // --------------------------------------------------------------- teks WA
+
+    public function test_teks_whatsapp_memuat_nama_dan_total(): void
+    {
+        $this->skenario();
+
+        $teks = MonthlyReport::for(2026, 8)->teksWhatsApp();
+
+        $this->assertStringContainsString('Agustus 2026', $teks);
+        $this->assertStringContainsString('Budi', $teks);
+        $this->assertStringContainsString('*Total:*', $teks);
+        $this->assertStringContainsString('1 karyawan', $teks);
+    }
+
+    public function test_teks_whatsapp_periode_kosong_tidak_meledak(): void
+    {
+        $teks = MonthlyReport::for(2026, 1)->teksWhatsApp();
+
+        $this->assertStringContainsString('Belum ada data', $teks);
+    }
 }

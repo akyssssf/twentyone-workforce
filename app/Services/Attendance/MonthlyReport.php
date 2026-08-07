@@ -19,45 +19,71 @@ use Illuminate\Support\Collection;
 class MonthlyReport
 {
     public function __construct(
-        public readonly int $year,
-        public readonly int $month,
+        public readonly Carbon $awal,
+        public readonly Carbon $akhir,
+        public readonly string $granularitas = 'bulanan',
     ) {}
 
     public static function for(int $year, int $month): self
     {
-        return new self($year, $month);
+        $timezone = config('attendance.timezone');
+        $awalBulan = Carbon::create($year, $month, 1, 0, 0, 0, $timezone);
+
+        $mulaiPelacakan = config('attendance.tracking_starts_on');
+        $awal = $awalBulan;
+
+        if ($mulaiPelacakan !== null) {
+            // Cuma relevan kalau tanggal mulai jatuh di bulan yang sama
+            // dengan yang diminta — periode dimulai dari situ, bukan
+            // tanggal 1, supaya bulan pertama sistem ini jalan tidak
+            // dipenuhi alpha dari sebelum mesin terpasang. Bulan-bulan lain
+            // (sebelum atau sesudah) tidak disentuh: bulan sebelumnya
+            // memang tidak akan punya data sama sekali (AttendanceComputer
+            // melewatinya), jadi tanggal 1 biasa sudah cukup — whereBetween
+            // otomatis kosong.
+            $mulai = Carbon::parse($mulaiPelacakan, $timezone)->startOfDay();
+            $awal = $mulai->isSameMonth($awalBulan) ? $mulai : $awalBulan;
+        }
+
+        return new self($awal, $awalBulan->copy()->endOfMonth(), 'bulanan');
+    }
+
+    /** Senin s/d Minggu yang memuat $tanggal. */
+    public static function forWeek(Carbon $tanggal): self
+    {
+        $timezone = config('attendance.timezone');
+        $hari = $tanggal->copy()->setTimezone($timezone)->startOfDay();
+
+        return new self($hari->copy()->startOfWeek(), $hari->copy()->endOfWeek(), 'mingguan');
+    }
+
+    public static function forDay(Carbon $tanggal): self
+    {
+        $timezone = config('attendance.timezone');
+        $hari = $tanggal->copy()->setTimezone($timezone)->startOfDay();
+
+        return new self($hari->copy(), $hari->copy()->endOfDay(), 'harian');
     }
 
     public function periodeAwal(): Carbon
     {
-        $awalBulan = Carbon::create($this->year, $this->month, 1, 0, 0, 0, config('attendance.timezone'));
-
-        $mulaiPelacakan = config('attendance.tracking_starts_on');
-
-        if ($mulaiPelacakan === null) {
-            return $awalBulan;
-        }
-
-        // Cuma relevan kalau tanggal mulai jatuh di bulan yang sama dengan
-        // yang diminta — periode dimulai dari situ, bukan tanggal 1, supaya
-        // bulan pertama sistem ini jalan tidak dipenuhi alpha dari sebelum
-        // mesin terpasang. Bulan-bulan lain (sebelum atau sesudah) tidak
-        // disentuh: bulan sebelumnya memang tidak akan punya data sama
-        // sekali (AttendanceComputer melewatinya), jadi tanggal 1 biasa
-        // sudah cukup — whereBetween otomatis kosong.
-        $mulai = Carbon::parse($mulaiPelacakan, config('attendance.timezone'))->startOfDay();
-
-        return $mulai->isSameMonth($awalBulan) ? $mulai : $awalBulan;
+        return $this->awal;
     }
 
     public function periodeAkhir(): Carbon
     {
-        return $this->periodeAwal()->endOfMonth();
+        return $this->akhir;
     }
 
     public function judulPeriode(): string
     {
-        return $this->periodeAwal()->translatedFormat('F Y');
+        return match ($this->granularitas) {
+            'harian' => $this->awal->translatedFormat('l, d F Y'),
+            'mingguan' => $this->awal->isSameMonth($this->akhir)
+                ? $this->awal->translatedFormat('d').' – '.$this->akhir->translatedFormat('d F Y')
+                : $this->awal->translatedFormat('d M').' – '.$this->akhir->translatedFormat('d M Y'),
+            default => $this->awal->translatedFormat('F Y'),
+        };
     }
 
     /**
@@ -167,11 +193,62 @@ class MonthlyReport
     }
 
     /**
+     * Teks rekap dalam format markup WhatsApp (*tebal*, blok monospace),
+     * siap tempel apa adanya ke chat — bukan HTML yang perlu dirender.
+     *
+     * Blok monospace (```) dipakai supaya kolom-kolomnya tetap sejajar;
+     * WhatsApp tidak punya tabel sungguhan.
+     */
+    public function teksWhatsApp(): string
+    {
+        $baris = $this->ringkasan()->filter(
+            fn (array $b) => $b['hari_tercatat'] > 0
+        )->values();
+
+        $total = $this->total();
+
+        $lebarNama = (int) max(4, min(20, $baris->max(fn (array $b) => mb_strlen($b['nama'])) ?? 4));
+
+        $teks = "*Rekap Absensi — {$this->judulPeriode()}*\n\n";
+
+        if ($baris->isEmpty()) {
+            $teks .= "_Belum ada data untuk periode ini._\n";
+
+            return $teks;
+        }
+
+        $teks .= "```\n";
+        $teks .= str_pad('Nama', $lebarNama).sprintf(" %3s %3s %3s %3s\n", 'H', 'T', 'A', 'L');
+
+        foreach ($baris as $b) {
+            $nama = mb_strimwidth($b['nama'], 0, $lebarNama, '');
+            $teks .= str_pad($nama, $lebarNama).sprintf(
+                " %3d %3d %3d %3d\n",
+                $b['hadir'], $b['telat'], $b['alpha'], $b['libur'],
+            );
+        }
+
+        $teks .= "```\n";
+        $teks .= "_H=Hadir · T=Telat · A=Alpha · L=Libur_\n\n";
+        $teks .= "*Total:* {$total['karyawan']} karyawan · {$total['hadir']} hadir · {$total['telat']} telat · {$total['alpha']} alpha";
+
+        if ($total['total_lembur_menit'] > 0) {
+            $teks .= ' · '.round($total['total_lembur_menit'] / 60, 1).' jam lembur';
+        }
+
+        return $teks;
+    }
+
+    /**
      * Nama berkas unduhan.
      */
     public function namaBerkas(): string
     {
-        return sprintf('absensi-%04d-%02d.xlsx', $this->year, $this->month);
+        return match ($this->granularitas) {
+            'harian' => 'absensi-'.$this->awal->format('Y-m-d').'.xlsx',
+            'mingguan' => 'absensi-'.$this->awal->format('Y-m-d').'_'.$this->akhir->format('Y-m-d').'.xlsx',
+            default => 'absensi-'.$this->awal->format('Y-m').'.xlsx',
+        };
     }
 
     /**

@@ -1,30 +1,69 @@
 @extends('layouts.app')
 
-@section('title', 'Rekap Bulanan')
+@section('title', 'Rekap Absensi')
 @section('lebar', 'max-w-6xl')
 
 @section('content')
 
+    <div class="mb-5">
+        <h1 class="text-xl font-semibold tracking-tight sm:text-2xl">Rekap Absensi</h1>
+        <p class="mt-1 text-sm text-slate-500">{{ $report->judulPeriode() }}</p>
+    </div>
+
     <div class="mb-5 flex flex-wrap items-end justify-between gap-3">
-        <div>
-            <h1 class="text-xl font-semibold tracking-tight sm:text-2xl">Rekap Bulanan</h1>
-            <p class="mt-1 text-sm text-slate-500">{{ $report->judulPeriode() }}</p>
+        {{-- Ganti granularitas --}}
+        <div class="inline-flex rounded-lg border border-slate-300 bg-white p-1 text-sm">
+            @foreach (['harian' => 'Harian', 'mingguan' => 'Mingguan', 'bulanan' => 'Bulanan'] as $kunci => $label)
+                <a href="{{ route('laporan', ['tampilan' => $kunci]) }}"
+                   class="rounded-md px-3 py-1.5 font-medium transition {{ $tampilan === $kunci ? 'bg-slate-900 text-white' : 'text-slate-600 hover:bg-slate-100' }}">
+                    {{ $label }}
+                </a>
+            @endforeach
         </div>
 
-        <div class="flex items-end gap-2">
-            <form method="GET" class="flex items-end gap-2">
-                <div>
-                    <label for="bulan" class="label">Bulan</label>
-                    <input id="bulan" type="month" name="bulan" value="{{ $periode->format('Y-m') }}"
-                           class="mt-1 rounded-lg border border-slate-300 px-3 py-1.5 text-sm shadow-sm focus:border-slate-900 focus:outline-none focus:ring-1 focus:ring-slate-900">
-                </div>
-                <button type="submit"
-                        class="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100">
-                    Lihat
-                </button>
-            </form>
+        <div class="flex flex-wrap items-end gap-2">
+            @if ($tampilan === 'harian')
+                <form method="GET" class="flex items-end gap-2">
+                    <input type="hidden" name="tampilan" value="harian">
+                    <div>
+                        <label for="tanggal" class="label">Tanggal</label>
+                        <input id="tanggal" type="date" name="tanggal" value="{{ $periode->format('Y-m-d') }}"
+                               class="mt-1 rounded-lg border border-slate-300 px-3 py-1.5 text-sm shadow-sm focus:border-slate-900 focus:outline-none focus:ring-1 focus:ring-slate-900">
+                    </div>
+                    <button type="submit" class="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100">Lihat</button>
+                </form>
+            @elseif ($tampilan === 'mingguan')
+                <form method="GET" class="flex items-end gap-2">
+                    <input type="hidden" name="tampilan" value="mingguan">
+                    <div>
+                        <label for="minggu" class="label">Minggu</label>
+                        <input id="minggu" type="week" name="minggu" value="{{ $periode->format('o-\WW') }}"
+                               class="mt-1 rounded-lg border border-slate-300 px-3 py-1.5 text-sm shadow-sm focus:border-slate-900 focus:outline-none focus:ring-1 focus:ring-slate-900">
+                    </div>
+                    <button type="submit" class="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100">Lihat</button>
+                </form>
+            @else
+                <form method="GET" class="flex items-end gap-2">
+                    <input type="hidden" name="tampilan" value="bulanan">
+                    <div>
+                        <label for="bulan" class="label">Bulan</label>
+                        <input id="bulan" type="month" name="bulan" value="{{ $periode->format('Y-m') }}"
+                               class="mt-1 rounded-lg border border-slate-300 px-3 py-1.5 text-sm shadow-sm focus:border-slate-900 focus:outline-none focus:ring-1 focus:ring-slate-900">
+                    </div>
+                    <button type="submit" class="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100">Lihat</button>
+                </form>
+            @endif
 
-            <a href="{{ route('laporan.excel', ['bulan' => $periode->format('Y-m')]) }}"
+            <textarea id="salin-wa-sumber" class="hidden" aria-hidden="true">{{ $waTeks }}</textarea>
+            <button type="button" id="salin-wa"
+                    class="inline-flex items-center gap-2 rounded-lg border border-emerald-600 px-4 py-2 text-sm font-medium text-emerald-700 hover:bg-emerald-50">
+                <svg class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/>
+                </svg>
+                <span id="salin-wa-label">Salin buat WA</span>
+            </button>
+
+            <a href="{{ route('laporan.excel', request()->query()) }}"
                class="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700">
                 <svg class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true">
                     <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v12m0 0l-4-4m4 4l4-4M4 20h16"/>
@@ -33,6 +72,36 @@
             </a>
         </div>
     </div>
+
+    <script>
+        document.getElementById('salin-wa')?.addEventListener('click', async function () {
+            const teks = document.getElementById('salin-wa-sumber').value;
+            const label = document.getElementById('salin-wa-label');
+
+            try {
+                if (navigator.clipboard && window.isSecureContext) {
+                    await navigator.clipboard.writeText(teks);
+                } else {
+                    // Fallback untuk konteks non-HTTPS (mis. dev lokal via http://).
+                    const area = document.createElement('textarea');
+                    area.value = teks;
+                    area.style.position = 'fixed';
+                    area.style.opacity = '0';
+                    document.body.appendChild(area);
+                    area.focus();
+                    area.select();
+                    document.execCommand('copy');
+                    document.body.removeChild(area);
+                }
+
+                const asli = label.textContent;
+                label.textContent = 'Tersalin!';
+                setTimeout(() => { label.textContent = asli; }, 2000);
+            } catch (e) {
+                alert('Gagal menyalin. Salin manual dari sini:\n\n' + teks);
+            }
+        });
+    </script>
 
     {{-- Ringkasan sebulan --}}
     <div class="mb-6 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-7">

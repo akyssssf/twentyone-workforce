@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Services\Attendance\MonthlyReport;
 use App\Services\Attendance\MonthlyReportExcel;
+use App\Support\DateInput;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\View\View;
@@ -20,6 +21,8 @@ class ReportController extends Controller
             'ringkasan' => $report->ringkasan(),
             'total' => $report->total(),
             'periode' => $report->periodeAwal(),
+            'tampilan' => $report->granularitas,
+            'waTeks' => $report->teksWhatsApp(),
         ]);
     }
 
@@ -44,6 +47,31 @@ class ReportController extends Controller
     {
         $timezone = config('attendance.timezone', 'Asia/Jakarta');
         $sekarang = Carbon::now($timezone);
+        $tampilan = $request->query('tampilan', 'bulanan');
+
+        if ($tampilan === 'harian') {
+            $tanggal = DateInput::parse($request->query('tanggal'), $timezone) ?? $sekarang;
+
+            return MonthlyReport::forDay($tanggal);
+        }
+
+        if ($tampilan === 'mingguan') {
+            // Input dari <input type="week"> berbentuk "2026-W32".
+            $minggu = $request->query('minggu');
+
+            if (is_string($minggu) && preg_match('/^(\d{4})-W(\d{2})$/', $minggu, $cocok)) {
+                $tahun = (int) $cocok[1];
+                $nomorMinggu = (int) $cocok[2];
+
+                if ($nomorMinggu >= 1 && $nomorMinggu <= 53 && $tahun >= 2000 && $tahun <= 2100) {
+                    $tanggal = Carbon::now($timezone)->setISODate($tahun, $nomorMinggu);
+
+                    return MonthlyReport::forWeek($tanggal);
+                }
+            }
+
+            return MonthlyReport::forWeek($sekarang);
+        }
 
         // Input bulan dari <input type="month"> berbentuk "2026-08".
         $bulan = $request->query('bulan');
