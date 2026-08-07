@@ -4,6 +4,7 @@
 @section('content')
 
 <div class="overflow-hidden kartu">
+    <div class="tabel-bungkus">
     <table class="tabel">
         <thead>
             <tr>
@@ -28,5 +29,6 @@
             @endforelse
         </tbody>
     </table>
+    </div>
 </div>
 @endsection

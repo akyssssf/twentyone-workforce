@@ -25,6 +25,7 @@
 @endif
 
 <div class="overflow-hidden kartu">
+    <div class="tabel-bungkus">
     <table class="tabel">
         <thead>
             <tr>
@@ -51,6 +52,7 @@
             @endforelse
         </tbody>
     </table>
+    </div>
 </div>
 
 <div class="mt-4">{{ $requests->links() }}</div>

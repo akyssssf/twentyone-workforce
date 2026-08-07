@@ -39,11 +39,7 @@
                            class="kolom mt-1">
                 </div>
 
-                <div>
-                    <label for="password" class="block text-sm font-medium text-slate-700">Kata sandi</label>
-                    <input id="password" name="password" type="password" required autocomplete="current-password"
-                           class="kolom mt-1">
-                </div>
+                <x-kolom-sandi id="password" name="password" label="Kata sandi" autocomplete="current-password" />
 
                 <label class="flex items-center gap-2 text-sm text-slate-600">
                     <input type="checkbox" name="remember" value="1"

@@ -193,11 +193,16 @@ class MonthlyReport
     }
 
     /**
-     * Teks rekap dalam format markup WhatsApp (*tebal*, blok monospace),
-     * siap tempel apa adanya ke chat — bukan HTML yang perlu dirender.
+     * Teks rekap dalam format markup WhatsApp (*tebal*, _miring_), siap
+     * tempel apa adanya ke chat — bukan HTML yang perlu dirender.
      *
-     * Blok monospace (```) dipakai supaya kolom-kolomnya tetap sejajar;
-     * WhatsApp tidak punya tabel sungguhan.
+     * SENGAJA tidak pakai tabel rata kolom (blok monospace ```...```).
+     * Itu terlihat rapi di preview desktop, tapi begitu WhatsApp membungkus
+     * baris yang kepanjangan di layar HP yang sempit, kesejajaran kolomnya
+     * hancur — nama pindah baris sendiri, angkanya di baris lain, jadi
+     * lebih susah dibaca daripada tanpa tabel sama sekali. Satu baris teks
+     * biasa per orang aman dibungkus di layar mana pun karena tidak ada
+     * kesejajaran visual yang bisa rusak.
      */
     public function teksWhatsApp(): string
     {
@@ -207,8 +212,6 @@ class MonthlyReport
 
         $total = $this->total();
 
-        $lebarNama = (int) max(4, min(20, $baris->max(fn (array $b) => mb_strlen($b['nama'])) ?? 4));
-
         $teks = "*Rekap Absensi — {$this->judulPeriode()}*\n\n";
 
         if ($baris->isEmpty()) {
@@ -217,19 +220,23 @@ class MonthlyReport
             return $teks;
         }
 
-        $teks .= "```\n";
-        $teks .= str_pad('Nama', $lebarNama).sprintf(" %3s %3s %3s %3s\n", 'H', 'T', 'A', 'L');
-
         foreach ($baris as $b) {
-            $nama = mb_strimwidth($b['nama'], 0, $lebarNama, '');
-            $teks .= str_pad($nama, $lebarNama).sprintf(
-                " %3d %3d %3d %3d\n",
-                $b['hadir'], $b['telat'], $b['alpha'], $b['libur'],
-            );
+            $catatan = ["H{$b['hadir']}"];
+
+            if ($b['telat'] > 0) {
+                $catatan[] = "T{$b['telat']}";
+            }
+            if ($b['alpha'] > 0) {
+                $catatan[] = "A{$b['alpha']}";
+            }
+            if ($b['libur'] > 0) {
+                $catatan[] = "L{$b['libur']}";
+            }
+
+            $teks .= "• {$b['nama']} — ".implode(' ', $catatan)."\n";
         }
 
-        $teks .= "```\n";
-        $teks .= "_H=Hadir · T=Telat · A=Alpha · L=Libur_\n\n";
+        $teks .= "\n_H=Hadir · T=Telat · A=Alpha · L=Libur_\n\n";
         $teks .= "*Total:* {$total['karyawan']} karyawan · {$total['hadir']} hadir · {$total['telat']} telat · {$total['alpha']} alpha";
 
         if ($total['total_lembur_menit'] > 0) {
