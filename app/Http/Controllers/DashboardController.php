@@ -30,7 +30,7 @@ class DashboardController extends Controller
         $timezone = config('attendance.timezone', 'Asia/Jakarta');
         $tanggal = $this->tanggalDiminta($request, $timezone);
 
-        $rekap = Attendance::with(['employee', 'shift', 'division'])
+        $rekap = Attendance::with(['employee', 'shift', 'division', 'firstLog', 'lastLog'])
             ->whereDate('work_date', $tanggal)
             ->get()
             ->sortBy(fn (Attendance $a) => $a->employee?->name)

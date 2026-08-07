@@ -108,6 +108,18 @@ class Attendance extends Model
         return $this->belongsTo(Shift::class);
     }
 
+    /** Scan yang jadi dasar jam masuk — sumber foto bukti absen masuk. */
+    public function firstLog(): BelongsTo
+    {
+        return $this->belongsTo(AttendanceLog::class, 'first_log_id');
+    }
+
+    /** Scan yang jadi dasar jam pulang — sumber foto bukti absen pulang. */
+    public function lastLog(): BelongsTo
+    {
+        return $this->belongsTo(AttendanceLog::class, 'last_log_id');
+    }
+
     public function scopeForDate($query, $date)
     {
         return $query->whereDate('work_date', $date);

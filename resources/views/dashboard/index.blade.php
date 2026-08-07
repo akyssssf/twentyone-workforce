@@ -270,8 +270,40 @@
                         </td>
                         <td class="whitespace-nowrap text-slate-500">{{ $a->shift?->name ?? '—' }}</td>
                         <td class="tabular-nums text-slate-500">{{ $a->scheduled_in?->format('H:i') ?? '—' }}</td>
-                        <td class="tabular-nums">{{ $a->check_in_at?->format('H:i') ?? '—' }}</td>
-                        <td class="tabular-nums">{{ $a->check_out_at?->format('H:i') ?? '—' }}</td>
+                        <td class="tabular-nums">
+                            @if ($a->check_in_at)
+                                @if ($a->firstLog?->photo_url)
+                                    <a href="{{ $a->firstLog->photo_url }}" target="_blank" rel="noopener noreferrer"
+                                       class="inline-flex items-center gap-1 hover:underline" title="Lihat bukti foto scan masuk">
+                                        {{ $a->check_in_at->format('H:i') }}
+                                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="h-3.5 w-3.5 text-slate-400">
+                                            <path d="M6.5 3a1 1 0 00-.894.553L5.118 4.5H3.5A1.5 1.5 0 002 6v9a1.5 1.5 0 001.5 1.5h13A1.5 1.5 0 0018 15V6a1.5 1.5 0 00-1.5-1.5h-1.618l-.488-.947A1 1 0 0013.5 3h-7zM10 14a3.5 3.5 0 110-7 3.5 3.5 0 010 7z"/>
+                                        </svg>
+                                    </a>
+                                @else
+                                    {{ $a->check_in_at->format('H:i') }}
+                                @endif
+                            @else
+                                —
+                            @endif
+                        </td>
+                        <td class="tabular-nums">
+                            @if ($a->check_out_at)
+                                @if ($a->lastLog?->photo_url)
+                                    <a href="{{ $a->lastLog->photo_url }}" target="_blank" rel="noopener noreferrer"
+                                       class="inline-flex items-center gap-1 hover:underline" title="Lihat bukti foto scan pulang">
+                                        {{ $a->check_out_at->format('H:i') }}
+                                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="h-3.5 w-3.5 text-slate-400">
+                                            <path d="M6.5 3a1 1 0 00-.894.553L5.118 4.5H3.5A1.5 1.5 0 002 6v9a1.5 1.5 0 001.5 1.5h13A1.5 1.5 0 0018 15V6a1.5 1.5 0 00-1.5-1.5h-1.618l-.488-.947A1 1 0 0013.5 3h-7zM10 14a3.5 3.5 0 110-7 3.5 3.5 0 010 7z"/>
+                                        </svg>
+                                    </a>
+                                @else
+                                    {{ $a->check_out_at->format('H:i') }}
+                                @endif
+                            @else
+                                —
+                            @endif
+                        </td>
                         <td class="tabular-nums {{ $a->late_minutes > 0 ? 'font-medium text-amber-700' : 'text-slate-400' }}">
                             {{ $a->late_minutes > 0 ? $a->late_minutes.' m' : '—' }}
                         </td>
