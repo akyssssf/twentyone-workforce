@@ -173,7 +173,15 @@
                             <p class="truncate text-sm font-medium">{{ $user->name }}</p>
                             <p class="truncate text-xs text-slate-500">{{ '@' . $user->username }}</p>
                         </div>
-                        <form method="POST" action="{{ route('logout') }}">
+                        <a href="{{ route('sandi.edit') }}"
+                           class="flex w-full items-center gap-2.5 px-4 py-3 text-left text-sm font-medium text-slate-700 transition hover:bg-slate-50">
+                            <svg class="h-4 w-4 shrink-0 text-slate-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                                <path d="M15.75 5.25a3 3 0 013 3m3 0a6 6 0 01-7.029 5.912c-.563-.097-1.159.026-1.563.43L10.5 17.25H8.25v2.25H6v2.25H2.25v-2.909c0-.464.184-.909.513-1.237l6.844-6.844c.404-.404.527-1 .43-1.563A6 6 0 1121.75 8.25z"
+                                      stroke-linecap="round" stroke-linejoin="round" />
+                            </svg>
+                            Akun &amp; Kata Sandi
+                        </a>
+                        <form method="POST" action="{{ route('logout') }}" class="border-t border-slate-100">
                             @csrf
                             <button type="submit"
                                     class="w-full px-4 py-3 text-left text-sm font-medium text-red-600 transition hover:bg-red-50">

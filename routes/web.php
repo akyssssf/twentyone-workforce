@@ -51,6 +51,7 @@ Route::middleware(['auth', EnsureUserIsActive::class, EnsurePasswordIsChanged::c
     // dalam lingkaran pengalihan.
     Route::get('sandi', [PasswordController::class, 'edit'])->name('sandi.edit');
     Route::post('sandi', [PasswordController::class, 'update'])->name('sandi.update');
+    Route::post('sandi/username', [PasswordController::class, 'updateUsername'])->name('sandi.username');
 
     // Pintu masuk bersama: manager diarahkan ke dashboard, karyawan ke portal.
     Route::get('beranda', function () {
