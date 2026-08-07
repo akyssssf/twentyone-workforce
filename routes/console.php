@@ -63,3 +63,17 @@ Schedule::command('attendance:compute --days=2')
     ->dailyAt('06:00')
     ->withoutOverlapping()
     ->runInBackground();
+
+// Kuras antrean lewat penjadwal.
+//
+// Di VPS, antrean dijalankan sebagai layanan yang hidup terus. Hosting bersama
+// tidak mengizinkan itu — proses yang berjalan lama dimatikan sepihak. Jadi
+// pekerja antrean dipanggil dari cron yang sama, bekerja sampai antreannya
+// habis, lalu berhenti sendiri.
+//
+// --stop-when-empty supaya tidak menggantung menunggu pekerjaan baru.
+// --max-time=50 supaya tidak tumpang tindih dengan pemanggilan berikutnya.
+Schedule::command('queue:work --stop-when-empty --max-time=50 --tries=3')
+    ->everyMinute()
+    ->withoutOverlapping()
+    ->runInBackground();

@@ -90,14 +90,32 @@ return new class extends Migration
         // Status lama `telat` dipindah ke dimensi lain: statusnya jadi `hadir`,
         // fakta telatnya tetap hidup di late_seconds/late_minutes. Tidak ada
         // informasi yang hilang, hanya berpindah tempat.
-        DB::statement('UPDATE attendances SET late_minutes = CAST((late_seconds + 59) / 60 AS INTEGER)');
+        // Pembulatan menit ke atas, ditulis agar jalan di SQLite maupun MySQL.
+        //
+        // CAST(... AS INTEGER) hanya dikenal SQLite; MySQL memakai SIGNED.
+        // Dibedakan di sini alih-alih memaksa satu bentuk, karena migrasi yang
+        // gagal di tengah pada tabel berisi data adalah kegagalan paling mahal
+        // yang bisa terjadi di seluruh rangkaian ini.
+        DB::statement(
+            DB::connection()->getDriverName() === 'sqlite'
+                ? 'UPDATE attendances SET late_minutes = CAST((late_seconds + 59) / 60 AS INTEGER)'
+                : 'UPDATE attendances SET late_minutes = FLOOR((late_seconds + 59) / 60)'
+        );
         DB::statement("UPDATE attendances SET status = 'hadir' WHERE status = 'telat'");
 
-        // Baru sekarang tukar unique key.
+        // Baru sekarang tukar unique key. Yang BARU dipasang lebih dulu.
+        //
+        // MySQL memakai index unik lama sebagai penopang foreign key
+        // employee_id, dan menolak menghapusnya selama tidak ada index lain
+        // yang bisa menggantikan. Karena index baru juga berawal employee_id,
+        // memasangnya duluan membuat penghapusan yang lama jadi sah.
         Schema::table('attendances', function (Blueprint $table) {
-            $table->dropUnique(['employee_id', 'work_date']);
             $table->unique(['employee_id', 'work_date', 'shift_key']);
             $table->index(['is_closed', 'work_date']);
+        });
+
+        Schema::table('attendances', function (Blueprint $table) {
+            $table->dropUnique(['employee_id', 'work_date']);
         });
 
         // Dan paling akhir, buang kolom rupiah. Absensi mencatat fakta;

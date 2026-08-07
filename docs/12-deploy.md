@@ -2,6 +2,10 @@
 
 Panduan menaikkan aplikasi dari laptop ke server yang menyala 24 jam.
 
+> **Baru pertama kali deploy?** Pakai [panduan Hostinger](13-hostinger.md) saja —
+> 30 menit, tanpa perlu mengurus server. Dokumen ini untuk yang mau kendali
+> penuh atau sudah terbiasa dengan Linux.
+
 ---
 
 ## 0. Kenapa harus pindah dari laptop

@@ -14,7 +14,15 @@
 /.zed
 /auth.json
 /node_modules
-/public/build
+# public/build SENGAJA ikut masuk git.
+#
+# Hosting bersama seperti Hostinger sering tidak punya Node, dan memaksa
+# membangun aset di sana adalah penghalang terbesar untuk deploy yang
+# seharusnya cukup "git pull". Ongkosnya: berkas hasil build ikut tercatat di
+# riwayat. Untuk proyek satu orang dengan satu tujuan deploy, itu tukar yang
+# sepadan.
+#
+# Jalankan `npm run build` sebelum commit kalau menyentuh CSS atau JS.
 /public/fonts-manifest.dev.json
 /public/hot
 /public/storage
@@ -41,3 +49,7 @@ Thumbs.db
 #
 # Salin folder ini langsung ke server saat deploy, jangan lewat git.
 /public/avatars/
+
+# Salinan database hasil db:backup. Berisi seluruh data gaji dan absensi —
+# tidak boleh masuk repo, apalagi repo publik.
+/storage/app/backups/

@@ -1,0 +1,32 @@
+# Pengalih untuk hosting bersama.
+#
+# Laravel seharusnya dilayani dari folder public/, bukan dari akar proyek.
+# Di VPS itu diatur lewat konfigurasi nginx. Di hosting bersama seperti
+# Hostinger, akar dokumen kadang tidak bisa diubah — dan tanpa berkas ini,
+# membuka domain akan menampilkan daftar berkas proyek, termasuk .env.
+#
+# Berkas ini menutup lubang itu: semua permintaan diteruskan ke public/,
+# sehingga folder app/, config/, dan database/ tidak pernah bisa diakses
+# lewat peramban walaupun akar dokumennya salah.
+#
+# Kalau akar dokumen BISA diarahkan ke public/ (Hostinger: hPanel > Website >
+# Ubah Root Folder), lakukan itu — lebih cepat dan lebih aman. Berkas ini
+# tetap dibiarkan sebagai jaring pengaman.
+
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+
+    RewriteCond %{REQUEST_URI} !^/public/
+    RewriteRule ^(.*)$ public/$1 [L]
+</IfModule>
+
+# Kunci berkas yang tidak boleh terbaca dari luar, apa pun konfigurasi
+# server-nya. Ini yang paling penting: .env memuat token Fingerspot, kunci
+# aplikasi, dan token WhatsApp.
+<FilesMatch "^(\.env|\.env\..*|composer\.(json|lock)|package(-lock)?\.json|artisan|phpunit\.xml)$">
+    Require all denied
+</FilesMatch>
+
+<IfModule mod_autoindex.c>
+    Options -Indexes
+</IfModule>

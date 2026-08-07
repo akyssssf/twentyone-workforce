@@ -12,7 +12,8 @@ Urutan baca. Setiap tahap membangun di atas tahap sebelumnya.
 | 5–6 | [05 — Relasi & Flowchart](05-relasi-dan-flowchart.md) | Matriks relasi, cascade, dan alur seluruh proses |
 | 7–9 | [07 — Sitemap, Halaman, Wireframe](07-sitemap-halaman-wireframe.md) | 24 halaman beserta rancangan tampilannya |
 | 10–11 | [10 — REST API & Struktur Project](10-rest-api-dan-struktur-folder.md) | Rancangan API mobile + struktur folder & aturan arsitektur |
-| 12 | [12 — Deploy ke Server](12-deploy.md) | Langkah pasang di VPS, cron, antrean, WhatsApp, backup, dan daftar periksa sebelum dipakai sungguhan |
+| 12 | [12 — Deploy ke Server (VPS)](12-deploy.md) | Langkah pasang lengkap: nginx, HTTPS, cron, antrean, backup |
+| 13 | [13 — **Deploy di Hostinger**](13-hostinger.md) | Jalur paling simpel, tanpa urus server. **Mulai dari sini kalau baru pertama kali deploy.** |
 
 ---
 
