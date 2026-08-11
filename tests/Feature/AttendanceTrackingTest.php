@@ -65,10 +65,11 @@ class AttendanceTrackingTest extends TestCase
         $hasil = app(AttendanceComputer::class)
             ->computeDate(Carbon::parse('2026-08-06', 'Asia/Jakarta'));
 
-        // Hanya karyawan biasa yang dihitung — dan dia memang alpha karena
-        // tidak ada scan sama sekali.
+        // Hanya karyawan biasa yang dihitung. Tidak ada scan sama sekali dan
+        // tidak ada roster nyata untuk tanggal ini, jadi (sementara) libur,
+        // bukan alpha — lihat AttendanceComputer::resolveStatus().
         $this->assertSame(1, $hasil['computed']);
-        $this->assertSame(1, $hasil['alpha']);
+        $this->assertSame(1, $hasil['libur']);
 
         $this->assertSame(0, $admin->attendances()->count());
         $this->assertSame(1, $karyawan->attendances()->count());

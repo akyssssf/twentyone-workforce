@@ -73,7 +73,7 @@ class MonthlyReportTest extends TestCase
         $this->scan('1', '2026-08-04 09:07:00');
         // 5 Agustus: telat 23 menit -> 3 blok -> Rp 15.000.
         $this->scan('1', '2026-08-05 09:23:00');
-        // 6 Agustus: tidak scan -> alpha.
+        // 6 Agustus: tidak scan, tanpa roster nyata -> libur (sementara).
 
         $this->hitung('2026-08-03', '2026-08-04', '2026-08-05', '2026-08-06');
 
@@ -93,7 +93,9 @@ class MonthlyReportTest extends TestCase
         // di dimensi berbeda, jadi angkanya memang tumpang tindih.
         $this->assertSame(3, $baris['hadir']);
         $this->assertSame(2, $baris['telat']);
-        $this->assertSame(1, $baris['alpha']);
+        // 6 Agustus tidak scan, tanpa roster nyata -> libur (sementara), bukan alpha.
+        $this->assertSame(0, $baris['alpha']);
+        $this->assertSame(1, $baris['libur']);
         $this->assertSame(4, $baris['hari_tercatat']);
         // nominal potongan pindah ke slip gaji.
         
@@ -199,8 +201,9 @@ class MonthlyReportTest extends TestCase
         $this->assertSame(3, $ringkasan->getCell('D5')->getValue());       // hadir
         $this->assertSame(2, $ringkasan->getCell('E5')->getValue());       // telat
         $this->assertSame(0, $ringkasan->getCell('F5')->getValue());       // pulang cepat
-        $this->assertSame(1, $ringkasan->getCell('G5')->getValue());       // alpha
-        $this->assertSame(0, $ringkasan->getCell('K5')->getValue());       // libur
+        // 6 Agustus tidak scan, tanpa roster nyata -> libur (sementara), bukan alpha.
+        $this->assertSame(0, $ringkasan->getCell('G5')->getValue());       // alpha
+        $this->assertSame(1, $ringkasan->getCell('K5')->getValue());       // libur
 
         // Baris total pakai rumus, bukan angka mati.
         $this->assertSame('TOTAL', $ringkasan->getCell('A6')->getValue());

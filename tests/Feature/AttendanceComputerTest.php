@@ -139,13 +139,19 @@ class AttendanceComputerTest extends TestCase
         }
     }
 
-    public function test_tanpa_scan_terhitung_alpha(): void
+    /**
+     * SEMENTARA: karyawan tanpa RosterAssignment (belum kebagian jadwal fix,
+     * shift-nya cuma tebakan dari default_shift_id) tidak divonis alpha kalau
+     * tidak ada scan — dianggap libur dulu sampai roster benar-benar dibuat.
+     * Lihat AttendanceComputer::resolveStatus().
+     */
+    public function test_tanpa_scan_dan_tanpa_roster_terhitung_libur(): void
     {
         $employee = $this->karyawan();
 
         $a = $this->hitung($employee, '2026-08-06');
 
-        $this->assertSame('alpha', $a->status->value);
+        $this->assertSame('libur', $a->status->value);
         $this->assertNull($a->check_in_at);
         $this->assertNull($a->check_out_at);
         $this->assertSame(0, $a->late_minutes);
@@ -220,11 +226,13 @@ class AttendanceComputerTest extends TestCase
         $this->scan('2', '2026-08-06 16:58:00');
         $this->scan('2', '2026-08-07 00:30:00');
 
-        // Tanggal 7 tidak punya scan miliknya sendiri, jadi harus alpha,
-        // bukan ikut memungut scan pulang tanggal 6.
+        // Tanggal 7 tidak punya scan miliknya sendiri. Tanpa roster nyata,
+        // itu dianggap libur (sementara), bukan alpha — tapi yang penting
+        // dites di sini adalah scan pulang tanggal 6 tidak ikut terpungut.
         $a = $this->hitung($employee, '2026-08-07');
 
-        $this->assertSame('alpha', $a->status->value);
+        $this->assertSame('libur', $a->status->value);
+        $this->assertNull($a->check_in_at);
     }
 
     public function test_scan_karyawan_lain_tidak_ikut_terhitung(): void
@@ -235,7 +243,10 @@ class AttendanceComputerTest extends TestCase
 
         $this->scan('2', '2026-08-06 08:50:00');
 
-        $this->assertSame('alpha', $this->hitung($budi, '2026-08-06')->status->value);
+        // Budi tetap tidak ikut kepungut scan Sari. Tanpa roster nyata dan
+        // tanpa scan sendiri, statusnya libur (sementara), bukan alpha.
+        $this->assertSame('libur', $this->hitung($budi, '2026-08-06')->status->value);
+        $this->assertNull($this->hitung($budi, '2026-08-06')->check_in_at);
     }
 
     public function test_karyawan_nonaktif_dilewati(): void
@@ -366,7 +377,7 @@ class AttendanceComputerTest extends TestCase
 
         $this->karyawan(['pin_device' => '1', 'name' => 'Hadir'], $shift);
         $this->karyawan(['pin_device' => '2', 'name' => 'Telat'], $shift);
-        $this->karyawan(['pin_device' => '3', 'name' => 'Alpha'], $shift);
+        $this->karyawan(['pin_device' => '3', 'name' => 'TanpaRoster'], $shift);
 
         $this->scan('1', '2026-08-06 08:50:00');
         $this->scan('2', '2026-08-06 09:25:00');
@@ -378,7 +389,11 @@ class AttendanceComputerTest extends TestCase
         // Yang telat tetap berstatus hadir — keterlambatan itu angka menit,
         // bukan status tersendiri. Jadi hadir = 2, bukan 1.
         $this->assertSame(2, $hasil['hadir']);
-        $this->assertSame(1, $hasil['alpha']);
+
+        // Karyawan ketiga tidak scan dan tidak punya roster nyata, jadi
+        // (sementara) terhitung libur, bukan alpha.
+        $this->assertSame(0, $hasil['alpha']);
+        $this->assertSame(1, $hasil['libur']);
         $this->assertArrayNotHasKey('telat', $hasil);
     }
 }

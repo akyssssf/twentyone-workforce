@@ -433,7 +433,20 @@ class AttendanceComputer
     protected function resolveStatus(?Carbon $checkIn, bool $libur, ?RosterAssignment $assignment): AttendanceStatus
     {
         if (! $libur) {
-            return $checkIn === null ? AttendanceStatus::Alpha : AttendanceStatus::Hadir;
+            if ($checkIn !== null) {
+                return AttendanceStatus::Hadir;
+            }
+
+            // SEMENTARA: roster harian belum diisi untuk semua karyawan.
+            // Kalau shift-nya cuma hasil tebakan dari default_shift_id (tidak
+            // ada RosterAssignment asli untuk tanggal ini), jangan vonis
+            // alpha — anggap libur dulu sampai rosternya benar-benar dibuat.
+            // Late/pulang-cepat tidak ikut dibebaskan di sini (itu ikut
+            // $libur di atas, bukan ikut cek ini) supaya karyawan yang tetap
+            // datang tanpa roster masih kena aturan telat seperti biasa.
+            // Cabut fallback ini begitu roster dipakai penuh untuk semua
+            // karyawan.
+            return $assignment === null ? AttendanceStatus::Libur : AttendanceStatus::Alpha;
         }
 
         // Masuk di hari libur tetap dicatat hadir — dia sedang membantu di luar

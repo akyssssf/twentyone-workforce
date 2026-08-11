@@ -85,20 +85,31 @@ class HolidayTest extends TestCase
         $this->assertSame(0, $a->late_minutes);
     }
 
-    public function test_hari_kerja_tanpa_scan_tetap_alpha(): void
+    /**
+     * SEMENTARA: tanpa RosterAssignment nyata, hari kerja tanpa scan sekarang
+     * jatuh ke libur juga (lihat AttendanceComputer::resolveStatus), bukan
+     * cuma hari off_days. Jadi tesnya tidak lagi bisa membedakan "hari kerja"
+     * dari "hari libur mingguan" selama roster belum dipakai — begitu roster
+     * dipakai penuh dan fallback ini dicabut, tes ini harus balik ke 'alpha'.
+     */
+    public function test_hari_kerja_tanpa_scan_tetap_libur_sementara_tanpa_roster(): void
     {
         $this->karyawan(['preferred_off_days' => [0]]);
 
-        // Senin, bukan hari liburnya.
-        $this->assertSame('alpha', $this->hitung('2026-08-10')->status->value);
+        // Senin, bukan hari liburnya — tapi tanpa roster tetap libur (sementara).
+        $this->assertSame('libur', $this->hitung('2026-08-10')->status->value);
     }
 
+    /**
+     * SEMENTARA: lihat catatan di atas — tanpa roster, perbedaan off_days null
+     * vs off_days terisi tidak lagi kelihatan dari status (sama-sama libur).
+     */
     public function test_off_days_kosong_berarti_tidak_punya_libur_mingguan(): void
     {
         // null harus berarti "belum diatur", bukan "libur setiap hari".
         $this->karyawan(['preferred_off_days' => null]);
 
-        $this->assertSame('alpha', $this->hitung('2026-08-09')->status->value);
+        $this->assertSame('libur', $this->hitung('2026-08-09')->status->value);
     }
 
     public function test_bisa_punya_lebih_dari_satu_hari_libur(): void
@@ -107,7 +118,10 @@ class HolidayTest extends TestCase
 
         $this->assertSame('libur', $this->hitung('2026-08-09')->status->value); // Minggu
         $this->assertSame('libur', $this->hitung('2026-08-12')->status->value); // Rabu
-        $this->assertSame('alpha', $this->hitung('2026-08-11')->status->value); // Selasa
+
+        // SEMENTARA: Selasa harusnya hari kerja biasa, tapi tanpa roster
+        // nyata tetap libur juga — lihat catatan di atas.
+        $this->assertSame('libur', $this->hitung('2026-08-11')->status->value); // Selasa
     }
 
     /**
@@ -143,6 +157,10 @@ class HolidayTest extends TestCase
 
     /**
      * Tanggal merah yang kafenya tetap buka tidak menghapus kewajiban masuk.
+     *
+     * SEMENTARA: tanpa RosterAssignment nyata, tidak-scan tetap jatuh ke
+     * libur juga (lihat catatan di test_hari_kerja_tanpa_scan_...), jadi
+     * assert-nya ikut disesuaikan sampai fallback ini dicabut.
      */
     public function test_libur_yang_kafenya_tetap_buka_tidak_meliburkan(): void
     {
@@ -150,7 +168,7 @@ class HolidayTest extends TestCase
 
         Holiday::create(['date' => '2026-08-17', 'name' => 'HUT RI', 'is_closed' => false]);
 
-        $this->assertSame('alpha', $this->hitung('2026-08-17')->status->value);
+        $this->assertSame('libur', $this->hitung('2026-08-17')->status->value);
     }
 
     public function test_libur_bersama_dan_libur_mingguan_bisa_bertumpuk(): void
@@ -172,7 +190,8 @@ class HolidayTest extends TestCase
 
         $computer = app(AttendanceComputer::class);
 
-        // 9 Agustus Minggu (libur), 10 Agustus Senin (alpha), 11 Agustus hadir.
+        // 9 Agustus Minggu (libur), 10 Agustus Senin (tanpa roster nyata jadi
+        // libur juga, sementara), 11 Agustus hadir.
         $this->scan('1', '2026-08-11 08:50:00');
 
         foreach (['2026-08-09', '2026-08-10', '2026-08-11'] as $tanggal) {
@@ -181,8 +200,8 @@ class HolidayTest extends TestCase
 
         $baris = MonthlyReport::for(2026, 8)->ringkasan()->sole();
 
-        $this->assertSame(1, $baris['libur']);
-        $this->assertSame(1, $baris['alpha']);
+        $this->assertSame(2, $baris['libur']);
+        $this->assertSame(0, $baris['alpha']);
         $this->assertSame(1, $baris['hadir']);
         $this->assertSame(0, $baris['telat']);
     }

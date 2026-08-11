@@ -362,6 +362,10 @@ class DashboardTest extends TestCase
         // status yang saling meniadakan.
         $this->assertSame(2, $ringkasan['hadir']);
         $this->assertSame(1, $ringkasan['terlambat']);
-        $this->assertSame(1, $ringkasan['alpha']);
+
+        // Andi tidak scan dan tidak punya roster nyata untuk tanggal ini,
+        // jadi (sementara) libur, bukan alpha.
+        $this->assertSame(0, $ringkasan['alpha']);
+        $this->assertSame(1, $ringkasan['libur']);
     }
 }
