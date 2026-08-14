@@ -352,6 +352,69 @@ class AttendanceComputerTest extends TestCase
         // blok potongan pindah ke rule_tiers; di sini yang dicatat menitnya.
     }
 
+    /**
+     * Shift produksi kafe, dipakai kelompok tes tebak-shift di bawah supaya
+     * jam-jamnya sama persis dengan yang dipakai di lapangan.
+     *
+     * @return array{0: Shift, 1: Shift, 2: Shift} pagi, middle, malam
+     */
+    protected function tigaShift(): array
+    {
+        return [
+            Shift::factory()->create(['code' => 'pagi', 'name' => 'Shift Pagi', 'start_time' => '08:00:00', 'end_time' => '18:00:00']),
+            Shift::factory()->middle()->create(),
+            Shift::factory()->malam()->create(['name' => 'Shift Malam', 'start_time' => '14:00:00']),
+        ];
+    }
+
+    /**
+     * Ini regresi yang benar-benar terjadi di produksi: begitu shift middle
+     * dibuat, jumlah shift aktif bukan 2 lagi dan seluruh tebakan mati, jadi
+     * orang yang datang 13:53 untuk shift malam terbaca telat 354 menit atas
+     * shift pagi yang tidak dia jalani.
+     */
+    public function test_tebak_shift_tetap_jalan_walau_shift_aktif_lebih_dari_dua(): void
+    {
+        [$pagi, , $malam] = $this->tigaShift();
+
+        // Defaultnya pagi, tapi hari ini dia jalani shift malam.
+        $employee = $this->karyawan([], $pagi);
+        $this->scan('1', '2026-08-06 13:53:00');
+
+        $a = $this->hitung($employee, '2026-08-06');
+
+        $this->assertSame($malam->id, $a->shift_id);
+        $this->assertSame(0, $a->late_minutes);
+    }
+
+    public function test_scan_jam_sebelas_ketebak_shift_middle(): void
+    {
+        [$pagi, $middle] = $this->tigaShift();
+
+        $employee = $this->karyawan([], $pagi);
+        $this->scan('1', '2026-08-06 11:18:00');
+
+        $a = $this->hitung($employee, '2026-08-06');
+
+        // Telatnya dihitung dari 11:00 punya middle, bukan dari 08:00 punya
+        // pagi — 18 menit, bukan 198.
+        $this->assertSame($middle->id, $a->shift_id);
+        $this->assertSame(18, $a->late_minutes);
+    }
+
+    public function test_datang_pagi_tidak_tertarik_ke_shift_middle(): void
+    {
+        [$pagi] = $this->tigaShift();
+
+        $employee = $this->karyawan([], $pagi);
+        $this->scan('1', '2026-08-06 07:50:00');
+
+        $a = $this->hitung($employee, '2026-08-06');
+
+        $this->assertSame($pagi->id, $a->shift_id);
+        $this->assertSame(0, $a->late_minutes);
+    }
+
     public function test_shift_disalin_supaya_rekap_lama_tidak_ikut_berubah(): void
     {
         $pagi = Shift::factory()->create();

@@ -38,4 +38,19 @@ class ShiftFactory extends Factory
             'crosses_midnight' => true,
         ]);
     }
+
+    /**
+     * Shift middle: berangkat tengahan, di antara pagi dan malam. Tidak semua
+     * divisi punya — dipakai waiters saat jam ramai.
+     */
+    public function middle(): static
+    {
+        return $this->state(fn () => [
+            'code' => 'middle',
+            'name' => 'Shift Middle',
+            'start_time' => '11:00:00',
+            'end_time' => '21:00:00',
+            'crosses_midnight' => false,
+        ]);
+    }
 }

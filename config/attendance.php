@@ -152,19 +152,18 @@ return [
     |--------------------------------------------------------------------------
     |
     | Dipakai kalau karyawan belum punya RosterAssignment untuk tanggal itu.
-    | Cuma aktif kalau persis ada 2 shift aktif di master data.
+    | Shift yang dipilih adalah yang jam mulainya paling dekat dengan scan
+    | pertama, jadi batasnya ikut jam shift di master data dan tidak perlu
+    | diatur ulang setiap kali shift baru ditambahkan.
     |
     | detection_start_hour : mulai cari scan pertama dari jam berapa. Sebelum
     |                        jam ini diabaikan supaya scan pulang shift malam
     |                        kemarin (lewat tengah malam) tidak ikut kehitung.
-    | boundary_hour        : scan sebelum jam ini = shift dengan start_time
-    |                        paling pagi. Jam ini ke atas = shift paling malam.
     |
     */
 
     'shift_guess' => [
         'detection_start_hour' => (int) env('ATTENDANCE_SHIFT_GUESS_START_HOUR', 6),
-        'boundary_hour' => (int) env('ATTENDANCE_SHIFT_GUESS_BOUNDARY_HOUR', 12),
     ],
 
     /*

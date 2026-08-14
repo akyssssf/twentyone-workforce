@@ -348,13 +348,13 @@
                             @endif
                         </td>
                         <td class="tabular-nums {{ $a->late_minutes > 0 ? 'font-medium text-amber-700' : 'text-slate-400' }}">
-                            {{ $a->late_minutes > 0 ? $a->late_minutes.' m' : '—' }}
+                            {{ \App\Support\Durasi::menit($a->late_minutes) }}
                         </td>
                         <td class="tabular-nums {{ $a->early_leave_minutes > 0 ? 'font-medium text-orange-700' : 'text-slate-400' }}">
-                            {{ $a->early_leave_minutes > 0 ? $a->early_leave_minutes.' m' : '—' }}
+                            {{ \App\Support\Durasi::menit($a->early_leave_minutes) }}
                         </td>
                         <td class="tabular-nums {{ $a->overtime_minutes > 0 ? 'font-medium text-indigo-700' : 'text-slate-400' }}">
-                            {{ $a->overtime_minutes > 0 ? round($a->overtime_minutes / 60, 1).' j' : '—' }}
+                            {{ \App\Support\Durasi::menit($a->overtime_minutes) }}
                         </td>
                         <td>
                             <x-status-badge :warna="$a->status->color()" :label="$a->status->label()" />

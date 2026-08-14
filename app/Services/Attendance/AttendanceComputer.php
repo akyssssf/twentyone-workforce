@@ -260,14 +260,20 @@ class AttendanceComputer
      * Tanpa roster, tebak shift dari jam scan pertama hari itu, bukan
      * langsung percaya default_shift_id.
      *
-     * default_shift_id gampang basi: kafe cuma buka dua shift dan orang
-     * kadang dapat giliran beda dari biasanya, roster belum diisi per hari.
-     * Kalau tetap dipaksa ke default lama, orang yang biasanya shift pagi
-     * tapi hari ini masuk shift malam akan terbaca telat berjam-jam padahal
-     * dia datang tepat waktu untuk shift yang dia jalani hari ini.
+     * default_shift_id gampang basi: orang kadang dapat giliran beda dari
+     * biasanya sementara roster belum diisi per hari. Kalau tetap dipaksa ke
+     * default lama, orang yang biasanya shift pagi tapi hari ini masuk shift
+     * malam akan terbaca telat berjam-jam padahal dia datang tepat waktu
+     * untuk shift yang dia jalani hari ini.
      *
-     * Cuma jalan kalau persis ada 2 shift aktif (kondisi kafe ini). Kalau
-     * jumlahnya lain, terlalu berisiko menebak — mundur ke default_shift_id.
+     * Aturannya: ambil shift yang jam mulainya PALING DEKAT dengan scan
+     * pertama, berapa pun jumlah shift aktifnya.
+     *
+     * Dulu ini dibatasi "persis 2 shift" karena kafe cuma buka pagi & malam.
+     * Batasan itu jadi jebakan begitu shift ketiga (middle, 11:00) dibuat:
+     * jumlahnya bukan 2 lagi, jadi seluruh tebakan mati diam-diam dan semua
+     * orang jatuh ke default_shift_id — yang datang 13:53 untuk shift malam
+     * mendadak terbaca telat 354 menit atas shift pagi yang tidak dia jalani.
      */
     protected function guessShift(Employee $employee, Carbon $date): ?Shift
     {
@@ -275,7 +281,8 @@ class AttendanceComputer
 
         $aktif = Shift::active()->orderBy('start_time')->get();
 
-        if ($aktif->count() !== 2) {
+        // Satu shift saja tidak ada yang bisa ditebak: pilihannya cuma itu.
+        if ($aktif->count() < 2) {
             return $default;
         }
 
@@ -286,7 +293,6 @@ class AttendanceComputer
         // sekitar jam 01:00-05:00 karena window_after_hours) tidak salah
         // kebaca sebagai scan masuk hari ini.
         $mulaiJam = (int) config('attendance.shift_guess.detection_start_hour', 6);
-        $batasJam = (int) config('attendance.shift_guess.boundary_hour', 12);
 
         $scanPertama = AttendanceLog::query()
             ->where('employee_id', $employee->id)
@@ -303,9 +309,20 @@ class AttendanceComputer
             return $default;
         }
 
-        $jamScan = $scanPertama->scanned_at->copy()->setTimezone($timezone)->hour;
+        $waktuScan = $scanPertama->scanned_at->copy()->setTimezone($timezone);
+        $menitScan = $waktuScan->hour * 60 + $waktuScan->minute;
 
-        return $jamScan < $batasJam ? $aktif->first() : $aktif->last();
+        return $aktif
+            ->sortBy(fn (Shift $shift) => abs($this->menitMulai($shift) - $menitScan))
+            ->first();
+    }
+
+    /** Jam mulai shift sebagai menit sejak tengah malam. */
+    protected function menitMulai(Shift $shift): int
+    {
+        [$jam, $menit] = array_pad(explode(':', (string) $shift->start_time), 2, '0');
+
+        return ((int) $jam) * 60 + (int) $menit;
     }
 
     /**

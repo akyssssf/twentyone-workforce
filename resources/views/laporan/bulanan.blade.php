@@ -124,13 +124,13 @@
 
         <div class="kartu p-4">
             <div class="text-xs font-medium uppercase tracking-wide text-slate-500">Total telat</div>
-            <div class="mt-1 text-xl font-semibold text-amber-700">{{ $total['total_telat_menit'] }} menit</div>
+            <div class="mt-1 text-xl font-semibold text-amber-700">{{ \App\Support\Durasi::menit($total['total_telat_menit']) }}</div>
         </div>
 
         <div class="kartu p-4">
             <div class="text-xs font-medium uppercase tracking-wide text-slate-500">Total lembur</div>
             <div class="mt-1 text-xl font-semibold text-indigo-700">
-                {{ round($total['total_lembur_menit'] / 60, 1) }} jam
+                {{ \App\Support\Durasi::menit($total['total_lembur_menit']) }}
             </div>
         </div>
     </div>
@@ -194,7 +194,7 @@
                                 </td>
                                 <td class="text-center text-slate-500">{{ $baris['libur'] ?: '-' }}</td>
                                 <td class="text-slate-600">
-                                    {{ \App\Services\Attendance\MonthlyReport::durasi($baris['total_telat_detik']) }}
+                                    {{ \App\Support\Durasi::detik($baris['total_telat_detik']) }}
                                 </td>
                                 <td class="text-center">
                                     @if ($baris['pulang_cepat'] > 0)
@@ -204,7 +204,7 @@
                                     @endif
                                 </td>
                                 <td class="text-slate-600">
-                                    {{ $baris['total_lembur_menit'] > 0 ? round($baris['total_lembur_menit'] / 60, 1).' jam' : '-' }}
+                                    {{ \App\Support\Durasi::menit($baris['total_lembur_menit']) }}
                                 </td>
                             </tr>
                         @endforeach
@@ -216,9 +216,9 @@
                             <td class="text-center">{{ $total['telat'] }}</td>
                             <td class="text-center">{{ $total['alpha'] }}</td>
                             <td class="text-center">{{ $total['libur'] }}</td>
-                            <td >{{ $total['total_telat_menit'] }} m</td>
+                            <td >{{ \App\Support\Durasi::menit($total['total_telat_menit']) }}</td>
                             <td class="text-center">{{ $total['pulang_cepat'] }}</td>
-                            <td >{{ round($total['total_lembur_menit'] / 60, 1) }} jam</td>
+                            <td >{{ \App\Support\Durasi::menit($total['total_lembur_menit']) }}</td>
                         </tr>
                     </tfoot>
                 </table>

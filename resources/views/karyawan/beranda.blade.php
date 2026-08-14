@@ -114,10 +114,10 @@
                                 Pulang <strong class="tabular-nums">{{ $a->check_out_at?->format('H:i') ?? '—' }}</strong>
                             </span>
                             @if ($a->late_minutes > 0)
-                                <span class="text-amber-700">Telat {{ $a->late_minutes }} menit</span>
+                                <span class="text-amber-700">Telat {{ \App\Support\Durasi::menit($a->late_minutes) }}</span>
                             @endif
                             @if ($a->overtime_minutes > 0)
-                                <span class="text-indigo-700">Lembur {{ round($a->overtime_minutes / 60, 1) }} jam</span>
+                                <span class="text-indigo-700">Lembur {{ \App\Support\Durasi::menit($a->overtime_minutes) }}</span>
                             @endif
                             <x-status-badge :warna="$a->status->color()" :label="$a->status->label()" />
                         </div>

@@ -167,14 +167,6 @@ class MonthlyReportTest extends TestCase
         
     }
 
-    public function test_durasi_dibaca_manusia(): void
-    {
-        $this->assertSame('-', MonthlyReport::durasi(0));
-        $this->assertSame('45d', MonthlyReport::durasi(45));
-        $this->assertSame('7m 0d', MonthlyReport::durasi(420));
-        $this->assertSame('1j 10m', MonthlyReport::durasi(4200));
-    }
-
     // ------------------------------------------------------------------- excel
 
     public function test_berkas_excel_valid_dan_isinya_cocok(): void

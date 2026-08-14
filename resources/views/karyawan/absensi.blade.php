@@ -19,8 +19,8 @@
     <x-kartu label="Terlambat" :nilai="$ringkasan['telat']" warna="text-amber-600" />
     <x-kartu label="Pulang Cepat" :nilai="$ringkasan['pulang_cepat']" warna="text-orange-600" />
     <x-kartu label="Alpha" :nilai="$ringkasan['alpha']" warna="text-red-600" />
-    <x-kartu label="Total telat" :nilai="$ringkasan['total_telat_menit'].' m'" />
-    <x-kartu label="Lembur" :nilai="round($ringkasan['lembur_menit']/60, 1).' j'" warna="text-indigo-600" />
+    <x-kartu label="Total telat" :nilai="\App\Support\Durasi::menit($ringkasan['total_telat_menit'])" />
+    <x-kartu label="Lembur" :nilai="\App\Support\Durasi::menit($ringkasan['lembur_menit'])" warna="text-indigo-600" />
 </div>
 
 {{-- Di ponsel, 7 kolom dipaksa muat jadi tabel cuma bikin geser ke samping
@@ -45,7 +45,7 @@
             @if ($a->late_minutes > 0 || $a->has_adjustment)
                 <div class="mt-2 flex items-center gap-2 border-t border-slate-100 pt-2 text-xs">
                     @if ($a->late_minutes > 0)
-                        <span class="font-medium text-amber-700">Telat {{ $a->late_minutes }} menit</span>
+                        <span class="font-medium text-amber-700">Telat {{ \App\Support\Durasi::menit($a->late_minutes) }}</span>
                     @endif
                     @if ($a->has_adjustment)
                         <span class="text-slate-400">dikoreksi</span>
@@ -81,7 +81,7 @@
                         <td >{{ $a->check_in_at?->format('H:i') ?? '—' }}</td>
                         <td >{{ $a->check_out_at?->format('H:i') ?? '—' }}</td>
                         <td class="{{ $a->late_minutes > 0 ? 'text-amber-700' : 'text-slate-400' }}">
-                            {{ $a->late_minutes > 0 ? $a->late_minutes.' m' : '—' }}
+                            {{ \App\Support\Durasi::menit($a->late_minutes) }}
                         </td>
                         <td >
                             <x-status-badge :warna="$a->status->color()" :label="$a->status->label()" />

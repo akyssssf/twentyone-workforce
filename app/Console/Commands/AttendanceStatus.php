@@ -6,6 +6,7 @@ use App\Models\Attendance;
 use App\Models\AttendanceLog;
 use App\Models\DeviceCallback;
 use App\Models\Employee;
+use App\Support\Durasi;
 use Illuminate\Console\Command;
 use Illuminate\Support\Carbon;
 
@@ -170,7 +171,7 @@ class AttendanceStatus extends Command
                 $a->scheduled_in?->format('H:i') ?? '-',
                 $a->check_in_at?->format('H:i:s') ?? '-',
                 $a->check_out_at?->format('H:i:s') ?? '-',
-                $a->late_seconds > 0 ? $this->durasi($a->late_seconds) : '-',
+                Durasi::detik($a->late_seconds),
                 $a->late_blocks ?: '-',
                 $a->deduction_amount > 0 ? 'Rp '.number_format($a->deduction_amount, 0, ',', '.') : '-',
                 $a->status,
@@ -182,13 +183,5 @@ class AttendanceStatus extends Command
         if ($potongan > 0) {
             $this->line('   Total potongan hari ini: <comment>Rp '.number_format($potongan, 0, ',', '.').'</comment>');
         }
-    }
-
-    protected function durasi(int $detik): string
-    {
-        $menit = intdiv($detik, 60);
-        $sisa = $detik % 60;
-
-        return $menit > 0 ? "{$menit}m {$sisa}d" : "{$sisa}d";
     }
 }

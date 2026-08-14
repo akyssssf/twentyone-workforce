@@ -245,24 +245,4 @@ class MonthlyReport
             default => 'absensi-'.$this->awal->format('Y-m').'.xlsx',
         };
     }
-
-    /**
-     * Ubah detik jadi bentuk yang enak dibaca manusia di laporan.
-     */
-    public static function durasi(int $detik): string
-    {
-        if ($detik <= 0) {
-            return '-';
-        }
-
-        $jam = intdiv($detik, 3600);
-        $menit = intdiv($detik % 3600, 60);
-        $sisa = $detik % 60;
-
-        if ($jam > 0) {
-            return "{$jam}j {$menit}m";
-        }
-
-        return $menit > 0 ? "{$menit}m {$sisa}d" : "{$sisa}d";
-    }
 }
