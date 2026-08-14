@@ -57,6 +57,28 @@ class MonthlyReport
         return new self($hari->copy()->startOfWeek(), $hari->copy()->endOfWeek(), 'mingguan');
     }
 
+    /**
+     * Rentang bebas yang ditentukan sendiri.
+     *
+     * Ada karena periode gajian tidak selalu jatuh rapi di batas bulan —
+     * roster bisa mulai di pertengahan, atau owner ingin melihat satu potong
+     * minggu ramai saja. Kalau tanggalnya terbalik, ditukar diam-diam
+     * daripada memulangkan rentang kosong yang terlihat seperti tidak ada data.
+     */
+    public static function forRange(Carbon $awal, Carbon $akhir): self
+    {
+        $timezone = config('attendance.timezone');
+
+        $dari = $awal->copy()->setTimezone($timezone)->startOfDay();
+        $sampai = $akhir->copy()->setTimezone($timezone)->endOfDay();
+
+        if ($dari->greaterThan($sampai)) {
+            [$dari, $sampai] = [$sampai->copy()->startOfDay(), $dari->copy()->endOfDay()];
+        }
+
+        return new self($dari, $sampai, 'custom');
+    }
+
     public static function forDay(Carbon $tanggal): self
     {
         $timezone = config('attendance.timezone');
@@ -79,23 +101,48 @@ class MonthlyReport
     {
         return match ($this->granularitas) {
             'harian' => $this->awal->translatedFormat('l, d F Y'),
-            'mingguan' => $this->awal->isSameMonth($this->akhir)
-                ? $this->awal->translatedFormat('d').' – '.$this->akhir->translatedFormat('d F Y')
-                : $this->awal->translatedFormat('d M').' – '.$this->akhir->translatedFormat('d M Y'),
+            'mingguan', 'custom' => $this->rentangTerbaca(),
             default => $this->awal->translatedFormat('F Y'),
         };
     }
 
     /**
-     * Satu baris per karyawan aktif, termasuk yang tidak punya catatan sama
-     * sekali bulan itu. Karyawan yang hilang dari laporan lebih berbahaya
-     * daripada karyawan dengan angka nol, karena tidak ada yang menyadarinya.
+     * "15 – 31 Agustus 2026" kalau masih satu bulan, "28 Agu – 3 Sep 2026"
+     * kalau menyeberang. Bagian yang berulang dibuang supaya judulnya pendek.
+     */
+    protected function rentangTerbaca(): string
+    {
+        if ($this->awal->isSameDay($this->akhir)) {
+            return $this->awal->translatedFormat('l, d F Y');
+        }
+
+        if ($this->awal->isSameMonth($this->akhir)) {
+            return $this->awal->translatedFormat('d').' – '.$this->akhir->translatedFormat('d F Y');
+        }
+
+        if ($this->awal->year === $this->akhir->year) {
+            return $this->awal->translatedFormat('d M').' – '.$this->akhir->translatedFormat('d M Y');
+        }
+
+        return $this->awal->translatedFormat('d M Y').' – '.$this->akhir->translatedFormat('d M Y');
+    }
+
+    /**
+     * Satu baris per karyawan yang diabsen, termasuk yang tidak punya catatan
+     * sama sekali periode itu. Karyawan yang hilang dari laporan lebih
+     * berbahaya daripada karyawan dengan angka nol, karena tidak ada yang
+     * menyadarinya.
+     *
+     * Yang TIDAK diabsen (admin, akun uji coba) sengaja dikeluarkan. Mereka
+     * bukan kasus "belum ada datanya" melainkan "memang tidak pernah menempel
+     * jari di mesin", dan barisnya yang selalu nol cuma memanjangkan rekap
+     * tanpa pernah bisa berubah.
      *
      * @return Collection<int, array<string, mixed>>
      */
     public function ringkasan(): Collection
     {
-        $karyawan = Employee::with('defaultShift')->active()->orderBy('name')->get();
+        $karyawan = Employee::with('defaultShift')->tracked()->orderBy('name')->get();
 
         $perKaryawan = Attendance::query()
             ->whereBetween('work_date', [$this->periodeAwal(), $this->periodeAkhir()])
@@ -241,7 +288,7 @@ class MonthlyReport
     {
         return match ($this->granularitas) {
             'harian' => 'absensi-'.$this->awal->format('Y-m-d').'.xlsx',
-            'mingguan' => 'absensi-'.$this->awal->format('Y-m-d').'_'.$this->akhir->format('Y-m-d').'.xlsx',
+            'mingguan', 'custom' => 'absensi-'.$this->awal->format('Y-m-d').'_'.$this->akhir->format('Y-m-d').'.xlsx',
             default => 'absensi-'.$this->awal->format('Y-m').'.xlsx',
         };
     }

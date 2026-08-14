@@ -13,7 +13,7 @@
     <div class="mb-5 flex flex-wrap items-end justify-between gap-3">
         {{-- Ganti granularitas --}}
         <div class="inline-flex rounded-lg border border-slate-300 bg-white p-1 text-sm">
-            @foreach (['harian' => 'Harian', 'mingguan' => 'Mingguan', 'bulanan' => 'Bulanan'] as $kunci => $label)
+            @foreach (['harian' => 'Harian', 'mingguan' => 'Mingguan', 'bulanan' => 'Bulanan', 'custom' => 'Custom'] as $kunci => $label)
                 <a href="{{ route('laporan', ['tampilan' => $kunci]) }}"
                    class="rounded-md px-3 py-1.5 font-medium transition {{ $tampilan === $kunci ? 'bg-slate-900 text-white' : 'text-slate-600 hover:bg-slate-100' }}">
                     {{ $label }}
@@ -28,6 +28,21 @@
                     <div>
                         <label for="tanggal" class="label">Tanggal</label>
                         <input id="tanggal" type="date" name="tanggal" value="{{ $periode->format('Y-m-d') }}"
+                               class="mt-1 rounded-lg border border-slate-300 px-3 py-1.5 text-sm shadow-sm focus:border-slate-900 focus:outline-none focus:ring-1 focus:ring-slate-900">
+                    </div>
+                    <button type="submit" class="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100">Lihat</button>
+                </form>
+            @elseif ($tampilan === 'custom')
+                <form method="GET" class="flex flex-wrap items-end gap-2">
+                    <input type="hidden" name="tampilan" value="custom">
+                    <div>
+                        <label for="dari" class="label">Dari</label>
+                        <input id="dari" type="date" name="dari" value="{{ $periode->format('Y-m-d') }}"
+                               class="mt-1 rounded-lg border border-slate-300 px-3 py-1.5 text-sm shadow-sm focus:border-slate-900 focus:outline-none focus:ring-1 focus:ring-slate-900">
+                    </div>
+                    <div>
+                        <label for="sampai" class="label">Sampai</label>
+                        <input id="sampai" type="date" name="sampai" value="{{ $periodeAkhir->format('Y-m-d') }}"
                                class="mt-1 rounded-lg border border-slate-300 px-3 py-1.5 text-sm shadow-sm focus:border-slate-900 focus:outline-none focus:ring-1 focus:ring-slate-900">
                     </div>
                     <button type="submit" class="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100">Lihat</button>
@@ -137,9 +152,10 @@
 
     @if ($total['alpha'] > 0)
         <div class="pemberitahuan mb-5 border-amber-200 bg-amber-50 text-amber-900">
-            Ada {{ $total['alpha'] }} hari terhitung <strong>alpha</strong>. Kalau sebagiannya sebenarnya hari
-            libur, atur libur mingguan lewat <code class="rounded bg-amber-100 px-1">employee:edit PIN --off-days</code>
-            atau libur bersama lewat <code class="rounded bg-amber-100 px-1">holiday add</code>, lalu hitung ulang.
+            Ada {{ $total['alpha'] }} hari terhitung <strong>alpha</strong> — dijadwalkan masuk tapi tidak ada
+            scan sama sekali. Kalau sebagiannya sebenarnya libur atau izin, perbaiki jadwalnya di
+            <a href="{{ route('manajer.roster.index') }}" class="font-medium underline">Roster</a>,
+            atau setujui pengajuan izinnya, lalu hitung ulang.
         </div>
     @endif
 

@@ -21,6 +21,7 @@ class ReportController extends Controller
             'ringkasan' => $report->ringkasan(),
             'total' => $report->total(),
             'periode' => $report->periodeAwal(),
+            'periodeAkhir' => $report->periodeAkhir(),
             'tampilan' => $report->granularitas,
             'waTeks' => $report->teksWhatsApp(),
         ]);
@@ -53,6 +54,15 @@ class ReportController extends Controller
             $tanggal = DateInput::parse($request->query('tanggal'), $timezone) ?? $sekarang;
 
             return MonthlyReport::forDay($tanggal);
+        }
+
+        if ($tampilan === 'custom') {
+            // Rentang bebas. Yang kosong diisi hari ini, jadi memilih satu
+            // sisi saja tetap menghasilkan laporan, bukan halaman error.
+            $dari = DateInput::parse($request->query('dari'), $timezone) ?? $sekarang;
+            $sampai = DateInput::parse($request->query('sampai'), $timezone) ?? $sekarang;
+
+            return MonthlyReport::forRange($dari, $sampai);
         }
 
         if ($tampilan === 'mingguan') {

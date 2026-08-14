@@ -2,6 +2,7 @@
 
 namespace App\Services\Attendance;
 
+use App\Enums\AttendanceStatus;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use PhpOffice\PhpSpreadsheet\Style\Alignment;
 use PhpOffice\PhpSpreadsheet\Style\Border;
@@ -23,10 +24,16 @@ use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
  */
 class MonthlyReportExcel
 {
-    /** Format rupiah tanpa desimal, pemisah ribuan titik. */
-
     protected const WARNA_JUDUL = 'FF1E293B';   // slate-800
+
     protected const WARNA_TOTAL = 'FFF1F5F9';   // slate-100
+
+    /**
+     * Menit ditulis sebagai angka biasa supaya tetap bisa dijumlah, tapi
+     * ditampilkan dengan satuannya sendiri — "723" tanpa keterangan gampang
+     * disangka jam atau rupiah oleh yang membuka berkasnya.
+     */
+    protected const FORMAT_MENIT = '#,##0" m"';
 
     public function __construct(
         protected MonthlyReport $report,
@@ -69,18 +76,21 @@ class MonthlyReportExcel
     {
         $sheet->setTitle('Ringkasan');
 
+        // Judul dan keterangan direntang sampai N, bukan M — kolomnya ada 14
+        // (A sampai N), dan merge yang kependekan bikin blok judulnya terlihat
+        // terpotong di tengah tabel.
         $sheet->setCellValue('A1', 'Rekap Absensi '.$this->report->judulPeriode());
-        $sheet->mergeCells('A1:M1');
+        $sheet->mergeCells('A1:N1');
         $sheet->getStyle('A1')->getFont()->setBold(true)->setSize(14);
 
         $sheet->setCellValue('A2', 'Dibuat '.now(config('attendance.timezone'))->translatedFormat('d F Y H:i'));
-        $sheet->mergeCells('A2:M2');
+        $sheet->mergeCells('A2:N2');
         $sheet->getStyle('A2')->getFont()->setSize(9)->getColor()->setARGB('FF64748B');
 
         $judul = [
             'PIN', 'Nama', 'Shift', 'Hadir', 'Telat', 'Pulang Cepat', 'Alpha',
             'Izin', 'Sakit', 'Cuti', 'Libur', 'Hari Tercatat',
-            'Total Telat (menit)', 'Lembur (menit)',
+            'Total Telat', 'Lembur',
         ];
 
         $sheet->fromArray($judul, null, 'A4');
@@ -107,9 +117,10 @@ class MonthlyReportExcel
                 $data['cuti'],
                 $data['libur'],
                 $data['hari_tercatat'],
-                // Ditulis sebagai menit dalam bentuk angka supaya bisa
-                // dijumlah dan diurutkan di Excel.
-                round($data['total_telat_detik'] / 60, 1),
+                // Menit bulat, bukan pecahan. Detik tidak menambah apa pun
+                // selain "12,5" yang terlihat seperti angka yang belum jadi;
+                // menitnya sendiri sudah dibulatkan ke atas saat dihitung.
+                $data['total_telat_menit'],
                 $data['total_lembur_menit'],
             ], null, 'A'.$baris, strictNullComparison: true);
 
@@ -138,12 +149,22 @@ class MonthlyReportExcel
             $sheet->getStyle("A4:N{$baris}")->getBorders()->getAllBorders()
                 ->setBorderStyle(Border::BORDER_THIN)->getColor()->setARGB('FFE2E8F0');
             $sheet->getStyle("D5:N{$baris}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+
+            // Kolom menit ikut baris TOTAL: rumus SUM-nya juga perlu satuan,
+            // kalau tidak totalnya jadi satu-satunya angka telanjang di sheet.
+            $sheet->getStyle("M5:N{$baris}")->getNumberFormat()->setFormatCode(self::FORMAT_MENIT);
+
+            // Penyaring di baris judul supaya owner bisa mengurutkan sendiri
+            // per nama atau per jumlah alpha tanpa minta laporan baru.
+            $sheet->setAutoFilter("A4:N{$barisTerakhir}");
         }
 
         $this->lebarOtomatis($sheet, 'A', 'N');
 
-        // Baris judul tetap terlihat saat digulir.
-        $sheet->freezePane('A5');
+        // Nama karyawan ikut terkunci, bukan cuma baris judulnya: begitu
+        // digulir ke kanan sampai kolom lembur, tanpa ini tidak ada lagi
+        // penanda barisnya milik siapa.
+        $sheet->freezePane('C5');
     }
 
     protected function sheetRincian(Worksheet $sheet): void
@@ -152,7 +173,7 @@ class MonthlyReportExcel
 
         $judul = [
             'Tanggal', 'PIN', 'Nama', 'Shift', 'Jadwal Masuk',
-            'Scan Masuk', 'Scan Pulang', 'Telat (menit)', 'Pulang Cepat (menit)', 'Status',
+            'Scan Masuk', 'Scan Pulang', 'Telat', 'Pulang Cepat', 'Status',
         ];
 
         $sheet->fromArray($judul, null, 'A1');
@@ -171,9 +192,13 @@ class MonthlyReportExcel
                 // Shift malam pulangnya di tanggal berikutnya, jadi tanggal
                 // ikut ditulis supaya tidak terbaca seperti salah ketik.
                 $this->waktuPulang($data),
-                $data['telat_detik'] > 0 ? round($data['telat_detik'] / 60, 1) : 0,
+                $data['telat_menit'],
                 $data['pulang_cepat_menit'],
-                $data['status'] instanceof \BackedEnum ? $data['status']->value : $data['status'],
+                // Label, bukan nilai mentah: sheet ini dibaca manusia, dan
+                // "Hadir" lebih jelas daripada "hadir" berjejer dengan "alpha".
+                $data['status'] instanceof AttendanceStatus
+                    ? $data['status']->label()
+                    : (string) $data['status'],
             ], null, 'A'.$baris, strictNullComparison: true);
 
             $baris++;
@@ -185,6 +210,7 @@ class MonthlyReportExcel
             $sheet->getStyle("A1:J{$akhir}")->getBorders()->getAllBorders()
                 ->setBorderStyle(Border::BORDER_THIN)->getColor()->setARGB('FFE2E8F0');
             $sheet->getStyle("H2:I{$akhir}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+            $sheet->getStyle("H2:I{$akhir}")->getNumberFormat()->setFormatCode(self::FORMAT_MENIT);
 
             // Filter kolom supaya owner bisa menyaring sendiri per nama atau
             // per status tanpa perlu minta laporan baru.
@@ -192,7 +218,7 @@ class MonthlyReportExcel
         }
 
         $this->lebarOtomatis($sheet, 'A', 'J');
-        $sheet->freezePane('A2');
+        $sheet->freezePane('D2');
     }
 
     /**

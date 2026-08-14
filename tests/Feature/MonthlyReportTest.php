@@ -64,7 +64,7 @@ class MonthlyReportTest extends TestCase
     {
         $budi = Employee::factory()->create([
             'pin_device' => '1', 'name' => 'Budi', 'default_shift_id' => $this->shift->id,
-            
+
         ]);
 
         // 3 Agustus: tepat waktu.
@@ -98,8 +98,7 @@ class MonthlyReportTest extends TestCase
         $this->assertSame(1, $baris['libur']);
         $this->assertSame(4, $baris['hari_tercatat']);
         // nominal potongan pindah ke slip gaji.
-        
-        
+
     }
 
     /**
@@ -116,7 +115,59 @@ class MonthlyReportTest extends TestCase
 
         $this->assertSame(0, $baris['hari_tercatat']);
         // nominal potongan pindah ke slip gaji.
-        
+
+    }
+
+    /**
+     * Admin dan akun uji coba tidak pernah menempel jari di mesin, jadi
+     * barisnya akan selalu nol dan cuma memanjangkan rekap.
+     */
+    public function test_karyawan_yang_tidak_diabsen_tidak_masuk_laporan(): void
+    {
+        Employee::factory()->create([
+            'pin_device' => '5', 'name' => 'Barista', 'default_shift_id' => $this->shift->id,
+        ]);
+        Employee::factory()->tanpaAbsensi()->create([
+            'pin_device' => '900', 'name' => 'Admin Kafe', 'default_shift_id' => $this->shift->id,
+        ]);
+
+        $ringkasan = MonthlyReport::for(2026, 8)->ringkasan();
+
+        $this->assertCount(1, $ringkasan);
+        $this->assertSame('Barista', $ringkasan->first()['nama']);
+    }
+
+    public function test_rentang_custom_hanya_memuat_tanggal_yang_diminta(): void
+    {
+        $this->skenario(); // 3-6 Agustus
+
+        // Cuma 4 dan 5 Agustus, dua-duanya hari telat.
+        $report = MonthlyReport::forRange(
+            Carbon::parse('2026-08-04', 'Asia/Jakarta'),
+            Carbon::parse('2026-08-05', 'Asia/Jakarta'),
+        );
+
+        $baris = $report->ringkasan()->sole();
+
+        $this->assertSame(2, $baris['hari_tercatat']);
+        $this->assertSame(2, $baris['hadir']);
+        $this->assertSame(2, $baris['telat']);
+        $this->assertSame('04 – 05 Agustus 2026', $report->judulPeriode());
+    }
+
+    /**
+     * Rentang terbalik lebih mungkin salah ketik daripada permintaan laporan
+     * kosong, jadi ditukar diam-diam.
+     */
+    public function test_rentang_custom_terbalik_ditukar(): void
+    {
+        $report = MonthlyReport::forRange(
+            Carbon::parse('2026-08-20', 'Asia/Jakarta'),
+            Carbon::parse('2026-08-10', 'Asia/Jakarta'),
+        );
+
+        $this->assertSame('2026-08-10', $report->periodeAwal()->toDateString());
+        $this->assertSame('2026-08-20', $report->periodeAkhir()->toDateString());
     }
 
     public function test_karyawan_nonaktif_tidak_masuk_laporan(): void
@@ -162,9 +213,9 @@ class MonthlyReportTest extends TestCase
         $total = MonthlyReport::for(2026, 8)->total();
 
         $this->assertSame(2, $total['karyawan']);
-        
+
         // nominal potongan pindah ke slip gaji.
-        
+
     }
 
     // ------------------------------------------------------------------- excel

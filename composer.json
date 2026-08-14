@@ -1,9 +1,9 @@
 {
     "$schema": "https://getcomposer.org/schema.json",
-    "name": "laravel/laravel",
+    "name": "duapuluhsatu/absensi-kafe",
     "type": "project",
-    "description": "The skeleton application for the Laravel framework.",
-    "keywords": ["laravel", "framework"],
+    "description": "Sistem absensi dan penjadwalan 21 Kafe, dari scan Fingerspot sampai rekap gajian.",
+    "keywords": ["absensi", "roster", "fingerspot"],
     "license": "MIT",
     "require": {
         "php": "^8.3",
