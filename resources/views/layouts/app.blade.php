@@ -5,6 +5,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <meta name="theme-color" content="#0f172a">
     <title>@yield('title', 'Beranda') &middot; {{ config('app.name') }}</title>
+
+    {{-- Logo putih di atas latar gelap, bukan logo polos transparan: ikon tab
+         yang transparan ikut hilang begitu peramban dipakai dalam mode gelap. --}}
+    <link rel="icon" type="image/png" href="{{ asset('favicon.png') }}">
+    <link rel="apple-touch-icon" href="{{ asset('apple-touch-icon.png') }}">
+
     @vite(['resources/css/app.css', 'resources/js/app.js'])
 </head>
 <body class="h-full bg-slate-100 text-slate-900 antialiased">
@@ -78,8 +84,8 @@
            class="cetak-sembunyi fixed inset-y-0 left-0 z-50 flex w-64 -translate-x-full flex-col
                   bg-slate-900 text-slate-300 transition-transform duration-200 lg:translate-x-0">
         <div class="flex h-16 shrink-0 items-center gap-2.5 px-5">
-            <span class="flex h-8 w-8 items-center justify-center rounded-lg bg-white text-sm font-bold text-slate-900">
-                <x-inisial-aplikasi />
+            <span class="flex h-8 w-8 items-center justify-center rounded-lg bg-white">
+                <x-logo-21 varian="hitam" class="h-7 w-7" />
             </span>
             <span class="truncate text-base font-semibold text-white">{{ config('app.name') }}</span>
         </div>

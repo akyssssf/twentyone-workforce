@@ -5,6 +5,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <meta name="theme-color" content="#0f172a">
     <title>Masuk &middot; {{ config('app.name') }}</title>
+
+    <link rel="icon" type="image/png" href="{{ asset('favicon.png') }}">
+    <link rel="apple-touch-icon" href="{{ asset('apple-touch-icon.png') }}">
+
     @vite(['resources/css/app.css', 'resources/js/app.js'])
 </head>
 <body class="h-full bg-slate-50">
@@ -13,8 +17,8 @@
     <div class="w-full max-w-sm">
 
         <div class="mb-7 text-center">
-            <span class="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-900 text-lg font-bold text-white">
-                <x-inisial-aplikasi />
+            <span class="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-900">
+                <x-logo-21 varian="putih" class="h-10 w-10" />
             </span>
             <h1 class="text-xl font-semibold tracking-tight">{{ config('app.name') }}</h1>
             <p class="mt-1 text-sm text-slate-500">Masuk dengan nama panggilan Anda</p>
