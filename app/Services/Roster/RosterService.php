@@ -144,11 +144,20 @@ class RosterService
             ? AssignmentStatus::Off
             : AssignmentStatus::Scheduled;
 
+        $shiftKey = (int) ($shiftId ?? 0);
+
         $assignment = RosterAssignment::updateOrCreate(
             [
                 'employee_id' => $employee->id,
-                'work_date' => $date->toDateString(),
-                'shift_key' => (int) ($shiftId ?? 0),
+
+                // Harus Carbon, bukan string "Y-m-d". Kolomnya tersimpan
+                // sebagai "2026-08-15 00:00:00", jadi mencarinya dengan string
+                // pendek tidak pernah ketemu dan updateOrCreate berubah jadi
+                // insert yang menabrak unique constraint. Jebakan yang sama
+                // sudah pernah kena di AttendanceComputer.
+                'work_date' => $date->copy()->startOfDay(),
+
+                'shift_key' => $shiftKey,
             ],
             [
                 'roster_id' => $roster->id,
@@ -159,6 +168,25 @@ class RosterService
                 'source_request_id' => $sourceRequestId,
             ],
         );
+
+        // Memindahkan shift harus MEMINDAHKAN, bukan menambah.
+        //
+        // shift_key ikut jadi kunci karena double shift diizinkan, jadi
+        // mengubah shift seseorang dari pagi ke malam tidak menimpa baris
+        // lamanya — baris pagi tetap tinggal dan orang itu mendadak punya dua
+        // jadwal di hari yang sama. Dampaknya bukan cuma tampilan: absensi
+        // membuat satu rekap per assignment, jadi orangnya muncul dua kali di
+        // laporan dengan telat yang dihitung dari dua jam masuk berbeda.
+        //
+        // Baris dari pengajuan yang sudah disetujui dilewati: cuti dan tukar
+        // shift bukan sisa jadwal lama, dan menghapusnya diam-diam akan
+        // membatalkan keputusan manager tanpa jejak.
+        RosterAssignment::query()
+            ->where('employee_id', $employee->id)
+            ->whereDate('work_date', $date)
+            ->where('shift_key', '!=', $shiftKey)
+            ->whereNotIn('source', ['leave', 'swap'])
+            ->delete();
 
         AuditLogger::record('roster.assignment_changed', $assignment, [], [
             'employee' => $employee->name,
