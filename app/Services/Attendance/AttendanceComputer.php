@@ -241,9 +241,13 @@ class AttendanceComputer
                 'early_leave_minutes' => $early['minutes'],
                 'work_minutes' => $this->workMinutes($checkIn, $checkOut, $shift),
 
-                // Lembur hanya dari approval yang sudah dikonfirmasi. Menit
-                // setelah jam pulang tanpa approval BUKAN lembur (BR-14).
-                'overtime_minutes' => $this->overtimeResolver->minutesFor($employee, $date),
+                // Lembur hanya dari penugasan yang sudah diaktifkan kodenya.
+                // Menit setelah jam pulang tanpa penugasan BUKAN lembur
+                // (BR-14) — yang dihitung otomatis cuma durasinya, dari jam
+                // pulang terjadwal sampai scan terakhir.
+                'overtime_minutes' => $this->overtimeResolver->minutesFor(
+                    $employee, $date, $shift, $window->scheduledOut,
+                ),
 
                 'has_adjustment' => $adjustments->isNotEmpty(),
                 'source_note' => $adjustments->isNotEmpty()

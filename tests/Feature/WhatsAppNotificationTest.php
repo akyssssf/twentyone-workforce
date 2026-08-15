@@ -41,7 +41,10 @@ class WhatsAppNotificationTest extends TestCase
         Carbon::setTestNow(Carbon::parse('2026-08-10 18:00:00', 'Asia/Jakarta'));
 
         $this->admin = User::factory()->create(['role' => UserRole::Admin]);
-        $shift = Shift::where('code', 'malam')->first();
+
+        // Shift pagi: lembur menyambung shift sampai kafe tutup, jadi yang
+        // kebagian shift malam tidak bisa ditugaskan.
+        $shift = Shift::where('code', 'pagi')->first();
 
         $this->karyawan = Employee::factory()->create([
             'branch_id' => Branch::current()->id,
@@ -56,6 +59,12 @@ class WhatsAppNotificationTest extends TestCase
             'phone' => '081298765432',
             'default_shift_id' => $shift->id,
         ]);
+
+        // Lembur menyambung shift yang dijadwalkan, jadi rosternya wajib ada.
+        $roster = app(\App\Services\Roster\RosterService::class);
+        foreach ([$this->karyawan, $this->pengganti] as $e) {
+            $roster->assign($roster->findOrCreate(2026, 8), $e, today(), $shift->id);
+        }
     }
 
     protected function tearDown(): void
@@ -75,8 +84,6 @@ class WhatsAppNotificationTest extends TestCase
         // approve() terpisah lagi untuk jalur ini.
         $service->submitOvertime($this->karyawan, [
             'work_date' => today()->toDateString(),
-            'planned_start' => '01:00',
-            'planned_end' => '03:00',
             'reason' => 'Persiapan katering pesanan besar',
             'substitute_employee_id' => $this->pengganti->id,
         ], 'manager');

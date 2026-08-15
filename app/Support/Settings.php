@@ -26,7 +26,6 @@ class Settings
         'roster.warn_double_shift' => true,
         'attendance.check_in_out_strategy' => 'earliest_latest',
         'attendance.close_day_hour' => 6,
-        'overtime.min_minutes' => 60,
         'overtime.allow_backdated' => true,
         'payroll.period_start_day' => 21,
         'payroll.pay_day' => 21,

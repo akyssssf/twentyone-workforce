@@ -47,7 +47,9 @@ class RequestSubstituteAdminTest extends TestCase
 
         $this->admin = User::factory()->create(['role' => UserRole::Admin]);
 
-        $shift = Shift::where('code', 'malam')->first();
+        // Shift pagi: lembur menyambung shift sampai kafe tutup, jadi yang
+        // kebagian shift malam tidak bisa ditugaskan.
+        $shift = Shift::where('code', 'pagi')->first();
 
         $this->pengaju = Employee::factory()->create([
             'branch_id' => Branch::current()->id,
@@ -60,6 +62,12 @@ class RequestSubstituteAdminTest extends TestCase
             'name' => 'Rekan',
             'default_shift_id' => $shift->id,
         ]);
+
+        // Lembur menyambung shift yang dijadwalkan, jadi rosternya wajib ada.
+        $roster = app(\App\Services\Roster\RosterService::class);
+        foreach ([$this->pengaju, $this->pengganti] as $e) {
+            $roster->assign($roster->findOrCreate(2026, 8), $e, today(), $shift->id);
+        }
     }
 
     protected function tearDown(): void
@@ -79,8 +87,6 @@ class RequestSubstituteAdminTest extends TestCase
         // beda dari yang ditunjuk manajer yang sekarang langsung Approved.
         app(RequestService::class)->submitOvertime($this->pengaju, [
             'work_date' => today()->toDateString(),
-            'planned_start' => '01:00',
-            'planned_end' => '03:00',
             'reason' => 'Persiapan katering',
             'substitute_employee_id' => $this->pengganti->id,
         ], 'employee');

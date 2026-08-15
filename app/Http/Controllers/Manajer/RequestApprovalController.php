@@ -108,12 +108,16 @@ class RequestApprovalController extends Controller
             'employees' => Employee::query()->active()->orderBy('name')->get(),
             'shifts' => Shift::query()->where('is_active', true)->get(),
 
-            // Realisasi yang menunggu disahkan. Inilah titik kedua approval:
-            // approval pertama merestui rencananya, yang ini mengesahkan
-            // jam yang benar-benar dikerjakan.
+            // Realisasi yang menitnya masih hasil hitungan mesin. Yang sudah
+            // pernah dikoreksi manusia (confirmed_by terisi) sengaja tidak
+            // ikut: angkanya sudah final dan attendance:compute pun tidak
+            // menimpanya lagi. Dibatasi sebulan supaya daftarnya tidak jadi
+            // arsip yang tak pernah habis.
             'records' => OvertimeRecord::query()
                 ->with(['employee', 'overtimeRequest'])
-                ->where('status', 'pending_confirmation')
+                ->whereNull('confirmed_by')
+                ->whereNotNull('activated_at')
+                ->whereDate('work_date', '>=', today()->subDays(30))
                 ->orderByDesc('work_date')
                 ->get(),
 
@@ -138,13 +142,12 @@ class RequestApprovalController extends Controller
     /** Manager membuat lembur untuk beberapa karyawan sekaligus. */
     public function storeOvertime(Request $request)
     {
+        // Jam tidak diminta: lembur selalu menyambung shift orangnya sampai
+        // kafe tutup, dan durasi sebenarnya dihitung dari scan terakhirnya.
         $data = $request->validate([
             'employee_ids' => ['required', 'array', 'min:1'],
             'employee_ids.*' => ['exists:employees,id'],
             'work_date' => ['required', 'date'],
-            'planned_start' => ['required'],
-            'planned_end' => ['required'],
-            'shift_id' => ['nullable', 'exists:shifts,id'],
             'substitute_employee_id' => ['required', 'exists:employees,id'],
             'reason' => ['required', 'string', 'min:5'],
         ]);
@@ -162,9 +165,6 @@ class RequestApprovalController extends Controller
                 $pengajuan = $this->service->submitOvertime($employee, [
                     'batch_id' => $batchId,
                     'work_date' => $data['work_date'],
-                    'planned_start' => $data['planned_start'],
-                    'planned_end' => $data['planned_end'],
-                    'shift_id' => $data['shift_id'] ?? null,
                     'substitute_employee_id' => $data['substitute_employee_id'],
                     'reason' => $data['reason'],
                 ], 'manager');

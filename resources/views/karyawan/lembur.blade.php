@@ -48,9 +48,10 @@
                     <div>
                         <p class="text-sm font-medium">{{ $r->work_date->translatedFormat('l, d M Y') }}</p>
                         <p class="text-xs text-slate-500">
-                            Rencana {{ $r->approved_minutes }} menit
                             @if ($r->overtimeRequest)
-                                &middot; {{ substr($r->overtimeRequest->planned_start, 0, 5) }}–{{ substr($r->overtimeRequest->planned_end, 0, 5) }}
+                                Menyambung shift, mulai {{ substr($r->overtimeRequest->planned_start, 0, 5) }}
+                            @else
+                                Menyambung shift Anda hari itu
                             @endif
                         </p>
                     </div>
@@ -66,7 +67,10 @@
     <div class="kartu-judul">
         <div>
             <h2 class="font-semibold">Riwayat Lembur</h2>
-            <p class="text-xs text-slate-500">Yang dibayar adalah menit yang disahkan admin setelah Anda bekerja.</p>
+            <p class="text-xs text-slate-500">
+                Lamanya dihitung dari jam pulang shift Anda sampai scan terakhir.
+                Kalau lupa scan pulang, dihitung penuh sampai kafe tutup.
+            </p>
         </div>
     </div>
 
@@ -75,8 +79,8 @@
             <thead>
                 <tr>
                     <th>Tanggal</th>
-                    <th class="text-right">Rencana</th>
-                    <th class="text-right">Aktual</th>
+                    <th class="text-right">Batas</th>
+                    <th class="text-right">Terhitung</th>
                     <th class="text-right">Dibayar</th>
                     <th>Status</th>
                 </tr>
@@ -85,10 +89,10 @@
                 @forelse ($riwayat as $r)
                     <tr>
                         <td class="whitespace-nowrap">{{ $r->work_date->translatedFormat('d M Y') }}</td>
-                        <td class="text-right tabular-nums text-slate-500">{{ $r->approved_minutes }} m</td>
-                        <td class="text-right tabular-nums text-slate-500">{{ $r->actual_minutes ?: '—' }}</td>
+                        <td class="text-right tabular-nums text-slate-500">{{ \App\Support\Durasi::menit($r->approved_minutes) }}</td>
+                        <td class="text-right tabular-nums text-slate-500">{{ \App\Support\Durasi::menit($r->actual_minutes) }}</td>
                         <td class="text-right font-medium tabular-nums">
-                            {{ $r->payable_minutes > 0 ? $r->payable_minutes . ' m' : '—' }}
+                            {{ \App\Support\Durasi::menit($r->payable_minutes) }}
                         </td>
                         <td>
                             @if ($r->status === 'confirmed')

@@ -3,7 +3,7 @@
 
 @section('content')
 
-<x-judul-halaman keterangan="Lembur tidak pernah terjadi otomatis. Admin menunjuk orangnya, orang itu mengaktifkan dengan kode, lalu realisasinya disahkan." />
+<x-judul-halaman keterangan="Lembur tidak pernah terjadi sendiri: admin menunjuk orangnya, orang itu mengaktifkan dengan kode. Yang dihitung sendiri cuma lamanya — dari jam pulang shiftnya sampai scan terakhir." />
 
 {{-- 1. Tugaskan --}}
 <div class="kartu mb-5">
@@ -35,19 +35,14 @@
             </p>
         </div>
 
-        <div class="grid gap-4 sm:grid-cols-3">
-            <div>
-                <label class="label">Tanggal</label>
-                <input type="date" name="work_date" required class="kolom mt-1">
-            </div>
-            <div>
-                <label class="label">Mulai</label>
-                <input type="time" name="planned_start" required class="kolom mt-1">
-            </div>
-            <div>
-                <label class="label">Selesai</label>
-                <input type="time" name="planned_end" required class="kolom mt-1">
-            </div>
+        <div>
+            <label class="label">Tanggal</label>
+            <input type="date" name="work_date" required class="kolom mt-1 sm:max-w-xs">
+            <p class="mt-1 text-xs text-slate-500">
+                Jamnya tidak perlu diisi. Lembur menyambung shift orangnya sampai kafe tutup,
+                dan lamanya dihitung sendiri dari jam pulang terjadwal ke scan terakhirnya.
+                Yang kebagian shift malam tidak bisa ditugaskan — setelah itu kafe sudah tutup.
+            </p>
         </div>
 
         <div>
@@ -100,8 +95,11 @@
 <div class="kartu mb-5">
     <div class="kartu-judul">
         <div>
-            <h2 class="font-semibold">Menunggu Pengesahan</h2>
-            <p class="text-xs text-slate-500">Yang dibayar min(disetujui, aktual). Menaikkan di atas itu wajib pakai catatan.</p>
+            <h2 class="font-semibold">Terhitung Otomatis</h2>
+            <p class="text-xs text-slate-500">
+                Menitnya dihitung sendiri dari jam pulang terjadwal ke scan terakhir. Cukup dibiarkan
+                kalau sudah benar — form di bawah cuma untuk mengoreksi. Menaikkan di atas batasnya wajib pakai catatan.
+            </p>
         </div>
     </div>
 
@@ -112,8 +110,15 @@
                     <x-avatar :employee="$r->employee" ukuran="sm" />
                     <span class="text-sm font-medium">{{ $r->employee?->name }}</span>
                     <span class="text-xs text-slate-500">
-                        {{ $r->work_date->translatedFormat('d M Y') }} &middot; disetujui {{ $r->approved_minutes }} menit
+                        {{ $r->work_date->translatedFormat('d M Y') }} &middot;
+                        batas {{ \App\Support\Durasi::menit($r->approved_minutes) }}
                     </span>
+
+                    @if ($r->status === 'confirmed')
+                        <x-status-badge warna="emerald" label="Sudah terhitung" />
+                    @else
+                        <x-status-badge warna="slate" label="Hari belum tutup" />
+                    @endif
 
                     @if ($r->isActivated())
                         <x-status-badge warna="emerald"
@@ -123,19 +128,18 @@
                     @endif
                 </div>
 
-                @php $saran = $r->saranMenit(); @endphp
-
-                @if ($saran !== null)
-                    <p class="mb-2 text-xs text-slate-500">
-                        Saran dari jam scan pulang asli: <strong class="text-slate-700">{{ $saran }} menit</strong>
-                        lewat jadwal pulang. Sudah keisi otomatis di bawah, tinggal cek lalu sahkan (atau ubah manual
-                        kalau tidak sesuai).
-                    </p>
-                @else
-                    <p class="mb-2 text-xs text-amber-700">
-                        Belum ada scan pulang tercatat untuk tanggal ini — isi manual berdasarkan laporan orangnya.
-                    </p>
-                @endif
+                <p class="mb-2 text-xs text-slate-500">
+                    @if ($r->actual_end === null)
+                        Belum ada scan setelah jam pulangnya.
+                    @elseif ($r->actual_minutes >= $r->approved_minutes)
+                        Tidak ada scan pulang sampai kafe tutup, jadi dihitung penuh sampai
+                        {{ $r->actual_end->format('H:i') }}.
+                    @else
+                        Scan terakhir {{ $r->actual_end->format('H:i') }}, terhitung
+                        <strong class="text-slate-700">{{ \App\Support\Durasi::menit($r->actual_minutes) }}</strong>
+                        lewat jam pulang.
+                    @endif
+                </p>
 
                 <form method="POST" action="{{ route('manajer.lembur.confirm', $r) }}"
                       class="flex flex-wrap items-end gap-2">
@@ -143,17 +147,17 @@
                     <div>
                         <label class="label">Aktual (menit)</label>
                         <input type="number" name="actual_minutes" min="0"
-                               value="{{ $saran ?? $r->approved_minutes }}" required
+                               value="{{ $r->actual_minutes }}" required
                                class="kolom mt-0.5 w-24">
                     </div>
                     <div>
                         <label class="label">Dibayar (menit)</label>
                         <input type="number" name="payable_minutes" min="0"
-                               value="{{ min($saran ?? $r->approved_minutes, $r->approved_minutes) }}" required
+                               value="{{ $r->payable_minutes }}" required
                                class="kolom mt-0.5 w-24">
                     </div>
-                    <input type="text" name="note" placeholder="Catatan" class="kolom min-w-40 flex-1">
-                    <button class="btn-setuju">Sahkan</button>
+                    <input type="text" name="note" placeholder="Catatan koreksi" class="kolom min-w-40 flex-1">
+                    <button class="btn-setuju">Koreksi</button>
                 </form>
             </div>
         @empty

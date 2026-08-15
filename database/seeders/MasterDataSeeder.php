@@ -140,7 +140,6 @@ class MasterDataSeeder extends Seeder
             ['roster.warn_double_shift', true, 'bool', 'Peringatkan kalau ada double shift'],
             ['attendance.check_in_out_strategy', 'earliest_latest', 'string', 'Cara menentukan jam masuk & pulang'],
             ['attendance.close_day_hour', 6, 'int', 'Jam proses tutup hari'],
-            ['overtime.min_minutes', 60, 'int', 'Minimal lembur (menit)'],
             ['overtime.allow_backdated', true, 'bool', 'Izinkan approval lembur susulan'],
             ['payroll.period_start_day', 21, 'int', 'Tanggal mulai periode gaji'],
             ['payroll.pay_day', 21, 'int', 'Tanggal pembayaran gaji'],

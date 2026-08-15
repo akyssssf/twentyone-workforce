@@ -3,12 +3,13 @@
 namespace Tests\Feature;
 
 use App\Enums\UserRole;
-use App\Models\Attendance;
+use App\Models\AttendanceLog;
 use App\Models\Branch;
 use App\Models\Employee;
 use App\Models\OvertimeRecord;
 use App\Models\Shift;
 use App\Models\User;
+use App\Services\Attendance\OvertimeResolver;
 use App\Services\Requests\OvertimeCodeService;
 use App\Services\Requests\RequestService;
 use Database\Seeders\MasterDataSeeder;
@@ -43,7 +44,10 @@ class OvertimeCodeTest extends TestCase
 
         $this->admin = User::factory()->create(['role' => UserRole::Admin]);
 
-        $shift = Shift::where('code', 'malam')->first();
+        // Shift pagi, bukan malam: lembur berarti menyambung shift sampai
+        // kafe tutup, dan setelah shift malam tidak ada lagi yang bisa
+        // disambung.
+        $shift = Shift::where('code', 'pagi')->first();
 
         $this->rifqi = Employee::factory()->create([
             'branch_id' => Branch::current()->id,
@@ -56,6 +60,20 @@ class OvertimeCodeTest extends TestCase
             'name' => 'Rekan',
             'default_shift_id' => $shift->id,
         ]);
+
+        // Lembur menyambung shift yang dijadwalkan, jadi rosternya wajib ada.
+        $this->jadwalkan($this->rifqi, $shift);
+        $this->jadwalkan($this->rekan, $shift);
+    }
+
+    protected function jadwalkan(Employee $employee, Shift $shift, ?Carbon $tanggal = null): void
+    {
+        app(\App\Services\Roster\RosterService::class)->assign(
+            app(\App\Services\Roster\RosterService::class)->findOrCreate(2026, 8),
+            $employee,
+            $tanggal ?? today(),
+            $shift->id,
+        );
     }
 
     protected function tearDown(): void
@@ -73,10 +91,9 @@ class OvertimeCodeTest extends TestCase
 
         // Ditunjuk manajer sudah otomatis Approved sejak dibuat — tidak ada
         // approve() terpisah lagi untuk jalur ini.
+        // Jam tidak lagi diketik: diturunkan dari shift orangnya hari itu.
         $service->submitOvertime($untuk ?? $this->rifqi, [
             'work_date' => today()->toDateString(),
-            'planned_start' => '01:00',
-            'planned_end' => '03:00',
             'reason' => 'Persiapan katering pesanan besar',
             'substitute_employee_id' => $this->rekan->id,
         ], 'manager');
@@ -91,6 +108,7 @@ class OvertimeCodeTest extends TestCase
             'branch_id' => Branch::current()->id,
             'name' => 'Orang Ketiga',
         ]);
+        $this->jadwalkan($lain, Shift::where('code', 'pagi')->first());
 
         $satu = $this->tugaskan();
         $dua = $this->tugaskan($lain);
@@ -131,62 +149,143 @@ class OvertimeCodeTest extends TestCase
         $this->assertNotNull($record->overtimeRequest->request->decided_at);
     }
 
+    // ------------------------------------------------- hitung otomatis
+
+    protected function scan(Employee $employee, string $waktu): void
+    {
+        $at = Carbon::parse($waktu, 'Asia/Jakarta');
+
+        AttendanceLog::create([
+            'cloud_id' => 'UJI',
+            'employee_id' => $employee->id,
+            'pin' => $employee->pin_device,
+            'scanned_at' => $at,
+            'scan_minute' => $at->copy()->startOfMinute(),
+            'source' => 'webhook',
+        ]);
+    }
+
+    /** Shift pagi seeder: 09:00-17:00. Kafe tutup saat shift malam kelar, 01:00. */
+    protected function hitungLembur(): int
+    {
+        $shift = Shift::where('code', 'pagi')->first();
+
+        return app(OvertimeResolver::class)->minutesFor(
+            $this->rifqi,
+            Carbon::parse('2026-08-10', 'Asia/Jakarta'),
+            $shift,
+            Carbon::parse('2026-08-10 17:00:00', 'Asia/Jakarta'),
+        );
+    }
+
+    public function test_menit_lembur_dihitung_dari_scan_terakhir(): void
+    {
+        $record = $this->tugaskan();
+        app(OvertimeCodeService::class)->activate($this->rifqi, $record->overtimeRequest->secret_code);
+
+        $this->scan($this->rifqi, '2026-08-10 19:30:00');
+
+        // Hari sudah lewat jam tutup, jadi hasilnya boleh disimpulkan.
+        Carbon::setTestNow(Carbon::parse('2026-08-11 02:00:00', 'Asia/Jakarta'));
+
+        $this->assertSame(150, $this->hitungLembur());
+    }
+
     /**
-     * @return array{0: int, 1: int, 2: int|null} [checkout_hour, checkout_minute, saran_menit_diharap]
+     * Lupa scan pulang membayar paling banyak — pilihan sadar, supaya yang
+     * lembur tidak dirugikan karena lupa menempel jari.
      */
-    public static function skenarioSaranMenit(): array
-    {
-        return [
-            'pulang tepat jadwal -> 0' => [17, 0, 0],
-            'pulang 45 menit lewat jadwal -> 45' => [17, 45, 45],
-            // "Nyambung" ke shift berikutnya cuma beda BESAR angkanya, bukan
-            // beda rumus — pulang 3 jam lewat jadwal ya 180 menit.
-            'pulang nyambung shift berikutnya -> 180' => [20, 0, 180],
-        ];
-    }
-
-    #[\PHPUnit\Framework\Attributes\DataProvider('skenarioSaranMenit')]
-    public function test_saran_menit_dari_jam_scan_pulang_asli(int $jamPulang, int $menitPulang, int $diharap): void
+    public function test_tanpa_scan_pulang_dihitung_penuh_sampai_kafe_tutup(): void
     {
         $record = $this->tugaskan();
+        app(OvertimeCodeService::class)->activate($this->rifqi, $record->overtimeRequest->secret_code);
 
-        Attendance::create([
-            'employee_id' => $this->rifqi->id,
-            'shift_id' => $this->rifqi->default_shift_id,
-            'work_date' => today(),
-            'scheduled_in' => today()->setTime(17, 0),
-            'scheduled_out' => today()->setTime(17, 0),
-            'check_in_at' => today()->setTime(16, 55),
-            'check_out_at' => today()->setTime($jamPulang, $menitPulang),
-            'status' => 'hadir',
+        Carbon::setTestNow(Carbon::parse('2026-08-11 02:00:00', 'Asia/Jakarta'));
+
+        // 17:00 sampai 01:00 keesokan harinya.
+        $this->assertSame(480, $this->hitungLembur());
+    }
+
+    public function test_hari_yang_belum_tutup_belum_ikut_terbayar(): void
+    {
+        $record = $this->tugaskan();
+        app(OvertimeCodeService::class)->activate($this->rifqi, $record->overtimeRequest->secret_code);
+
+        $this->scan($this->rifqi, '2026-08-10 19:30:00');
+
+        // Masih jam 20:00, orangnya mungkin belum pulang.
+        Carbon::setTestNow(Carbon::parse('2026-08-10 20:00:00', 'Asia/Jakarta'));
+
+        $this->assertSame(0, $this->hitungLembur());
+        $this->assertSame(150, OvertimeRecord::find($record->id)->actual_minutes);
+    }
+
+    /** Tanpa aktivasi kode, tidak ada bukti siapa yang mengerjakannya. */
+    public function test_tanpa_aktivasi_kode_tidak_dihitung(): void
+    {
+        $this->tugaskan();
+        $this->scan($this->rifqi, '2026-08-10 19:30:00');
+
+        Carbon::setTestNow(Carbon::parse('2026-08-11 02:00:00', 'Asia/Jakarta'));
+
+        $this->assertSame(0, $this->hitungLembur());
+    }
+
+    public function test_koreksi_manajer_tidak_ditimpa_hitungan_ulang(): void
+    {
+        $record = $this->tugaskan();
+        app(OvertimeCodeService::class)->activate($this->rifqi, $record->overtimeRequest->secret_code);
+
+        $this->scan($this->rifqi, '2026-08-10 19:30:00');
+        Carbon::setTestNow(Carbon::parse('2026-08-11 02:00:00', 'Asia/Jakarta'));
+
+        $record->update([
+            'actual_minutes' => 90,
+            'payable_minutes' => 90,
+            'status' => 'confirmed',
+            'confirmed_by' => $this->admin->id,
+            'confirmed_at' => now(),
+            'note' => 'Pulang lebih awal, disaksikan langsung.',
         ]);
 
-        $this->assertSame($diharap, $record->saranMenit());
+        $this->assertSame(90, $this->hitungLembur());
+        $this->assertSame(90, OvertimeRecord::find($record->id)->actual_minutes);
     }
 
-    public function test_saran_menit_null_kalau_belum_ada_scan_pulang(): void
+    public function test_shift_malam_tidak_bisa_ditugaskan_lembur(): void
     {
-        $record = $this->tugaskan();
+        $malam = Shift::where('code', 'malam')->first();
+        $this->jadwalkan($this->rifqi, $malam);
 
-        Attendance::create([
-            'employee_id' => $this->rifqi->id,
-            'shift_id' => $this->rifqi->default_shift_id,
-            'work_date' => today(),
-            'scheduled_in' => today()->setTime(17, 0),
-            'scheduled_out' => today()->setTime(17, 0),
-            'check_in_at' => today()->setTime(16, 55),
-            'check_out_at' => null,
-            'status' => 'hadir',
+        $this->actingAs($this->admin);
+
+        $this->expectException(RuntimeException::class);
+        $this->expectExceptionMessage('kafe tutup');
+
+        app(RequestService::class)->submitOvertime($this->rifqi, [
+            'work_date' => today()->toDateString(),
+            'reason' => 'Bersih-bersih setelah tutup',
+            'substitute_employee_id' => $this->rekan->id,
+        ], 'manager');
+    }
+
+    public function test_tanpa_jadwal_shift_tidak_bisa_ditugaskan_lembur(): void
+    {
+        $tanpaJadwal = Employee::factory()->create([
+            'branch_id' => Branch::current()->id,
+            'name' => 'Belum Dijadwalkan',
         ]);
 
-        $this->assertNull($record->saranMenit());
-    }
+        $this->actingAs($this->admin);
 
-    public function test_saran_menit_null_kalau_tidak_ada_absensi_sama_sekali(): void
-    {
-        $record = $this->tugaskan();
+        $this->expectException(RuntimeException::class);
+        $this->expectExceptionMessage('tidak punya jadwal shift');
 
-        $this->assertNull($record->saranMenit());
+        app(RequestService::class)->submitOvertime($tanpaJadwal, [
+            'work_date' => today()->toDateString(),
+            'reason' => 'Bantu stok opname',
+            'substitute_employee_id' => $this->rekan->id,
+        ], 'manager');
     }
 
     public function test_kode_orang_lain_ditolak(): void

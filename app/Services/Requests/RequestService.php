@@ -15,6 +15,7 @@ use App\Models\OvertimeRequest;
 use App\Models\Request;
 use App\Models\RosterAssignment;
 use App\Models\User;
+use App\Services\Attendance\OvertimeResolver;
 use App\Services\Audit\AuditLogger;
 use App\Services\Notifications\Notifier;
 use App\Services\Payroll\PayrollLockGuard;
@@ -43,6 +44,7 @@ class RequestService
         protected PayrollLockGuard $lockGuard,
         protected Notifier $notifier,
         protected LeaveService $leave,
+        protected OvertimeResolver $overtimeResolver,
     ) {}
 
     // ------------------------------------------------------------ pengganti
@@ -147,27 +149,56 @@ class RequestService
         });
     }
 
+    /**
+     * Tugaskan lembur: menyambung shift seseorang sampai kafe tutup.
+     *
+     * Jamnya tidak diketik siapa pun. Lembur selalu mulai persis saat shift
+     * orangnya selesai dan paling lama sampai jam tutup — durasi sebenarnya
+     * dihitung belakangan dari scan terakhirnya (lihat OvertimeResolver).
+     * Yang disimpan di sini cuma jendelanya, sekaligus jadi batas atas yang
+     * boleh dibayar.
+     */
     public function submitOvertime(Employee $employee, array $data, string $initiatedBy = 'employee'): Request
     {
         $workDate = Carbon::parse($data['work_date'])->startOfDay();
         $this->lockGuard->ensureUnlocked($workDate);
 
-        $start = Carbon::parse($workDate->toDateString() . ' ' . $data['planned_start']);
-        $end = Carbon::parse($workDate->toDateString() . ' ' . $data['planned_end']);
+        $assignment = RosterAssignment::query()
+            ->with('shift')
+            ->where('employee_id', $employee->id)
+            ->whereDate('work_date', $workDate)
+            ->working()
+            ->first();
 
-        // Lembur shift malam melewati tengah malam.
-        if ($end->lessThanOrEqualTo($start)) {
-            $end->addDay();
+        if ($assignment?->shift === null) {
+            throw new RuntimeException(
+                "{$employee->name} tidak punya jadwal shift pada tanggal itu, jadi tidak ada shift yang bisa disambung."
+            );
         }
 
-        $minutes = (int) $start->diffInMinutes($end);
-        $minimum = \App\Support\Settings::int('overtime.min_minutes', 60);
+        $shift = $assignment->shift;
 
-        if ($minutes < $minimum) {
-            throw new RuntimeException("Lembur minimal {$minimum} menit. Pengajuan ini hanya {$minutes} menit.");
+        if (! $this->overtimeResolver->bolehLembur($shift)) {
+            throw new RuntimeException(
+                "{$employee->name} kebagian {$shift->name} yang berakhir setelah tengah malam. "
+                . 'Setelah itu kafe tutup, jadi tidak ada shift yang bisa disambung.'
+            );
+        }
+
+        $start = $shift->endsOn($workDate);
+        $end = $this->overtimeResolver->batasAkhirHari($workDate);
+
+        $minutes = (int) $start->diffInMinutes($end);
+
+        if ($minutes <= 0) {
+            throw new RuntimeException('Jam tutup sudah lewat dari jam pulang shiftnya, tidak ada waktu yang bisa dilembur.');
         }
 
         $pengganti = $this->assertSubstitute($employee, $data['substitute_employee_id'] ?? null);
+
+        $data['planned_start'] = $start->format('H:i:s');
+        $data['planned_end'] = $end->format('H:i:s');
+        $data['shift_id'] = $shift->id;
 
         return DB::transaction(function () use ($employee, $data, $workDate, $minutes, $initiatedBy, $pengganti) {
             // Lembur yang manajer sendiri yang menunjuk langsung SAH sejak
@@ -672,19 +703,21 @@ class RequestService
     protected function pesanKodeLembur(Request $request, $overtime): string
     {
         $tanggal = $overtime->work_date->translatedFormat('l, d F Y');
-        $jam = substr($overtime->planned_start, 0, 5) . '–' . substr($overtime->planned_end, 0, 5);
+        $mulai = substr($overtime->planned_start, 0, 5);
 
         return implode("\n", [
             'Halo ' . $request->employee->name . ',',
             '',
             'Anda ditugaskan lembur:',
             $tanggal,
-            'Jam ' . $jam . ' (' . $overtime->planned_minutes . ' menit)',
+            'Menyambung shift, mulai jam ' . $mulai,
             '',
             'KODE LEMBUR: ' . $overtime->secret_code,
             '',
             'Buka menu Lembur di aplikasi dan masukkan kode ini sebelum mulai bekerja.',
             'Tanpa diaktifkan, lembur tidak dibayar walaupun Anda tetap scan.',
+            '',
+            'Jangan lupa scan pulang saat selesai — dari situ jam lemburnya dihitung.',
         ]);
     }
 
