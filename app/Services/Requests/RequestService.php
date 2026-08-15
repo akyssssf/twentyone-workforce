@@ -3,6 +3,7 @@
 namespace App\Services\Requests;
 
 use App\Enums\AttendanceStatus;
+use App\Enums\OvertimeOccasion;
 use App\Enums\RequestStatus;
 use App\Enums\RequestType;
 use App\Models\AttendanceAdjustment;
@@ -194,8 +195,19 @@ class RequestService
             throw new RuntimeException('Jam tutup sudah lewat dari jam pulang shiftnya, tidak ada waktu yang bisa dilembur.');
         }
 
-        $pengganti = $this->assertSubstitute($employee, $data['substitute_employee_id'] ?? null);
+        $diminta = $data['occasion'] ?? null;
 
+        $keperluan = $diminta instanceof OvertimeOccasion
+            ? $diminta
+            : (OvertimeOccasion::tryFrom((string) $diminta) ?? OvertimeOccasion::Pengganti);
+
+        // Acara berdiri sendiri: tidak ada posisi yang ditinggalkan, jadi
+        // tidak ada yang perlu menutupnya.
+        $pengganti = $keperluan->butuhPengganti()
+            ? $this->assertSubstitute($employee, $data['substitute_employee_id'] ?? null)
+            : null;
+
+        $data['occasion'] = $keperluan;
         $data['planned_start'] = $start->format('H:i:s');
         $data['planned_end'] = $end->format('H:i:s');
         $data['shift_id'] = $shift->id;
@@ -228,6 +240,7 @@ class RequestService
                 'batch_id' => $data['batch_id'] ?? null,
                 'work_date' => $workDate,
                 'shift_id' => $data['shift_id'] ?? null,
+                'occasion' => $data['occasion'],
                 'planned_start' => $data['planned_start'],
                 'planned_end' => $data['planned_end'],
                 'planned_minutes' => $minutes,

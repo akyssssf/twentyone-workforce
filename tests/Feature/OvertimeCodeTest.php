@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Enums\OvertimeOccasion;
 use App\Enums\UserRole;
 use App\Models\AttendanceLog;
 use App\Models\Branch;
@@ -250,6 +251,104 @@ class OvertimeCodeTest extends TestCase
 
         $this->assertSame(90, $this->hitungLembur());
         $this->assertSame(90, OvertimeRecord::find($record->id)->actual_minutes);
+    }
+
+    // ------------------------------------------------- keperluan lembur
+
+    public function test_lembur_acara_tidak_perlu_pengganti(): void
+    {
+        $this->actingAs($this->admin);
+
+        app(RequestService::class)->submitOvertime($this->rifqi, [
+            'work_date' => today()->toDateString(),
+            'occasion' => OvertimeOccasion::LiveMusic->value,
+            'reason' => 'Tambahan tenaga untuk live music',
+        ], 'manager');
+
+        $record = OvertimeRecord::where('employee_id', $this->rifqi->id)->latest('id')->first();
+
+        $this->assertSame(OvertimeOccasion::LiveMusic, $record->overtimeRequest->occasion);
+        $this->assertNull($record->overtimeRequest->request->substitute_employee_id);
+    }
+
+    public function test_lembur_penggantian_tetap_wajib_menunjuk_pengganti(): void
+    {
+        $this->actingAs($this->admin);
+
+        $this->expectException(RuntimeException::class);
+        $this->expectExceptionMessage('Pengganti wajib dipilih');
+
+        app(RequestService::class)->submitOvertime($this->rifqi, [
+            'work_date' => today()->toDateString(),
+            'occasion' => OvertimeOccasion::Pengganti->value,
+            'reason' => 'Menutup posisi rekan yang izin',
+        ], 'manager');
+    }
+
+    /** Baris lama dibuat sebelum kolom keperluan ada — semuanya penggantian. */
+    public function test_tanpa_keperluan_dianggap_penggantian(): void
+    {
+        $record = $this->tugaskan();
+
+        $this->assertSame(OvertimeOccasion::Pengganti, $record->overtimeRequest->occasion);
+    }
+
+    // --------------------------------------------------- lewat form admin
+
+    /**
+     * Penugasan massal lewat form pernah cuma jadi untuk orang PERTAMA:
+     * controller memanggil approve() sekali lagi padahal jalur manajer sudah
+     * disetujui sejak dibuat, lemparannya menghentikan perulangan, dan sisanya
+     * diam-diam tidak pernah dibuat.
+     */
+    public function test_form_admin_menugaskan_semua_orang_yang_dipilih(): void
+    {
+        $ketiga = Employee::factory()->create([
+            'branch_id' => Branch::current()->id,
+            'name' => 'Orang Ketiga',
+        ]);
+        $this->jadwalkan($ketiga, Shift::where('code', 'pagi')->first());
+
+        $response = $this->actingAs($this->admin)->post(route('manajer.lembur.store'), [
+            'employee_ids' => [$this->rifqi->id, $ketiga->id],
+            'occasion' => OvertimeOccasion::Pengganti->value,
+            'substitute_employee_id' => $this->rekan->id,
+            'work_date' => today()->toDateString(),
+            'reason' => 'Persiapan katering pesanan besar',
+        ]);
+
+        $response->assertSessionHasNoErrors();
+
+        $this->assertSame(1, OvertimeRecord::where('employee_id', $this->rifqi->id)->count());
+        $this->assertSame(1, OvertimeRecord::where('employee_id', $ketiga->id)->count());
+    }
+
+    public function test_form_admin_menolak_penggantian_tanpa_pengganti(): void
+    {
+        $response = $this->actingAs($this->admin)->post(route('manajer.lembur.store'), [
+            'employee_ids' => [$this->rifqi->id],
+            'occasion' => OvertimeOccasion::Pengganti->value,
+            'work_date' => today()->toDateString(),
+            'reason' => 'Menutup posisi rekan yang izin',
+        ]);
+
+        $response->assertSessionHasErrors('substitute_employee_id');
+        $this->assertSame(0, OvertimeRecord::where('employee_id', $this->rifqi->id)->count());
+    }
+
+    public function test_form_admin_menerima_acara_tanpa_pengganti(): void
+    {
+        $response = $this->actingAs($this->admin)->post(route('manajer.lembur.store'), [
+            'employee_ids' => [$this->rifqi->id],
+            'occasion' => OvertimeOccasion::Nobar->value,
+            'work_date' => today()->toDateString(),
+            'reason' => 'Nobar final, tamu membludak',
+        ]);
+
+        $response->assertSessionHasNoErrors();
+
+        $record = OvertimeRecord::where('employee_id', $this->rifqi->id)->latest('id')->first();
+        $this->assertSame(OvertimeOccasion::Nobar, $record->overtimeRequest->occasion);
     }
 
     public function test_shift_malam_tidak_bisa_ditugaskan_lembur(): void

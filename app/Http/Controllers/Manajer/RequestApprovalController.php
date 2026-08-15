@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Manajer;
 
+use App\Enums\OvertimeOccasion;
 use App\Enums\RequestStatus;
 use App\Http\Controllers\Controller;
 use App\Models\Employee;
@@ -12,6 +13,7 @@ use App\Services\Audit\AuditLogger;
 use App\Services\Requests\RequestService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
 use RuntimeException;
 
 class RequestApprovalController extends Controller
@@ -148,8 +150,19 @@ class RequestApprovalController extends Controller
             'employee_ids' => ['required', 'array', 'min:1'],
             'employee_ids.*' => ['exists:employees,id'],
             'work_date' => ['required', 'date'],
-            'substitute_employee_id' => ['required', 'exists:employees,id'],
+            'occasion' => ['required', Rule::enum(OvertimeOccasion::class)],
+
+            // Pengganti cuma wajib kalau lemburnya memang menutup posisi
+            // orang lain. Acara seperti live music tidak menggantikan siapa
+            // pun, dan memaksanya bikin admin mengarang nama.
+            'substitute_employee_id' => [
+                Rule::requiredIf(fn () => $request->input('occasion') === OvertimeOccasion::Pengganti->value),
+                'nullable',
+                'exists:employees,id',
+            ],
             'reason' => ['required', 'string', 'min:5'],
+        ], [
+            'substitute_employee_id.required' => 'Kalau lemburnya menggantikan rekan, sebutkan siapa yang ditutup posisinya.',
         ]);
 
         // Satu request per karyawan — karena tiap orang punya realisasi dan
@@ -162,15 +175,20 @@ class RequestApprovalController extends Controller
             $employee = Employee::findOrFail($employeeId);
 
             try {
-                $pengajuan = $this->service->submitOvertime($employee, [
+                // Sudah berstatus Approved sejak dibuat — submitOvertime()
+                // jalur 'manager' sekaligus memutuskan, mengirim kode, dan
+                // membuat catatan realisasinya. Memanggil approve() lagi di
+                // sini dulu melempar "tidak sedang menunggu persetujuan",
+                // yang menghentikan seluruh perulangan: orang pertama dapat
+                // lemburnya, sisanya diam-diam tidak pernah dibuat.
+                $this->service->submitOvertime($employee, [
                     'batch_id' => $batchId,
                     'work_date' => $data['work_date'],
-                    'substitute_employee_id' => $data['substitute_employee_id'],
+                    'occasion' => $data['occasion'],
+                    'substitute_employee_id' => $data['substitute_employee_id'] ?? null,
                     'reason' => $data['reason'],
                 ], 'manager');
 
-                // Dibuat manager berarti sekaligus disetujui manager.
-                $this->service->approve($pengajuan, $request->user(), 'Dibuat dan disetujui manager');
                 $dibuat++;
             } catch (RuntimeException $e) {
                 return back()->withErrors(['lembur' => $e->getMessage()]);

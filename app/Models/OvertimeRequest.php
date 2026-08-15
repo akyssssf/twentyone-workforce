@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Enums\OvertimeOccasion;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -21,7 +22,7 @@ class OvertimeRequest extends Model
     public $incrementing = false;
 
     protected $fillable = [
-        'request_id', 'batch_id', 'work_date', 'shift_id', 'planned_start',
+        'request_id', 'batch_id', 'work_date', 'shift_id', 'occasion', 'planned_start',
         'planned_end', 'planned_minutes', 'initiated_by', 'is_backdated', 'reason',
         'secret_code',
     ];
@@ -52,6 +53,7 @@ class OvertimeRequest extends Model
     {
         return [
             'work_date' => 'date',
+            'occasion' => OvertimeOccasion::class,
             'planned_minutes' => 'integer',
             'is_backdated' => 'boolean',
         ];

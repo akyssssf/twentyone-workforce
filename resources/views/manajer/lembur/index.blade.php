@@ -23,15 +23,34 @@
         </div>
 
         <div>
-            <label class="label">Pengganti mereka</label>
-            <select name="substitute_employee_id" required class="kolom mt-1">
-                <option value="">— pilih rekan —</option>
-                @foreach ($employees as $e)
-                    <option value="{{ $e->id }}">{{ $e->name }}</option>
+            <label class="label" for="occasion">Lembur untuk apa</label>
+            <select id="occasion" name="occasion" required class="kolom mt-1 sm:max-w-xs"
+                    onchange="document.getElementById('kotak-pengganti').hidden = this.value !== 'pengganti'">
+                @foreach (\App\Enums\OvertimeOccasion::cases() as $o)
+                    <option value="{{ $o->value }}" @selected(old('occasion', 'pengganti') === $o->value)>
+                        {{ $o->label() }}
+                    </option>
                 @endforeach
             </select>
             <p class="mt-1 text-xs text-slate-500">
-                Orang yang menutup posisi mereka. Wajib, sama seperti pengajuan lain.
+                Acara seperti live music dan nobar berdiri sendiri — tidak ada posisi yang ditinggalkan,
+                jadi tidak perlu menunjuk pengganti.
+            </p>
+        </div>
+
+        {{-- Cuma relevan kalau lemburnya menutup posisi orang lain. Disembunyikan
+             lewat atribut hidden, bukan dihapus, supaya nilainya tetap terkirim
+             apa adanya kalau pilihannya dikembalikan ke penggantian. --}}
+        <div id="kotak-pengganti" @hidden(old('occasion', 'pengganti') !== 'pengganti')>
+            <label class="label">Pengganti mereka</label>
+            <select name="substitute_employee_id" class="kolom mt-1">
+                <option value="">— pilih rekan —</option>
+                @foreach ($employees as $e)
+                    <option value="{{ $e->id }}" @selected(old('substitute_employee_id') == $e->id)>{{ $e->name }}</option>
+                @endforeach
+            </select>
+            <p class="mt-1 text-xs text-slate-500">
+                Orang yang menutup posisi mereka.
             </p>
         </div>
 
@@ -77,7 +96,10 @@
                         <div class="min-w-0">
                             <p class="truncate text-sm font-medium">{{ $r->employee?->name }}</p>
                             <p class="text-xs text-slate-500">
-                                {{ $r->work_date->translatedFormat('d M Y') }} &middot; {{ $r->approved_minutes }} menit
+                                {{ $r->work_date->translatedFormat('d M Y') }}
+                                @if ($r->overtimeRequest?->occasion)
+                                    &middot; {{ $r->overtimeRequest->occasion->label() }}
+                                @endif
                             </p>
                         </div>
                     </div>
@@ -113,6 +135,11 @@
                         {{ $r->work_date->translatedFormat('d M Y') }} &middot;
                         batas {{ \App\Support\Durasi::menit($r->approved_minutes) }}
                     </span>
+
+                    @if ($r->overtimeRequest?->occasion)
+                        <x-status-badge :warna="$r->overtimeRequest->occasion->color()"
+                                        :label="$r->overtimeRequest->occasion->label()" />
+                    @endif
 
                     @if ($r->status === 'confirmed')
                         <x-status-badge warna="emerald" label="Sudah terhitung" />
