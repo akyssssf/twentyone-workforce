@@ -1,6 +1,6 @@
 {
     "$schema": "https://getcomposer.org/schema.json",
-    "name": "duapuluhsatu/absensi-kafe",
+    "name": "duapuluhsatu/21-kafe",
     "type": "project",
     "description": "Sistem absensi dan penjadwalan 21 Kafe, dari scan Fingerspot sampai rekap gajian.",
     "keywords": ["absensi", "roster", "fingerspot"],

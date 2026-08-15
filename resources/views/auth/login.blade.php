@@ -14,7 +14,7 @@
 
         <div class="mb-7 text-center">
             <span class="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-900 text-lg font-bold text-white">
-                {{ mb_substr(config('app.name'), 0, 1) }}
+                <x-inisial-aplikasi />
             </span>
             <h1 class="text-xl font-semibold tracking-tight">{{ config('app.name') }}</h1>
             <p class="mt-1 text-sm text-slate-500">Masuk dengan nama panggilan Anda</p>

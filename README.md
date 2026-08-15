@@ -1,6 +1,6 @@
-# Absensi Kafe
+# 21 Kafe
 
-Sistem absensi dan penjadwalan untuk 21 Kafe, dari scan sidik jari di mesin
+Sistem absensi dan penjadwalan 21 Kafe, dari scan sidik jari di mesin
 Fingerspot sampai rekap yang siap dipakai hitung gajian.
 
 ## Cara kerjanya

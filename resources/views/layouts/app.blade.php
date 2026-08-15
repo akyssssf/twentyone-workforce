@@ -79,7 +79,7 @@
                   bg-slate-900 text-slate-300 transition-transform duration-200 lg:translate-x-0">
         <div class="flex h-16 shrink-0 items-center gap-2.5 px-5">
             <span class="flex h-8 w-8 items-center justify-center rounded-lg bg-white text-sm font-bold text-slate-900">
-                {{ mb_substr(config('app.name'), 0, 1) }}
+                <x-inisial-aplikasi />
             </span>
             <span class="truncate text-base font-semibold text-white">{{ config('app.name') }}</span>
         </div>
