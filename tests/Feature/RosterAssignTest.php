@@ -104,6 +104,62 @@ class RosterAssignTest extends TestCase
         $this->assertTrue($baris->contains(fn ($a) => $a->source === 'leave'));
     }
 
+    // -------------------------------------------------------- markLeave()
+
+    /**
+     * Kasus yang benar-benar terjadi di produksi: karyawan yang baru
+     * mengambil-alih shift rekan lewat tukar (jadi punya DUA baris hari itu)
+     * mengajukan sakit untuk tanggal yang sama. Sebelum ini, mass update di
+     * markLeave() mencoba menjadikan shift_key KEDUA baris = 0 sekaligus —
+     * baris kedua nabrak baris pertama yang barusan jadi 0, gagal dengan
+     * error mentah dari database.
+     */
+    public function test_sakit_dengan_dua_baris_roster_diringkas_jadi_satu(): void
+    {
+        $pagi = Shift::factory()->create();
+        $malam = Shift::factory()->malam()->create();
+        $employee = Employee::factory()->create(['default_shift_id' => $pagi->id]);
+
+        $roster = $this->service->findOrCreate(2026, 8);
+
+        // Dua baris hari yang sama, seperti hasil mengambil-alih shift rekan.
+        $this->service->assign($roster, $employee, $this->tanggal(), $pagi->id);
+        RosterAssignment::create([
+            'roster_id' => $roster->id,
+            'employee_id' => $employee->id,
+            'work_date' => $this->tanggal(),
+            'shift_id' => $malam->id,
+            'status' => 'scheduled',
+            'source' => 'swap',
+        ]);
+
+        $this->assertSame(2, RosterAssignment::where('employee_id', $employee->id)
+            ->whereDate('work_date', $this->tanggal())->count());
+
+        $this->service->markLeave($employee, $this->tanggal(), requestId: 99);
+
+        $baris = RosterAssignment::where('employee_id', $employee->id)
+            ->whereDate('work_date', $this->tanggal())->get();
+
+        $this->assertCount(1, $baris);
+        $this->assertSame('leave', $baris->first()->status->value);
+        $this->assertNull($baris->first()->shift_id);
+        $this->assertSame(0, $baris->first()->shift_key);
+    }
+
+    public function test_sakit_tanpa_roster_sama_sekali_tetap_membuat_baris(): void
+    {
+        $employee = Employee::factory()->create();
+
+        $this->service->markLeave($employee, $this->tanggal(), requestId: 5);
+
+        $baris = RosterAssignment::where('employee_id', $employee->id)
+            ->whereDate('work_date', $this->tanggal())->sole();
+
+        $this->assertSame('leave', $baris->status->value);
+        $this->assertSame(5, $baris->source_request_id);
+    }
+
     public function test_menetapkan_shift_yang_sama_dua_kali_tetap_satu_baris(): void
     {
         $pagi = Shift::factory()->create();

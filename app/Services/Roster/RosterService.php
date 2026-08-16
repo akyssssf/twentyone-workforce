@@ -202,36 +202,50 @@ class RosterService
     {
         $roster = $this->findOrCreate((int) $date->year, (int) $date->month);
 
-        RosterAssignment::query()
+        $baris = RosterAssignment::query()
             ->where('employee_id', $employee->id)
             ->whereDate('work_date', $date)
-            ->update([
+            ->get();
+
+        // Sedang cuti/izin/sakit berarti tidak masuk sama sekali hari itu —
+        // tidak peduli berapa shift yang tadinya dijadwalkan. Karyawan yang
+        // baru mengambil-alih shift rekan lewat tukar (jadi punya dua baris
+        // hari itu) tetap harus diringkas jadi SATU baris libur, bukan
+        // dua-duanya ditandai libur secara terpisah: shift_key wajib sama
+        // dengan shift_id (lihat HasShiftKey), jadi dua baris shift_id null
+        // di tanggal yang sama akan selalu tabrakan di constraint unik.
+        $baris->skip(1)->each->delete();
+
+        $pertama = $baris->first();
+
+        if ($pertama !== null) {
+            // Lewat instance, bukan RosterAssignment::query()->update(): itu
+            // yang membuat event saving() milik HasShiftKey ikut jalan dan
+            // otomatis menyamakan shift_key dengan shift_id yang baru (null
+            // -> 0), tanpa perlu ditulis manual di sini.
+            $pertama->update([
                 'status' => AssignmentStatus::Leave->value,
                 'shift_id' => null,
-                'shift_key' => 0,
+                'division_id' => $pertama->division_id ?? $employee->primaryDivision()?->id,
                 'source' => 'leave',
                 'source_request_id' => $requestId,
             ]);
 
-        // Kalau tanggal itu belum punya baris sama sekali, buatkan — supaya
-        // "sedang cuti" tetap terekam walau rosternya belum digenerate.
-        $exists = RosterAssignment::query()
-            ->where('employee_id', $employee->id)
-            ->whereDate('work_date', $date)
-            ->exists();
-
-        if (! $exists) {
-            RosterAssignment::create([
-                'roster_id' => $roster->id,
-                'employee_id' => $employee->id,
-                'work_date' => $date->toDateString(),
-                'shift_id' => null,
-                'division_id' => $employee->primaryDivision()?->id,
-                'status' => AssignmentStatus::Leave,
-                'source' => 'leave',
-                'source_request_id' => $requestId,
-            ]);
+            return;
         }
+
+        // Tanggal itu belum punya baris sama sekali — buatkan, supaya
+        // "sedang cuti" tetap terekam walau rosternya belum digenerate.
+        RosterAssignment::create([
+            'roster_id' => $roster->id,
+            'employee_id' => $employee->id,
+            'work_date' => $date->toDateString(),
+            'shift_id' => null,
+            'division_id' => $employee->primaryDivision()?->id,
+            'status' => AssignmentStatus::Leave,
+            'source' => 'leave',
+            'source_request_id' => $requestId,
+        ]);
     }
 
     public function publish(Roster $roster): array

@@ -626,9 +626,14 @@ class RequestService
         $theirs = $swap->partnerAssignment;
 
         if ($theirs === null) {
-            // Rekan mengambil alih shift tanpa memberi shift balik.
+            // Rekan mengambil alih shift tanpa memberi shift balik — di sini
+            // memang kepemilikan barisnya yang berpindah, karena tidak ada
+            // baris kedua untuk saling ditukar isinya.
+            $rekan = Employee::findOrFail($swap->partner_employee_id);
+            $this->assertTidakDobelShift($mine->work_date, (int) ($mine->shift_id ?? 0), $rekan);
+
             $mine->update([
-                'employee_id' => $swap->partner_employee_id,
+                'employee_id' => $rekan->id,
                 'source' => 'swap',
                 'source_request_id' => $request->id,
             ]);
@@ -636,21 +641,61 @@ class RequestService
             return;
         }
 
-        // Tukar pemilik kedua jadwal.
-        $mineEmployee = $mine->employee_id;
-        $theirsEmployee = $theirs->employee_id;
+        // Tukar ISI kedua baris (shift & divisi), BUKAN kepemilikannya.
+        //
+        // Kepemilikan sengaja tidak disentuh sama sekali. Kalau yang ditukar
+        // employee_id-nya, dua baris yang KEBETULAN shift_key-nya sama
+        // (dua-duanya sama-sama Shift Pagi, cuma beda posisi) akan sempat
+        // bertabrakan di tengah proses: begitu baris pertama selesai
+        // dipindah, untuk sesaat dua baris sama-sama menunjuk employee yang
+        // sama dengan shift_key yang identik, sebelum baris kedua sempat
+        // diproses. SQLite tidak menunda pengecekan constraint unik sampai
+        // akhir — bahkan dalam satu UPDATE yang menyentuh banyak baris
+        // sekaligus — jadi urutan apa pun dipakai, satu di antaranya pasti
+        // nabrak. Menukar isi sambil employee_id tiap baris tetap tidak
+        // pernah menimbulkan keadaan antara seperti itu.
+        $isiMine = ['shift_id' => $mine->shift_id, 'division_id' => $mine->division_id];
+        $isiTheirs = ['shift_id' => $theirs->shift_id, 'division_id' => $theirs->division_id];
 
-        $mine->update([
-            'employee_id' => $theirsEmployee,
-            'source' => 'swap',
-            'source_request_id' => $request->id,
-        ]);
+        $this->assertTidakDobelShift($mine->work_date, (int) ($theirs->shift_id ?? 0), $mine->employee, $mine->id);
+        $this->assertTidakDobelShift($theirs->work_date, (int) ($mine->shift_id ?? 0), $theirs->employee, $theirs->id);
 
-        $theirs->update([
-            'employee_id' => $mineEmployee,
-            'source' => 'swap',
-            'source_request_id' => $request->id,
-        ]);
+        $mine->update($isiTheirs + ['source' => 'swap', 'source_request_id' => $request->id]);
+        $theirs->update($isiMine + ['source' => 'swap', 'source_request_id' => $request->id]);
+    }
+
+    /**
+     * Pastikan $penerima belum punya baris LAIN dengan shift_key yang sama di
+     * tanggal itu, sebelum dia diberi shift itu (lewat tukar isi) atau shift
+     * itu dipindah kepemilikannya ke dia (lewat pengambilalihan).
+     *
+     * Tanpa ini, seseorang yang KEBETULAN sudah dijadwalkan shift yang persis
+     * sama hari itu (dua-duanya sama-sama Shift Pagi, misalnya) akan berakhir
+     * dobel-pemilik shift yang sama — mustahil secara fisik, dan sebelumnya
+     * baru ketahuan lewat error mentah dari database (unique constraint),
+     * bukan pesan yang bisa dipahami manajer.
+     *
+     * @throws RuntimeException
+     */
+    protected function assertTidakDobelShift(
+        Carbon $tanggal,
+        int $shiftKeyBaru,
+        Employee $penerima,
+        ?int $abaikanId = null,
+    ): void {
+        $sudahAda = RosterAssignment::query()
+            ->where('employee_id', $penerima->id)
+            ->whereDate('work_date', $tanggal)
+            ->where('shift_key', $shiftKeyBaru)
+            ->when($abaikanId !== null, fn ($q) => $q->where('id', '!=', $abaikanId))
+            ->exists();
+
+        if ($sudahAda) {
+            throw new RuntimeException(
+                "{$penerima->name} sudah dijadwalkan shift yang sama pada tanggal yang sama, "
+                . 'jadi tukar ini akan membuatnya dobel di shift yang persis sama.'
+            );
+        }
     }
 
     /**
