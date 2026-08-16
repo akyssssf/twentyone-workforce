@@ -555,10 +555,35 @@ class RequestService
     {
         $leave = $request->leave;
         $employee = $request->employee;
+        $pengganti = $request->substitute;
 
-        // Roster berubah otomatis (BR-20).
+        // Roster berubah otomatis (BR-20). Pengganti yang sudah bersedia ikut
+        // menempati shift yang ditinggalkan — bukan cuma catatan siapa yang
+        // setuju, tapi benar-benar terjadwal, supaya dia juga kena aturan
+        // Alpha yang sama kalau ternyata tidak masuk.
         for ($date = $leave->start_date->copy(); $date->lessThanOrEqualTo($leave->end_date); $date->addDay()) {
+            // Diambil SEBELUM markLeave(): begitu itu jalan, baris employee
+            // yang cuti sudah berubah jadi libur dan shift/divisinya hilang.
+            $jadwalAsli = RosterAssignment::query()
+                ->where('employee_id', $employee->id)
+                ->whereDate('work_date', $date)
+                ->working()
+                ->get();
+
             $this->roster->markLeave($employee, $date, $request->id);
+
+            if ($pengganti !== null) {
+                $rosterBulan = $this->roster->findOrCreate($date->year, $date->month);
+
+                // Bisa lebih dari satu baris kalau yang cuti kebagian dobel
+                // shift hari itu — penggantinya menutup semuanya.
+                foreach ($jadwalAsli as $jadwal) {
+                    $this->roster->assign(
+                        $rosterBulan, $pengganti, $date, $jadwal->shift_id, $jadwal->division_id,
+                        'leave', $request->id,
+                    );
+                }
+            }
         }
 
         $this->leave->consume($request);
