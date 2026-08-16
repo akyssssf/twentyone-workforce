@@ -180,9 +180,11 @@
                         <div class="flex items-center gap-2 text-sm font-medium">
                             <span class="h-2.5 w-2.5 rounded-full" style="background: {{ $shift->color ?? '#475569' }}"></span>
                             {{ $shift->name }}
-                            <span class="font-normal text-slate-500">
-                                {{ substr($shift->start_time, 0, 5) }}–{{ substr($shift->end_time, 0, 5) }}
-                            </span>
+                            @if ($shift->show_hours)
+                                <span class="font-normal text-slate-500">
+                                    {{ substr($shift->start_time, 0, 5) }}–{{ substr($shift->end_time, 0, 5) }}
+                                </span>
+                            @endif
                         </div>
                         <span class="text-xs text-slate-500">{{ $petugas->count() }} orang</span>
                     </div>
@@ -342,6 +344,9 @@
                                     </a>
                                 @else
                                     {{ $a->check_out_at->format('H:i') }}
+                                @endif
+                                @if (! $a->check_out_at->isSameDay($a->work_date))
+                                    <span class="text-xs text-slate-400">(+1 hari)</span>
                                 @endif
                             @else
                                 —

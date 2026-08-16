@@ -77,9 +77,11 @@
                                   style="background: {{ $j->shift->color ?? '#475569' }}">
                                 {{ $j->shift->name }}
                             </span>
-                            <span class="text-sm text-slate-600">
-                                {{ substr($j->shift->start_time, 0, 5) }} – {{ substr($j->shift->end_time, 0, 5) }}
-                            </span>
+                            @if ($j->shift->show_hours)
+                                <span class="text-sm text-slate-600">
+                                    {{ substr($j->shift->start_time, 0, 5) }} – {{ substr($j->shift->end_time, 0, 5) }}
+                                </span>
+                            @endif
                             @if ($j->division)
                                 <span class="text-sm text-slate-400">sebagai {{ $j->division->name }}</span>
                             @endif
@@ -112,6 +114,9 @@
                                     <svg class="h-4 w-4 shrink-0 text-emerald-600" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M16.704 4.153a.75.75 0 01.143 1.052l-8 10.5a.75.75 0 01-1.127.075l-4.5-4.5a.75.75 0 011.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 011.05-.143z" clip-rule="evenodd" /></svg>
                                 @endif
                                 Pulang <strong class="tabular-nums">{{ $a->check_out_at?->format('H:i') ?? '—' }}</strong>
+                                @if ($a->check_out_at && ! $a->check_out_at->isSameDay($a->work_date))
+                                    <span class="text-xs text-slate-400">(+1 hari)</span>
+                                @endif
                             </span>
                             @if ($a->late_minutes > 0)
                                 <span class="text-amber-700">Telat {{ \App\Support\Durasi::menit($a->late_minutes) }}</span>
@@ -154,9 +159,11 @@
                         <div class="flex items-center gap-2 text-sm font-medium">
                             <span class="h-2.5 w-2.5 rounded-full" style="background: {{ $shift->color ?? '#475569' }}"></span>
                             {{ $shift->name }}
-                            <span class="font-normal text-slate-500">
-                                {{ substr($shift->start_time, 0, 5) }}–{{ substr($shift->end_time, 0, 5) }}
-                            </span>
+                            @if ($shift->show_hours)
+                                <span class="font-normal text-slate-500">
+                                    {{ substr($shift->start_time, 0, 5) }}–{{ substr($shift->end_time, 0, 5) }}
+                                </span>
+                            @endif
                         </div>
                         <span class="text-xs text-slate-500">{{ $petugas->count() }} orang</span>
                     </div>

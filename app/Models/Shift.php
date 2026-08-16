@@ -17,6 +17,7 @@ class Shift extends Model
         'name',
         'start_time',
         'end_time',
+        'show_hours',
         'crosses_midnight',
         'break_minutes',
         'is_break_paid',
@@ -34,6 +35,7 @@ class Shift extends Model
             // tanggal, jadi dibiarkan string "HH:MM:SS" supaya tidak
             // ketempelan tanggal hari ini secara diam-diam.
             'is_active' => 'boolean',
+            'show_hours' => 'boolean',
             'crosses_midnight' => 'boolean',
             'is_break_paid' => 'boolean',
             'break_minutes' => 'integer',

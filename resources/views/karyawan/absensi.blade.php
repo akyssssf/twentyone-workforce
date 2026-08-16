@@ -40,7 +40,12 @@
                 <div><span class="text-slate-400">Shift</span><br>{{ $a->shift?->name ?? '—' }}</div>
                 <div><span class="text-slate-400">Jadwal</span><br>{{ $a->scheduled_in?->format('H:i') ?? '—' }}</div>
                 <div><span class="text-slate-400">Masuk</span><br>{{ $a->check_in_at?->format('H:i') ?? '—' }}</div>
-                <div><span class="text-slate-400">Pulang</span><br>{{ $a->check_out_at?->format('H:i') ?? '—' }}</div>
+                <div><span class="text-slate-400">Pulang</span><br>
+                    {{ $a->check_out_at?->format('H:i') ?? '—' }}
+                    @if ($a->check_out_at && ! $a->check_out_at->isSameDay($a->work_date))
+                        <span class="text-xs text-slate-400">(+1 hari)</span>
+                    @endif
+                </div>
             </div>
             @if ($a->late_minutes > 0 || $a->has_adjustment)
                 <div class="mt-2 flex items-center gap-2 border-t border-slate-100 pt-2 text-xs">
@@ -79,7 +84,12 @@
                         <td class="text-slate-500">{{ $a->shift?->name ?? '—' }}</td>
                         <td class="text-slate-500">{{ $a->scheduled_in?->format('H:i') ?? '—' }}</td>
                         <td >{{ $a->check_in_at?->format('H:i') ?? '—' }}</td>
-                        <td >{{ $a->check_out_at?->format('H:i') ?? '—' }}</td>
+                        <td >
+                            {{ $a->check_out_at?->format('H:i') ?? '—' }}
+                            @if ($a->check_out_at && ! $a->check_out_at->isSameDay($a->work_date))
+                                <span class="text-xs text-slate-400">(+1 hari)</span>
+                            @endif
+                        </td>
                         <td class="{{ $a->late_minutes > 0 ? 'text-amber-700' : 'text-slate-400' }}">
                             {{ \App\Support\Durasi::menit($a->late_minutes) }}
                         </td>

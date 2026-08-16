@@ -63,10 +63,12 @@
                     @if ($a?->shift)
                         <div class="mt-auto rounded px-0.5 py-0.5 text-center text-[10px] font-semibold leading-tight text-white sm:px-1.5 sm:py-1 sm:text-left sm:text-[11px]"
                              style="background: {{ $a->shift->color ?? '#475569' }}"
-                             title="{{ $a->shift->name }} {{ substr($a->shift->start_time, 0, 5) }}">
+                             title="{{ $a->shift->name }}{{ $a->shift->show_hours ? ' '.substr($a->shift->start_time, 0, 5) : '' }}">
                             <span class="sm:hidden">{{ mb_strtoupper(mb_substr($a->shift->code ?? '?', 0, 1)) }}</span>
                             <span class="hidden sm:block">{{ $a->shift->name }}</span>
-                            <span class="hidden font-normal opacity-90 sm:block">{{ substr($a->shift->start_time, 0, 5) }}</span>
+                            @if ($a->shift->show_hours)
+                                <span class="hidden font-normal opacity-90 sm:block">{{ substr($a->shift->start_time, 0, 5) }}</span>
+                            @endif
                         </div>
                     @elseif ($a)
                         <div class="mt-auto rounded bg-slate-100 px-0.5 py-0.5 text-center text-[10px] leading-tight text-slate-500 sm:px-1.5 sm:py-1 sm:text-left sm:text-[11px]"
@@ -92,7 +94,10 @@
                       style="background: {{ $shift->color ?? '#475569' }}">
                     {{ mb_strtoupper(mb_substr($shift->code ?? '?', 0, 1)) }}
                 </span>
-                {{ $shift->name }} {{ substr($shift->start_time, 0, 5) }}–{{ substr($shift->end_time, 0, 5) }}
+                {{ $shift->name }}
+                @if ($shift->show_hours)
+                    {{ substr($shift->start_time, 0, 5) }}–{{ substr($shift->end_time, 0, 5) }}
+                @endif
             </span>
         @endforeach
         <span class="flex items-center gap-1.5">
@@ -124,9 +129,11 @@
                         <div class="flex items-center gap-2 text-sm font-medium">
                             <span class="h-2.5 w-2.5 rounded-full" style="background: {{ $shift->color ?? '#475569' }}"></span>
                             {{ $shift->name }}
-                            <span class="font-normal text-slate-500">
-                                {{ substr($shift->start_time, 0, 5) }}–{{ substr($shift->end_time, 0, 5) }}
-                            </span>
+                            @if ($shift->show_hours)
+                                <span class="font-normal text-slate-500">
+                                    {{ substr($shift->start_time, 0, 5) }}–{{ substr($shift->end_time, 0, 5) }}
+                                </span>
+                            @endif
                         </div>
                         <span class="text-xs text-slate-500">{{ $petugas->count() }} orang</span>
                     </div>
