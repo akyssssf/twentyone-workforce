@@ -92,6 +92,21 @@ class MasterDataSeeder extends Seeder
             'color' => '#6366f1',
             'is_active' => true,
         ]);
+
+        Shift::updateOrCreate(['code' => 'middle'], [
+            'name' => 'Shift Middle',
+            'code' => 'middle',
+            'start_time' => '11:30:00',
+            'end_time' => '01:00:00',
+            'crosses_midnight' => true,
+            'break_minutes' => 60,
+            'is_break_paid' => true,
+            'window_before_hours' => 4,
+            'window_after_hours' => 4,
+            'color' => '#10b981',
+            'is_active' => true,
+            'show_hours' => false,
+        ]);
     }
 
     /** BR-11 & BR-12 sebagai data, bukan angka yang ditanam di kode. */
@@ -111,7 +126,7 @@ class MasterDataSeeder extends Seeder
             [$malam->id, 'chef', 3],
             [$malam->id, 'barista', 2],
             [$malam->id, 'kasir', 1],
-            [$malam->id, 'waiter', 3],
+            [$malam->id, 'waiter', 2],
             [$malam->id, 'cleaning', 1],
         ];
 
@@ -241,7 +256,7 @@ class MasterDataSeeder extends Seeder
 
         $late = RuleSet::updateOrCreate(
             ['branch_id' => $branch->id, 'type' => 'late', 'effective_from' => $awalTahun],
-            ['name' => 'Potongan Terlambat ' . now()->year, 'is_active' => true],
+            ['name' => 'Potongan Terlambat '.now()->year, 'is_active' => true],
         );
         $late->tiers()->delete();
         $late->tiers()->createMany([
@@ -253,7 +268,7 @@ class MasterDataSeeder extends Seeder
 
         $early = RuleSet::updateOrCreate(
             ['branch_id' => $branch->id, 'type' => 'early_leave', 'effective_from' => $awalTahun],
-            ['name' => 'Potongan Pulang Cepat ' . now()->year, 'is_active' => true],
+            ['name' => 'Potongan Pulang Cepat '.now()->year, 'is_active' => true],
         );
         $early->tiers()->delete();
         $early->tiers()->createMany([
@@ -265,7 +280,7 @@ class MasterDataSeeder extends Seeder
         // Mengikuti pola umum: jam pertama 1,5x upah sejam, jam berikutnya 2x.
         $overtime = RuleSet::updateOrCreate(
             ['branch_id' => $branch->id, 'type' => 'overtime', 'effective_from' => $awalTahun],
-            ['name' => 'Tarif Lembur ' . now()->year, 'is_active' => true],
+            ['name' => 'Tarif Lembur '.now()->year, 'is_active' => true],
         );
         $overtime->tiers()->delete();
         $overtime->tiers()->createMany([
@@ -276,7 +291,7 @@ class MasterDataSeeder extends Seeder
         // Alpha = satu hari gaji per hari alpha (D-05).
         $absent = RuleSet::updateOrCreate(
             ['branch_id' => $branch->id, 'type' => 'absent', 'effective_from' => $awalTahun],
-            ['name' => 'Potongan Alpha ' . now()->year, 'is_active' => true],
+            ['name' => 'Potongan Alpha '.now()->year, 'is_active' => true],
         );
         $absent->tiers()->delete();
         $absent->tiers()->createMany([
@@ -287,7 +302,7 @@ class MasterDataSeeder extends Seeder
         // dipotong dari gaji jadi tidak muncul di sini.
         $bpjs = RuleSet::updateOrCreate(
             ['branch_id' => $branch->id, 'type' => 'bpjs', 'effective_from' => $awalTahun],
-            ['name' => 'BPJS ' . now()->year, 'is_active' => true],
+            ['name' => 'BPJS '.now()->year, 'is_active' => true],
         );
         $bpjs->tiers()->delete();
         $bpjs->tiers()->createMany([

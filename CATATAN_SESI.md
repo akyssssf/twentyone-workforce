@@ -246,8 +246,12 @@ malam) sekarang ditandai `(+1 hari)` di semua tempat yang menampilkannya
 - **Kebutuhan tenaga (`staffing_requirements`) shift Malam Waiters diturunkan
   dari 3 ke 2** — polanya memang selalu 2 orang malam + 1 middle, angka "3"
   bikin warning "kurang tenaga" muncul terus padahal sudah pas.
-- Siklus rotasi 4-mingguan waiters: patokan "Minggu 1" = **Senin 27 Juli
-  2026** (dikoreksi dari asumsi awal 3 Agustus setelah dicek ke lapangan).
+- **Siklus rotasi 4-mingguan waiters**: patokan "Minggu 1" = **Senin 17 Agustus
+  2026** (diupdate per 18 Agustus 2026: Waye = Farrel Daffa [PIN 3], Dafa = Dava
+  Erik Prasetiyo [PIN 2], Nur = Nurdiansyah [PIN 8], Amal = Muhammad Julian
+  Ikhlusul Amal [PIN 6]). Sisa bulan September berlanjut otomatis. Tanggal 15–16
+  Agustus tetap apa adanya. Perintah penerapan: `php artisan roster:apply-waiters --recompute`
+  atau `php database/scripts/apply_waiter_roster.php`.
 
 ## 6. Yang masih menggantung (per tanggal dokumen ini)
 
