@@ -160,6 +160,67 @@ class RosterAssignTest extends TestCase
         $this->assertSame(5, $baris->source_request_id);
     }
 
+    // ------------------------------------------------ cuti vs jadwal kerja
+
+    /**
+     * Skrip roster massal pernah menimpa cuti yang sudah disetujui: baris
+     * cutinya memang selamat (dilindungi dari penghapusan), tapi baris kerja
+     * baru NEMPEL di sampingnya, jadi di roster orangnya terlihat tetap masuk
+     * padahal cutinya sudah disahkan.
+     */
+    public function test_tidak_bisa_menjadwalkan_orang_yang_sedang_cuti(): void
+    {
+        $pagi = Shift::factory()->create();
+        $employee = Employee::factory()->create(['default_shift_id' => $pagi->id]);
+
+        $roster = $this->service->findOrCreate(2026, 8);
+        $this->service->markLeave($employee, $this->tanggal(), requestId: 7);
+
+        try {
+            $this->service->assign($roster, $employee, $this->tanggal(), $pagi->id);
+            $this->fail('Menjadwalkan orang yang sedang cuti seharusnya ditolak.');
+        } catch (\RuntimeException $e) {
+            $this->assertStringContainsString('sedang cuti', $e->getMessage());
+        }
+
+        $baris = RosterAssignment::where('employee_id', $employee->id)
+            ->whereDate('work_date', $this->tanggal())->get();
+
+        $this->assertCount(1, $baris);
+        $this->assertSame('leave', $baris->first()->status->value);
+    }
+
+    /** Menandai libur (shift null) tidak dibatasi — itu bukan menjadwalkan kerja. */
+    public function test_menandai_libur_tetap_boleh_walau_sedang_cuti(): void
+    {
+        $employee = Employee::factory()->create();
+        $roster = $this->service->findOrCreate(2026, 8);
+
+        $this->service->markLeave($employee, $this->tanggal(), requestId: 7);
+        $this->service->assign($roster, $employee, $this->tanggal(), null);
+
+        $this->assertSame(1, RosterAssignment::where('employee_id', $employee->id)
+            ->whereDate('work_date', $this->tanggal())->count());
+    }
+
+    /**
+     * Jalur pengajuan resmi (source leave/swap) tetap boleh menulis, karena
+     * itulah yang berhak mengubah baris cuti — misalnya pengganti yang
+     * ditugaskan menutup shift orang yang cuti.
+     */
+    public function test_jalur_pengajuan_tetap_boleh_menjadwalkan(): void
+    {
+        $pagi = Shift::factory()->create();
+        $employee = Employee::factory()->create(['default_shift_id' => $pagi->id]);
+
+        $roster = $this->service->findOrCreate(2026, 8);
+        $this->service->markLeave($employee, $this->tanggal(), requestId: 7);
+
+        $hasil = $this->service->assign($roster, $employee, $this->tanggal(), $pagi->id, null, 'swap');
+
+        $this->assertSame($pagi->id, $hasil->shift_id);
+    }
+
     public function test_menetapkan_shift_yang_sama_dua_kali_tetap_satu_baris(): void
     {
         $pagi = Shift::factory()->create();

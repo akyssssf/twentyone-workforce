@@ -13,6 +13,7 @@ use App\Models\RosterAssignment;
 use App\Services\Audit\AuditLogger;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
+use RuntimeException;
 
 /**
  * Pembuatan dan penerbitan roster bulanan.
@@ -145,6 +146,34 @@ class RosterService
             : AssignmentStatus::Scheduled;
 
         $shiftKey = (int) ($shiftId ?? 0);
+
+        // Cuti yang sudah disetujui tidak boleh ketiban jadwal kerja.
+        //
+        // Baris cuti memang sengaja dilindungi dari penghapusan di bawah,
+        // tapi itu saja tidak cukup: tanpa penjagaan ini, menjadwalkan orang
+        // yang sedang cuti justru MENAMBAH baris kerja di sampingnya, dan di
+        // roster dia terlihat tetap masuk padahal cutinya sudah disahkan.
+        // Sudah kejadian sekali — skrip rotasi massal menimpa cuti yang
+        // disetujui beberapa hari sebelumnya, tanpa ada yang tahu sampai
+        // orangnya mengecek sendiri.
+        //
+        // Yang dari pengajuan (source leave/swap) dikecualikan, karena itu
+        // justru jalur resmi yang berhak mengubah baris cuti.
+        if ($shiftId !== null && ! in_array($source, ['leave', 'swap'], true)) {
+            $cuti = RosterAssignment::query()
+                ->where('employee_id', $employee->id)
+                ->whereDate('work_date', $date)
+                ->where('status', AssignmentStatus::Leave->value)
+                ->first();
+
+            if ($cuti !== null) {
+                throw new RuntimeException(
+                    "{$employee->name} sedang cuti/izin yang sudah disetujui pada "
+                    .$date->translatedFormat('d M Y').', jadi tidak bisa dijadwalkan kerja. '
+                    .'Batalkan dulu pengajuannya kalau memang mau dijadwalkan.'
+                );
+            }
+        }
 
         $assignment = RosterAssignment::updateOrCreate(
             [

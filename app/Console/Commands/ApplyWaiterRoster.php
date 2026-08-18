@@ -9,6 +9,7 @@ use App\Services\Attendance\AttendanceComputer;
 use App\Services\Roster\RosterService;
 use Illuminate\Console\Command;
 use Illuminate\Support\Carbon;
+use RuntimeException;
 
 /**
  * Terapkan jadwal rotasi 4-mingguan Waiters ke roster bulanan.
@@ -161,6 +162,7 @@ class ApplyWaiterRoster extends Command
 
         $anchor = Carbon::parse('2026-08-17')->startOfDay();
         $assignedCount = 0;
+        $dilewati = [];
 
         for ($date = $from->copy(); $date->lessThanOrEqualTo($to); $date->addDay()) {
             $diff = (int) $anchor->diffInDays($date, false);
@@ -171,20 +173,38 @@ class ApplyWaiterRoster extends Command
                 $shiftCode = $pola[$cycleDay][$alias];
                 $shiftId = $shiftCode !== null ? $shifts[$shiftCode]->id : null;
 
-                $rosterService->assign(
-                    $roster,
-                    $emp,
-                    $date,
-                    $shiftId,
-                    $waiterDiv?->id,
-                    'manual'
-                );
+                try {
+                    $rosterService->assign(
+                        $roster,
+                        $emp,
+                        $date,
+                        $shiftId,
+                        $waiterDiv?->id,
+                        'manual'
+                    );
 
-                $assignedCount++;
+                    $assignedCount++;
+                } catch (RuntimeException $e) {
+                    // Cuti yang sudah disetujui menang atas pola rotasi.
+                    // Dilewati satu orang saja, bukan membatalkan seluruh
+                    // penerapan — kalau seluruh rotasi ikut gagal cuma karena
+                    // satu orang cuti, yang terjadi berikutnya adalah orang
+                    // mematikan penjagaannya supaya skripnya jalan.
+                    $dilewati[] = $date->format('d M').' — '.$e->getMessage();
+                }
             }
         }
 
         $this->info("Berhasil menetapkan {$assignedCount} jadwal untuk 4 waiter.");
+
+        if ($dilewati !== []) {
+            $this->newLine();
+            $this->warn('Dilewati karena cuti/izin yang sudah disetujui:');
+
+            foreach ($dilewati as $baris) {
+                $this->line('  - '.$baris);
+            }
+        }
 
         if ($this->option('recompute')) {
             $this->info('Menghitung ulang absensi...');
