@@ -17,8 +17,14 @@ use Illuminate\Support\Carbon;
  * Melibatkan 4 orang:
  *   - Waye  : Farrel Daffa (PIN 3)
  *   - Dafa  : Dava Erik Prasetiyo (PIN 2)
- *   - Nur   : Nurdiansyah (PIN 8)
+ *   - Nur   : Nuryati (PIN 19)
  *   - Amal  : Muhammad Julian Ikhlusul Amal (PIN 6)
+ *
+ * "Nur" adalah NURYATI, bukan Nurdiansyah. Nurdiansyah panggilannya "Dian"
+ * dan dia divisi Kitchen — pernah tertukar sekali dan bikin orang Kitchen
+ * masuk rotasi waiters selama enam minggu sementara Nuryati hilang dari
+ * jadwal. Karena itu nama dan PIN di bawah dicocokkan berpasangan, bukan
+ * salah satunya saja.
  */
 class ApplyWaiterRoster extends Command
 {
@@ -66,13 +72,36 @@ class ApplyWaiterRoster extends Command
             'middle' => $middleShift,
         ];
 
-        // 2. Ambil data 4 karyawan Waiters
-        $karyawan = [
-            'farrel' => Employee::where('pin_device', '3')->orWhere('name', 'Farrel Daffa')->first(),
-            'dava' => Employee::where('pin_device', '2')->orWhere('name', 'Dava Erik Prasetiyo')->first(),
-            'nur' => Employee::where('pin_device', '8')->orWhere('name', 'Nurdiansyah')->first(),
-            'amal' => Employee::where('pin_device', '6')->orWhere('name', 'Muhammad Julian Ikhlusul Amal')->first(),
+        // 2. Ambil data 4 karyawan Waiters.
+        //
+        // PIN dan nama harus COCOK BERDUA, bukan "salah satu yang ketemu".
+        // Versi lama memakai ->where(pin)->orWhere(nama) yang berarti baris
+        // mana pun yang PIN-nya cocok ATAU namanya cocok akan diterima —
+        // pemetaan yang salah pun lolos tanpa keluhan, dan itulah yang bikin
+        // Nurdiansyah (Kitchen) masuk rotasi waiters menggantikan Nuryati.
+        $daftar = [
+            'farrel' => ['pin' => '3', 'nama' => 'Farrel Daffa'],
+            'dava' => ['pin' => '2', 'nama' => 'Dava Erik Prasetiyo'],
+            'nur' => ['pin' => '19', 'nama' => 'Nuryati'],
+            'amal' => ['pin' => '6', 'nama' => 'Muhammad Julian Ikhlusul Amal'],
         ];
+
+        $karyawan = [];
+
+        foreach ($daftar as $alias => $identitas) {
+            $emp = Employee::where('pin_device', $identitas['pin'])->first();
+
+            if ($emp !== null && $emp->name !== $identitas['nama']) {
+                $this->error(
+                    "PIN {$identitas['pin']} ternyata milik \"{$emp->name}\", bukan \"{$identitas['nama']}\". "
+                    .'Pemetaan alias waiters perlu diperiksa sebelum roster diterapkan.'
+                );
+
+                return self::FAILURE;
+            }
+
+            $karyawan[$alias] = $emp;
+        }
 
         foreach ($karyawan as $alias => $emp) {
             if ($emp === null) {

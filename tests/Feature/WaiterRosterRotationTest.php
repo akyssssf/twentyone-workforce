@@ -68,8 +68,17 @@ class WaiterRosterRotationTest extends TestCase
 
         $this->farrel = Employee::factory()->create(['name' => 'Farrel Daffa', 'pin_device' => '3']);
         $this->dava = Employee::factory()->create(['name' => 'Dava Erik Prasetiyo', 'pin_device' => '2']);
-        $this->nur = Employee::factory()->create(['name' => 'Nurdiansyah', 'pin_device' => '8']);
+
+        // "Nur" = NURYATI (PIN 19). Bukan Nurdiansyah — dia panggilannya
+        // "Dian", PIN 8, dan divisinya Kitchen. Versi pertama tes ini memakai
+        // Nurdiansyah, jadi tesnya lulus sambil mengunci pemetaan yang salah.
+        $this->nur = Employee::factory()->create(['name' => 'Nuryati', 'pin_device' => '19']);
+
         $this->amal = Employee::factory()->create(['name' => 'Muhammad Julian Ikhlusul Amal', 'pin_device' => '6']);
+
+        // Orang yang dulu tertukar. Ada di sini supaya tes ikut menjaga dia
+        // TIDAK kebagian jadwal waiters.
+        Employee::factory()->create(['name' => 'Nurdiansyah', 'pin_device' => '8']);
     }
 
     public function test_apply_waiters_roster_rotasi_4_minggu(): void
@@ -114,6 +123,72 @@ class WaiterRosterRotationTest extends TestCase
         $this->assertShift($this->dava, '2026-09-14', $this->malam->id, AssignmentStatus::Scheduled);
         $this->assertShift($this->nur, '2026-09-14', $this->malam->id, AssignmentStatus::Scheduled);
         $this->assertShift($this->amal, '2026-09-14', null, AssignmentStatus::Off);
+    }
+
+    /**
+     * Hari Minggu TIDAK punya shift middle — dua orang di shift 1, dua di
+     * shift 2. Kelihatan seperti salah ketik dibanding Jumat/Sabtu yang
+     * selalu punya middle, padahal memang begitu jadwalnya. Dikunci di sini
+     * supaya tidak "diperbaiki" jadi salah oleh yang membaca berikutnya.
+     */
+    public function test_hari_minggu_tanpa_middle_dua_orang_shift_pagi(): void
+    {
+        $this->artisan('roster:apply-waiters --from=2026-08-17 --to=2026-09-30')
+            ->assertSuccessful();
+
+        $middle = Shift::where('code', 'middle')->firstOrFail();
+
+        // Minggu 23 Agustus: 1 = Amal + Waye, 2 = Nur + Dafa.
+        $this->assertShift($this->amal, '2026-08-23', $this->pagi->id, AssignmentStatus::Scheduled);
+        $this->assertShift($this->farrel, '2026-08-23', $this->pagi->id, AssignmentStatus::Scheduled);
+        $this->assertShift($this->nur, '2026-08-23', $this->malam->id, AssignmentStatus::Scheduled);
+        $this->assertShift($this->dava, '2026-08-23', $this->malam->id, AssignmentStatus::Scheduled);
+
+        $this->assertSame(0, RosterAssignment::whereDate('work_date', Carbon::parse('2026-08-23'))
+            ->where('shift_id', $middle->id)->count());
+    }
+
+    /**
+     * Kamis MINGGU 1 sendirian polanya: "1 = Waye", sementara Kamis minggu
+     * 2-4 "1 = Amal". Senin-Rabu memang sama tiap minggu, jadi Kamis yang
+     * beda ini gampang disangka kekeliruan — padahal sesuai jadwal.
+     */
+    public function test_kamis_minggu_pertama_beda_dari_kamis_minggu_lain(): void
+    {
+        $this->artisan('roster:apply-waiters --from=2026-08-17 --to=2026-09-30')
+            ->assertSuccessful();
+
+        // Kamis 20 Agustus (Minggu 1): Waye pagi, Nur libur.
+        $this->assertShift($this->farrel, '2026-08-20', $this->pagi->id, AssignmentStatus::Scheduled);
+        $this->assertShift($this->amal, '2026-08-20', $this->malam->id, AssignmentStatus::Scheduled);
+
+        // Kamis 27 Agustus (Minggu 2): giliran Amal yang pagi.
+        $this->assertShift($this->amal, '2026-08-27', $this->pagi->id, AssignmentStatus::Scheduled);
+        $this->assertShift($this->farrel, '2026-08-27', $this->malam->id, AssignmentStatus::Scheduled);
+    }
+
+    /**
+     * Nurdiansyah divisi Kitchen dan panggilannya "Dian" — bukan "Nur".
+     * Pernah tertukar sekali dan bikin dia kebagian rotasi waiters selama
+     * enam minggu sementara Nuryati hilang dari jadwal.
+     */
+    public function test_nurdiansyah_tidak_ikut_rotasi_waiters(): void
+    {
+        $dian = Employee::where('pin_device', '8')->sole();
+
+        $this->artisan('roster:apply-waiters --from=2026-08-17 --to=2026-09-30')
+            ->assertSuccessful();
+
+        $this->assertSame(0, RosterAssignment::where('employee_id', $dian->id)->count());
+    }
+
+    /** Pemetaan PIN yang tidak cocok dengan namanya harus berhenti, bukan diam-diam jalan. */
+    public function test_pemetaan_pin_yang_salah_ditolak(): void
+    {
+        Employee::where('pin_device', '19')->sole()->update(['pin_device' => '99']);
+
+        $this->artisan('roster:apply-waiters --from=2026-08-17 --to=2026-08-18')
+            ->assertFailed();
     }
 
     protected function assertShift(Employee $emp, string $date, ?int $shiftId, AssignmentStatus $status): void

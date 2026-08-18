@@ -247,11 +247,32 @@ malam) sekarang ditandai `(+1 hari)` di semua tempat yang menampilkannya
   dari 3 ke 2** — polanya memang selalu 2 orang malam + 1 middle, angka "3"
   bikin warning "kurang tenaga" muncul terus padahal sudah pas.
 - **Siklus rotasi 4-mingguan waiters**: patokan "Minggu 1" = **Senin 17 Agustus
-  2026** (diupdate per 18 Agustus 2026: Waye = Farrel Daffa [PIN 3], Dafa = Dava
-  Erik Prasetiyo [PIN 2], Nur = Nurdiansyah [PIN 8], Amal = Muhammad Julian
-  Ikhlusul Amal [PIN 6]). Sisa bulan September berlanjut otomatis. Tanggal 15–16
-  Agustus tetap apa adanya. Perintah penerapan: `php artisan roster:apply-waiters --recompute`
-  atau `php database/scripts/apply_waiter_roster.php`.
+  2026** (jadwal BARU per 18 Agustus 2026 — menggantikan jadwal lama yang
+  patokannya 27 Juli; jangan pakai patokan lama lagi). Berlaku 17 Agt–30 Sep,
+  siklusnya berulang tiap 28 hari. Tanggal 15–16 Agustus tetap apa adanya.
+  Diterapkan lewat `php artisan roster:apply-waiters --recompute`.
+
+  **Pemetaan nama panggilan → karyawan** (sumber kekeliruan yang sudah pernah
+  terjadi, jangan ditebak dari kemiripan nama):
+  - Waye = **Farrel Daffa** (PIN 3)
+  - Dafa = **Dava Erik Prasetiyo** (PIN 2)
+  - Nur  = **Nuryati** (PIN 19)
+  - Amal = **Muhammad Julian Ikhlusul Amal** (PIN 6)
+
+  **Nur BUKAN Nurdiansyah.** Nurdiansyah panggilannya "Dian", PIN 8, divisi
+  **Kitchen** — pernah tertukar dan bikin orang Kitchen masuk rotasi waiters
+  17 Agt–30 Sep sementara Nuryati hilang dari jadwal sama sekali. Perintahnya
+  sekarang mencocokkan PIN **dan** nama berpasangan, dan berhenti dengan
+  pesan jelas kalau tidak cocok.
+
+  Dua hal di pola ini terlihat seperti salah ketik tapi memang begitu
+  jadwalnya — sudah dikunci di `WaiterRosterRotationTest`, jangan
+  "diperbaiki":
+  - **Hari Minggu tidak punya shift middle** — dua orang di shift 1, dua di
+    shift 2 (beda dari Jumat/Sabtu yang selalu ada middle).
+  - **Kamis Minggu 1 (20 Agt) polanya sendiri**: "1 = Waye". Kamis minggu
+    2–4 barulah "1 = Amal". Senin–Rabu memang sama tiap minggu, jadi Kamis
+    yang beda ini gampang disangka keliru.
 
 ## 6. Yang masih menggantung (per tanggal dokumen ini)
 
