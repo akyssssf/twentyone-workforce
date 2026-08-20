@@ -384,11 +384,15 @@ jam yang salah padahal jadwalnya sudah diubah.
 **Menunggu dijalankan di server** (kode sudah di `main`, tinggal `git pull`
 dan `php artisan migrate --force`):
 
+**URUTAN PENTING** — jam khusus harus dipasang PALING AKHIR setelah roster
+tanggal itu final (lihat gotcha nomor 8):
+
+- [ ] `roster:set 2 2026-08-21=malam --divisi=waiter` (Dava, dari Middle)
+- [ ] `roster:set 20 2026-08-20=libur 2026-08-21=malam 2026-08-22=pagi 2026-08-23=libur --divisi=kasir --recompute` (Dea)
+- [ ] `roster:set 16 2026-08-22=malam --divisi=kasir --recompute` (Sinta)
 - [ ] `roster:jam-khusus 2026-08-21 pagi 08:00 16:00 --recompute`
 - [ ] `roster:jam-khusus 2026-08-21 malam 13:30 22:30 --recompute`
 - [ ] `attendance:waive-late 11 2026-08-18 --alasan="Motor mogok"` (Fikri)
-- [ ] `roster:set 20 2026-08-20=libur 2026-08-21=malam 2026-08-22=pagi 2026-08-23=libur --divisi=kasir --recompute` (Dea)
-- [ ] `roster:set 16 2026-08-22=malam --divisi=kasir --recompute` (Sinta)
 
 Sebelum menganggap salah satunya selesai, **lihat outputnya** — beberapa
 perintah sebelumnya dikira sudah jalan padahal belum.
@@ -408,6 +412,10 @@ perintah sebelumnya dikira sudah jalan padahal belum.
       atau pengganti cuti), manajer bisa bingung asalnya dari mana.
 - [ ] Kebijakan "SEMENTARA" di 4.1 harus ditinjau ulang & dicabut begitu
       roster dipakai penuh untuk SEMUA karyawan (termasuk kasir).
+- [ ] Jam khusus (`roster:jam-khusus`) menempel per-orang, bukan per
+      tanggal+shift — lihat gotcha nomor 8. Berfungsi, tapi rapuh terhadap
+      urutan. Pindahkan ke tabel `shift_time_overrides` kalau sudah sering
+      dipakai.
 - [ ] Peringatan validator "kurang tenaga" masih bising untuk shift Middle —
       Middle tidak punya `staffing_requirements`, jadi orang yang di Middle
       tidak terhitung mengisi kuota mana pun.
@@ -462,6 +470,21 @@ perintah sebelumnya dikira sudah jalan padahal belum.
    kedua akan MEMINDAHKAN shift (menghapus baris pertama), sesuai
    perbaikan di 4.5. Kalau butuh setup double-shift asli di test, pakai
    `RosterAssignment::create()` langsung untuk baris kedua.
+8. **`roster:jam-khusus` menempel ke ORANG, bukan ke tanggal+shift.**
+   Kolom `start_time_override`/`end_time_override` ada di
+   `roster_assignments`, jadi jam khusus cuma menempel pada orang yang
+   **saat itu** terjadwal di shift tersebut. Kalau roster tanggal itu
+   diubah SETELAH jam khusus dipasang, orang baru yang masuk ke shift itu
+   **tidak ikut kebagian** — dia pakai jam master, dan telatnya salah
+   hitung tanpa ada peringatan apa pun.
+
+   **Aturannya: pasang jam khusus PALING AKHIR**, setelah roster tanggal
+   itu benar-benar final. Perintahnya aman diulang, jadi kalau roster
+   terlanjur berubah, tinggal jalankan lagi.
+
+   Perbaikan yang lebih benar (belum dikerjakan): pindahkan override ke
+   tabel sendiri berkunci (work_date, shift_id), supaya berlaku untuk
+   siapa pun yang terjadwal di situ tanpa peduli urutan.
 
 ## 8. Perintah yang sering dipakai (jalankan di server, folder live)
 
