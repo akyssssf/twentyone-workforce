@@ -2,13 +2,37 @@
 
 Dokumen ini dibuat supaya AI/developer lain yang lanjut kerja di proyek ini
 tidak perlu menemukan ulang apa yang sudah ditemukan di sesi sebelumnya —
-terutama jebakan-jebakan yang sudah pernah bikin bug produksi. Ditulis
-16 Agustus 2026, setelah maraton perbaikan dari cabang `feat/hris-lengkap`
-(sudah menyatu ke `main`).
+terutama jebakan-jebakan yang sudah pernah bikin bug produksi.
+
+**Terakhir diperbarui: 20 Agustus 2026.** Cabang kerja `feat/hris-lengkap`,
+sudah menyatu ke `main` (yang di-deploy).
 
 Kalau ada yang di sini ternyata sudah berubah (kode sudah direfactor, bug
 sudah dibenerin ulang, dst), percayai kode yang ada sekarang — dokumen ini
 snapshot per tanggal di atas, bukan kebenaran abadi.
+
+---
+
+## 0. Cara melanjutkan di sesi baru
+
+Buka sesi baru di folder proyek ini, lalu mulai dengan kira-kira:
+
+> Baca `CATATAN_SESI.md` dulu untuk konteks proyek. Aku mau lanjut kerja
+> di sistem absensi 21 Kafe.
+
+Yang perlu diketahui AI/developer barunya sejak menit pertama:
+
+1. **Server produksi diakses lewat SSH**, dan saya (Claude) tidak punya
+   aksesnya — semua perintah server harus dijalankan sendiri oleh pemilik,
+   lalu hasilnya ditempel balik ke chat. Jangan pernah berasumsi sebuah
+   perintah sudah jalan tanpa melihat outputnya; ini sudah beberapa kali
+   bikin perbaikan dikira selesai padahal belum.
+2. **Baca bagian 2 (lingkungan) dan bagian 7 (jebakan) sebelum menyentuh
+   kode roster/absensi/lembur.** Sebagian besar bug di proyek ini berulang
+   polanya.
+3. **Perubahan data produksi lewat perintah artisan**, bukan skrip PHP
+   tempelan — lihat bagian 8. Skrip panjang lewat SSH sudah terbukti sering
+   kelewat separuh tanpa ada yang sadar.
 
 ---
 
@@ -229,6 +253,81 @@ tanggal berikutnya dari `work_date` (shift Malam & Middle, lewat tengah
 malam) sekarang ditandai `(+1 hari)` di semua tempat yang menampilkannya
 (dulu cuma ada di tabel Scan Mentah & Excel).
 
+### 4.11 Rotasi waiters dari Antigravity — pemetaan "Nur" tertukar orang
+
+Sesi terpisah memakai AI lain (Antigravity/Gemini) untuk menerapkan rotasi
+4-mingguan waiters 17 Agt–30 Sep. Polanya benar seluruhnya (sudah dicocokkan
+hari per hari), tapi **"Nur" dipetakan ke Nurdiansyah (PIN 8, divisi
+Kitchen)** — seharusnya **Nuryati (PIN 19)**.
+
+Yang bikin ini lolos: pencariannya memakai
+`->where('pin_device', '8')->orWhere('name', 'Nurdiansyah')` — "salah satu
+cocok" sudah diterima, jadi pemetaan yang salah pun tidak mengeluh. Dan
+**tesnya ikut mengunci kesalahan yang sama** (membuat karyawan bernama
+"Nurdiansyah" PIN 8 sebagai `nur`), sehingga lulus sambil salah — itu bagian
+paling berbahayanya, karena kesalahannya jadi terlihat terverifikasi.
+
+Diperbaiki: PIN dan nama harus cocok BERPASANGAN, dan perintahnya berhenti
+dengan pesan yang menyebut siapa pemilik PIN itu sebenarnya. Ditambah tes
+yang menjaga Nurdiansyah tidak kebagian jadwal waiters sama sekali.
+
+Untungnya versi salahnya **tidak pernah dijalankan di produksi** — sempat
+dicek sebelum diperbaiki.
+
+### 4.12 Cuti yang disetujui bisa ketiban jadwal kerja
+
+**Masalah**: `assign()` melindungi baris cuti dari terhapus, tapi tidak
+menolak menjadwalkan orang yang sedang cuti — jadi baris kerja baru
+**menempel di sampingnya**, dan di roster orangnya terlihat tetap masuk
+padahal cutinya sudah disahkan.
+
+Kejadian nyatanya: cuti Julian 22–23 Agustus disetujui 16 Agustus, lalu
+skrip rotasi waiters dijalankan 18 Agustus untuk rentang 17 Agt–30 Sep dan
+menempelkan Shift Malam di tanggal cutinya. Tanpa error, tanpa peringatan.
+
+**Solusi**: `assign()` menolak kalau tujuannya shift kerja dan orang itu
+punya cuti disetujui hari itu. Menandai libur (shift null) tetap boleh —
+itu bukan menjadwalkan kerja. Jalur pengajuan resmi (`source` leave/swap)
+dikecualikan, karena itu yang berhak mengubah baris cuti (misalnya pengganti
+yang menutup shift orang yang cuti). `roster:apply-waiters` **melewati**
+orang yang cuti lalu melaporkannya di akhir, bukan gagal total — kalau satu
+orang cuti bikin seluruh rotasi batal, ujungnya orang akan mematikan
+penjagaannya supaya skripnya jalan.
+
+### 4.13 Dua pintasan admin: `attendance:waive-late` & `roster:set`
+
+Memaafkan telat dan mengubah jadwal satu orang adalah pekerjaan admin yang
+paling sering muncul, tapi sebelumnya cuma bisa lewat skrip PHP panjang yang
+ditempel ke SSH. **Dampaknya nyata**: koreksi telat gagal diterapkan dua kali
+berturut-turut karena skripnya kelewat separuh, dan tidak ada yang tahu
+sampai orangnya membuka rekap sendiri.
+
+Lihat bagian 8 untuk cara pakainya. Keduanya menampilkan kondisi **sebelum
+dan sesudah**, supaya kalau hasilnya tidak seperti yang dikira, ketahuan saat
+itu juga.
+
+### 4.14 Jam shift khusus untuk satu tanggal
+
+Bos sesekali minta jam berbeda di satu hari tertentu (mis. Jumat 21 Agustus:
+Shift 1 jadi 08:00–16:00, Shift 2 jadi 13:30–22:30).
+
+Jam di tabel `shifts` berlaku **global**, jadi mengubahnya untuk sehari ikut
+mengubah semua tanggal — termasuk yang sudah lewat, karena cron menghitung
+ulang dua hari terakhir tiap 15 menit. "Ubah lalu kembalikan" karena itu
+bukan pilihan yang aman.
+
+Alternatif "bikin shift baru khusus sehari" juga ditolak: syarat tenaga
+terikat ke `shift_id`, jadi kuota hari itu tidak terhitung dan muncul
+peringatan "kurang tenaga" palsu — plus karyawan melihat nama shift asing
+di jadwalnya.
+
+**Solusi**: kolom `start_time_override` / `end_time_override` di
+`roster_assignments`, dibaca `WorkWindow::for()`. Nama shift, warna, dan
+kuota tetap normal; yang berbeda cuma jamnya, di tanggal itu saja. Tampilan
+(dashboard admin, beranda & kalender karyawan) menampilkan jam efektif dan
+menandainya "jam khusus" — kalau yang tampil jam master, karyawan datang di
+jam yang salah padahal jadwalnya sudah diubah.
+
 ## 5. Data & keputusan bisnis yang sudah diambil (bukan cuma kode)
 
 - **Roster Agustus** (mulai 15 Agustus) & **September penuh** sudah diisi
@@ -240,9 +339,15 @@ malam) sekarang ditandai `(+1 hari)` di semua tempat yang menampilkannya
   dinolkan) — posisi ini memang belum ada orangnya, biar warning validator
   roster berhenti bising.
 - **Shift Middle**: 11:30–01:00 (crosses midnight), berlaku Jumat/Sabtu/Minggu
-  untuk waiters. **Jam pulangnya (01:00) masih perlu dikonfirmasi ke bos**
-  — kalau ternyata beda, tinggal `Shift::where('code','middle')->update([...])`
-  lalu `attendance:compute` ulang rentang yang kepengaruh.
+  untuk waiters. Jam-nya **sengaja disembunyikan dari tampilan**
+  (`shifts.show_hours = false`) karena belum final dikonfirmasi ke bos —
+  datanya tetap dipakai penuh untuk hitung telat & jendela absen, cuma tidak
+  ditulis ke layar. Kalau nanti sudah pasti, `show_hours` tinggal
+  dikembalikan ke `true`.
+- **Nama karyawan pernah diubah**: "Dea Sofiyanti" → **"Dea Shofita Nur
+  Utami"** (PIN 20, Kasir). Sekarang ada TIGA orang dengan "Nur" di namanya —
+  Nuryati (waiters, 19), Nurdiansyah (kitchen, 8), dan Dea (kasir, 20).
+  Jangan pernah mencari karyawan dari kemiripan nama; pakai PIN.
 - **Kebutuhan tenaga (`staffing_requirements`) shift Malam Waiters diturunkan
   dari 3 ke 2** — polanya memang selalu 2 orang malam + 1 middle, angka "3"
   bikin warning "kurang tenaga" muncul terus padahal sudah pas.
@@ -274,22 +379,38 @@ malam) sekarang ditandai `(+1 hari)` di semua tempat yang menampilkannya
     2–4 barulah "1 = Amal". Senin–Rabu memang sama tiap minggu, jadi Kamis
     yang beda ini gampang disangka keliru.
 
-## 6. Yang masih menggantung (per tanggal dokumen ini)
+## 6. Yang masih menggantung (per 20 Agustus 2026)
 
-- [ ] Jam pulang Shift Middle (01:00) — konfirmasi final ke bos.
-- [ ] Roster Kasir — belum dibuat sama sekali.
+**Menunggu dijalankan di server** (kode sudah di `main`, tinggal `git pull`
+dan `php artisan migrate --force`):
+
+- [ ] `roster:jam-khusus 2026-08-21 pagi 08:00 16:00 --recompute`
+- [ ] `roster:jam-khusus 2026-08-21 malam 13:30 22:30 --recompute`
+- [ ] `attendance:waive-late 11 2026-08-18 --alasan="Motor mogok"` (Fikri)
+- [ ] `roster:set 20 2026-08-20=libur 2026-08-21=malam 2026-08-22=pagi 2026-08-23=libur --divisi=kasir --recompute` (Dea)
+- [ ] `roster:set 16 2026-08-22=malam --divisi=kasir --recompute` (Sinta)
+
+Sebelum menganggap salah satunya selesai, **lihat outputnya** — beberapa
+perintah sebelumnya dikira sudah jalan padahal belum.
+
+**Keputusan/pekerjaan yang belum tuntas:**
+
+- [ ] Payroll belum pernah digenerate sama sekali. Begitu dijalankan pertama
+      kali, cek dulu apakah ada slip lama yang perlu diabaikan.
 - [ ] Auto-deploy Hostinger masih nyasar ke folder `kafe/` — perlu dibenerin
       dari pengaturan Git di hPanel biar `git pull` manual tidak perlu terus.
+- [ ] Roster **Kasir September** belum ada (Agustus sudah). Selama kosong,
+      Dea & Sinta jatuh ke jalur cadangan di 4.1 (tidak scan = Libur).
 - [ ] Kolom "andi" di jadwal kasir lama — orangnya belum terdaftar di sistem
-      (nama lengkap & PIN mesin belum ada), sengaja di-skip.
-- [ ] Payroll belum pernah digenerate sama sekali — begitu dijalankan
-      pertama kali, cek dulu apakah ada slip lama yang perlu diabaikan.
+      (nama lengkap & PIN mesin belum diberikan), sengaja di-skip.
 - [ ] Halaman Roster manajer tidak punya penanda "baris ini muncul karena
-      apa" (manual/swap/leave) — kalau ada shift nongol tiba-tiba (dari
-      swap atau pengganti cuti), manajer bisa bingung asalnya dari mana.
-      Belum dikerjakan, cuma dicatat sebagai potensi kebingungan.
+      apa" (manual/swap/leave). Kalau ada shift nongol tiba-tiba (dari swap
+      atau pengganti cuti), manajer bisa bingung asalnya dari mana.
 - [ ] Kebijakan "SEMENTARA" di 4.1 harus ditinjau ulang & dicabut begitu
       roster dipakai penuh untuk SEMUA karyawan (termasuk kasir).
+- [ ] Peringatan validator "kurang tenaga" masih bising untuk shift Middle —
+      Middle tidak punya `staffing_requirements`, jadi orang yang di Middle
+      tidak terhitung mengisi kuota mana pun.
 
 ## 7. Jebakan teknis untuk diketahui (gotchas)
 
@@ -305,13 +426,23 @@ malam) sekarang ditandai `(+1 hari)` di semua tempat yang menampilkannya
    ada keadaan antara yang tabrakan. Kalau perlu "menukar" dua baris yang
    sama-sama punya nilai UNIQUE, jangan pindahkan kepemilikan bolak-balik —
    tukar ISI-nya, atau pakai nilai sementara yang dijamin aman.
-3. **`whereDate('kolom', $tanggal)` vs mencari pakai string `"Y-m-d"`** —
-   kolom `work_date` di `roster_assignments` & `attendances` tersimpan
-   sebagai `"Y-m-d 00:00:00"`. `updateOrCreate`/`where` yang mencari pakai
-   string pendek `"Y-m-d"` (bukan objek Carbon) **tidak pernah ketemu**,
-   dan `updateOrCreate` diam-diam berubah jadi INSERT yang nabrak unique
-   constraint. Sudah kena 2 kali (di `AttendanceComputer` dan
-   `RosterService`) sebelum polanya disadari.
+3. **Jebakan tanggal — yang paling sering menggigit di proyek ini.**
+   Kolom `work_date` di `roster_assignments` & `attendances` tersimpan
+   sebagai `"Y-m-d 00:00:00"`, bukan `"Y-m-d"`. Akibatnya:
+   - `updateOrCreate`/`where` yang mencari pakai string pendek `"Y-m-d"`
+     **tidak pernah ketemu** — dan `updateOrCreate` diam-diam berubah jadi
+     INSERT yang nabrak unique constraint.
+   - **`whereBetween('work_date', ['2026-08-22', '2026-08-23'])` MEMBUANG
+     tanggal 23**, karena `"2026-08-23 00:00:00" > "2026-08-23"` secara
+     perbandingan string. Ini bikin diagnosis salah ("datanya tidak ada"
+     padahal ada).
+   - `whereIn('work_date', ['2026-08-17', '2026-08-21'])` juga tidak pernah
+     cocok, dengan alasan yang sama.
+
+   **Selalu pakai `whereDate()`, objek Carbon, atau batas atas eksplisit**
+   (`'2026-08-23 23:59:59'`). Pola ini sudah menggigit **tiga kali** — dua
+   kali di kode produksi (`AttendanceComputer`, `RosterService`) dan
+   sekali di skrip diagnosis, yang sempat bikin kesimpulan keliru.
 4. **Migrasi FK `cascadeOnDelete()`** dari `shift_swap_requests` ke
    `roster_assignments` (`requester_assignment_id`, `partner_assignment_id`)
    — jangan pernah hapus lalu buat ulang baris `RosterAssignment` yang
@@ -331,6 +462,41 @@ malam) sekarang ditandai `(+1 hari)` di semua tempat yang menampilkannya
    kedua akan MEMINDAHKAN shift (menghapus baris pertama), sesuai
    perbaikan di 4.5. Kalau butuh setup double-shift asli di test, pakai
    `RosterAssignment::create()` langsung untuk baris kedua.
+
+## 8. Perintah yang sering dipakai (jalankan di server, folder live)
+
+Semua ini artisan command — **jangan lagi pakai skrip PHP tempelan lewat
+SSH**, itu sudah terbukti sering kelewat separuh tanpa ada yang sadar.
+
+```bash
+# Maafkan telat (alasan WAJIB, tanpa itu ditolak)
+php artisan attendance:waive-late <pin> [tanggal] --alasan="Motor mogok"
+php artisan attendance:waive-late <pin> [tanggal] --batal     # kembalikan
+
+# Ubah jadwal satu orang, boleh beberapa tanggal sekaligus
+php artisan roster:set <pin> 2026-08-21=malam 2026-08-22=pagi 2026-08-23=libur \
+    --divisi=kasir --recompute
+
+# Jam shift khusus untuk SATU tanggal (tidak menyentuh master shift)
+php artisan roster:jam-khusus 2026-08-21 pagi 08:00 16:00 --recompute
+php artisan roster:jam-khusus 2026-08-21 pagi 08:00 16:00 --hapus --recompute
+
+# Rotasi 4-mingguan waiters (17 Agt = Minggu 1)
+php artisan roster:apply-waiters --recompute
+
+# Hitung ulang rekap absensi
+php artisan attendance:compute --from=2026-08-18 --to=2026-08-20
+
+# Lihat aliran data absensi hari ini, dari callback sampai rekap
+php artisan attendance:status
+
+# Karyawan
+php artisan employee:list
+php artisan employee:edit <pin> --name="Nama Baru"
+```
+
+**PIN yang sering dipakai**: Farrel Daffa 3 · Dava Erik 2 · Nuryati 19 ·
+Julian Amal 6 · Fikri Imamy 11 · Nurdiansyah 8 · Dea 20 · Sinta 16.
 
 ---
 
