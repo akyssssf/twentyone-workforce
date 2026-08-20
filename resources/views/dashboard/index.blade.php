@@ -181,8 +181,13 @@
                             <span class="h-2.5 w-2.5 rounded-full" style="background: {{ $shift->color ?? '#475569' }}"></span>
                             {{ $shift->name }}
                             @if ($shift->show_hours)
-                                <span class="font-normal text-slate-500">
-                                    {{ substr($shift->start_time, 0, 5) }}–{{ substr($shift->end_time, 0, 5) }}
+                                {{-- Jam khusus tanggal itu menang atas jam master. Ditandai
+                                     supaya admin tidak menyangka jam shift sudah berubah
+                                     permanen — perubahannya cuma berlaku hari ini. --}}
+                                @php $khusus = $petugas->first(fn ($a) => $a->pakaiJamKhusus()); @endphp
+                                <span class="font-normal {{ $khusus ? 'text-amber-700' : 'text-slate-500' }}">
+                                    {{ substr($khusus?->mulaiEfektif() ?? $shift->start_time, 0, 5) }}–{{ substr($khusus?->selesaiEfektif() ?? $shift->end_time, 0, 5) }}
+                                    @if ($khusus)<span class="text-xs">(jam khusus)</span>@endif
                                 </span>
                             @endif
                         </div>

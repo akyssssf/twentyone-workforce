@@ -78,9 +78,17 @@
                                 {{ $j->shift->name }}
                             </span>
                             @if ($j->shift->show_hours)
+                                {{-- Jam khusus hari itu menang atas jam master shift: kalau
+                                     yang ditampilkan jam master, karyawan datang di jam yang
+                                     salah padahal jadwalnya sudah diubah. --}}
                                 <span class="text-sm text-slate-600">
-                                    {{ substr($j->shift->start_time, 0, 5) }} – {{ substr($j->shift->end_time, 0, 5) }}
+                                    {{ substr($j->mulaiEfektif(), 0, 5) }} – {{ substr($j->selesaiEfektif(), 0, 5) }}
                                 </span>
+                                @if ($j->pakaiJamKhusus())
+                                    <span class="rounded bg-amber-100 px-1.5 py-0.5 text-xs font-medium text-amber-800">
+                                        jam khusus
+                                    </span>
+                                @endif
                             @endif
                             @if ($j->division)
                                 <span class="text-sm text-slate-400">sebagai {{ $j->division->name }}</span>

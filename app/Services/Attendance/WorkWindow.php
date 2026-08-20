@@ -2,6 +2,7 @@
 
 namespace App\Services\Attendance;
 
+use App\Models\RosterAssignment;
 use App\Models\Shift;
 use Illuminate\Support\Carbon;
 
@@ -22,13 +23,22 @@ class WorkWindow
         public readonly Carbon $end,
     ) {}
 
-    public static function for(Shift $shift, Carbon $workDate): self
+    /**
+     * $assignment dipakai untuk jam khusus per tanggal — bos sesekali meminta
+     * jam berbeda di satu hari tertentu, dan jam di master shift berlaku
+     * global sehingga tidak bisa diubah cuma untuk sehari. Null berarti ikut
+     * jam master seperti biasa.
+     */
+    public static function for(Shift $shift, Carbon $workDate, ?RosterAssignment $assignment = null): self
     {
         $timezone = config('attendance.timezone', 'Asia/Jakarta');
         $date = $workDate->copy()->setTimezone($timezone)->startOfDay();
 
-        $scheduledIn = self::applyTime($date, $shift->start_time);
-        $shiftEnd = self::applyTime($date, $shift->end_time);
+        $mulai = $assignment?->start_time_override ?? $shift->start_time;
+        $selesai = $assignment?->end_time_override ?? $shift->end_time;
+
+        $scheduledIn = self::applyTime($date, $mulai);
+        $shiftEnd = self::applyTime($date, $selesai);
 
         // Jam pulang yang tidak lebih besar dari jam masuk berarti shift ini
         // melewati tengah malam, jadi ujungnya digeser ke hari berikutnya.

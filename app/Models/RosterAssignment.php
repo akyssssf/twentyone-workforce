@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Enums\AssignmentStatus;
 use App\Models\Concerns\HasShiftKey;
+use App\Services\Attendance\WorkWindow;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Carbon;
@@ -24,6 +25,7 @@ class RosterAssignment extends Model
 
     protected $fillable = [
         'roster_id', 'employee_id', 'work_date', 'shift_id', 'shift_key',
+        'start_time_override', 'end_time_override',
         'division_id', 'status', 'source', 'source_request_id', 'note',
     ];
 
@@ -65,14 +67,42 @@ class RosterAssignment extends Model
         return $query->whereDate('work_date', $date);
     }
 
+    /**
+     * Jam mulai efektif hari itu: jam khusus kalau ada, kalau tidak ikut
+     * master shift. "HH:MM:SS", atau null kalau memang libur.
+     */
+    public function mulaiEfektif(): ?string
+    {
+        return $this->start_time_override ?? $this->shift?->start_time;
+    }
+
+    public function selesaiEfektif(): ?string
+    {
+        return $this->end_time_override ?? $this->shift?->end_time;
+    }
+
+    /** Hari ini jamnya menyimpang dari master shift? */
+    public function pakaiJamKhusus(): bool
+    {
+        return $this->start_time_override !== null || $this->end_time_override !== null;
+    }
+
     /** Jam mulai dan selesai sesungguhnya, sudah memperhitungkan lewat tengah malam. */
     public function startsAt(): ?Carbon
     {
-        return $this->shift?->startsOn($this->work_date);
+        if ($this->shift === null) {
+            return null;
+        }
+
+        return WorkWindow::for($this->shift, $this->work_date, $this)->scheduledIn;
     }
 
     public function endsAt(): ?Carbon
     {
-        return $this->shift?->endsOn($this->work_date);
+        if ($this->shift === null) {
+            return null;
+        }
+
+        return WorkWindow::for($this->shift, $this->work_date, $this)->scheduledOut;
     }
 }

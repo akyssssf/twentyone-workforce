@@ -167,7 +167,7 @@ class AttendanceComputer
             return null;
         }
 
-        $window = WorkWindow::for($shift, $date);
+        $window = WorkWindow::for($shift, $date, $assignment);
         $timezone = config('attendance.timezone', 'Asia/Jakarta');
         $logs = $this->logsIn($employee, $window);
 
