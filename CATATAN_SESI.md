@@ -4,7 +4,7 @@ Dokumen ini dibuat supaya AI/developer lain yang lanjut kerja di proyek ini
 tidak perlu menemukan ulang apa yang sudah ditemukan di sesi sebelumnya —
 terutama jebakan-jebakan yang sudah pernah bikin bug produksi.
 
-**Terakhir diperbarui: 20 Agustus 2026.** Cabang kerja `feat/hris-lengkap`,
+**Terakhir diperbarui: 21 Agustus 2026.** Cabang kerja `feat/hris-lengkap`,
 sudah menyatu ke `main` (yang di-deploy).
 
 Kalau ada yang di sini ternyata sudah berubah (kode sudah direfactor, bug
@@ -328,6 +328,39 @@ kuota tetap normal; yang berbeda cuma jamnya, di tanggal itu saja. Tampilan
 menandainya "jam khusus" — kalau yang tampil jam master, karyawan datang di
 jam yang salah padahal jadwalnya sudah diubah.
 
+### 4.15 Scan yang dibuang jendela kerja — dan diagnosis yang sempat berbohong
+
+**Masalah asli**: Abdila Riansyah (PIN 10) scan datang 07:54:07, tapi yang masuk
+rekap justru scan 13:00 yang tidak disengaja. Sebabnya: hari itu Shift Malam
+dapat jam khusus mulai 13:30, jendela scan ikut bergeser jadi baru dibuka 09:30
+(4 jam sebelum jam masuk), dan scan 07:54 jatuh di luar jendela lalu **dibuang
+tanpa error, tanpa jejak, tanpa tanda apa pun di rekap**. Akar sebenarnya:
+pertukaran shift dengan Muhammad Nasdana Faza (PIN 12) yang tidak pernah
+dimasukkan ke sistem, jadi rosternya memang shift yang salah.
+
+Ini kelas kegagalan terburuk di proyek ini — rekapnya tetap terlihat wajar, jadi
+yang ketahuan cuma karyawan yang kebetulan memeriksa rekapnya sendiri lalu
+protes. Dua perintah baru dibuat untuk itu (lihat bagian 8):
+
+- `attendance:jelaskan <pin> <tanggal>` — seluruh rantai untuk satu orang:
+  jadwal & jam yang benar-benar dipakai, jendela yang dihasilkannya, SEMUA scan
+  hari itu termasuk yang dibuang berikut alasannya, scan mana yang jadi jam
+  masuk/pulang, lalu hasil akhirnya di rekap.
+- `attendance:periksa --from= --to=` — menyapu semua karyawan, mencari rekap
+  yang jam masuknya bukan scan pertama orang itu.
+
+Jejaknya dibangun lewat `AttendanceComputer::jejak()` yang memakai helper yang
+sama persis dengan perhitungan asli — **bukan salinan logikanya**. Diagnosis yang
+punya salinan sendiri akan menyimpang diam-diam dari kenyataan.
+
+**Pelajaran yang lebih mahal dari bug aslinya**: versi pertama `attendance:periksa`
+melaporkan **57 rekap bermasalah dalam seminggu, dan semuanya salah**. Yang dikira
+"scan datang pagi yang terbuang" ternyata scan PULANG shift malam hari sebelumnya
+(jatuh sekitar 01:00). Batas bawah rentangnya masih tengah malam sementara batas
+atasnya sudah memakai ambang 06:00 — dua batas yang tidak konsisten di satu
+fungsi yang sama. Laporan itu nyaris dipakai untuk membetulkan roster satu minggu
+penuh yang sebenarnya sudah benar. Sekarang dikunci tes (lihat jebakan nomor 9).
+
 ## 5. Data & keputusan bisnis yang sudah diambil (bukan cuma kode)
 
 - **Roster Agustus** (mulai 15 Agustus) & **September penuh** sudah diisi
@@ -379,25 +412,25 @@ jam yang salah padahal jadwalnya sudah diubah.
     2–4 barulah "1 = Amal". Senin–Rabu memang sama tiap minggu, jadi Kamis
     yang beda ini gampang disangka keliru.
 
-## 6. Yang masih menggantung (per 20 Agustus 2026)
+## 6. Yang masih menggantung (per 21 Agustus 2026)
 
-**Menunggu dijalankan di server** (kode sudah di `main`, tinggal `git pull`
-dan `php artisan migrate --force`):
+Antrean perintah 20-21 Agustus **sudah dijalankan semua** (roster Dava, Dea,
+Sinta; jam khusus pagi & malam 21 Agustus; pemaafan telat Fikri), ditambah
+perbaikan tukar shift 21 Agustus yang tidak pernah masuk sistem: Abdila (10)
+ke Shift Pagi, Nasdana (12) ke Shift Malam, Dava (2) dari Middle ke Malam.
+Sudah diverifikasi lewat `attendance:periksa` — bukan diasumsikan.
 
-**URUTAN PENTING** — jam khusus harus dipasang PALING AKHIR setelah roster
-tanggal itu final (lihat gotcha nomor 8):
-
-- [ ] `roster:set 2 2026-08-21=malam --divisi=waiter` (Dava, dari Middle)
-- [ ] `roster:set 20 2026-08-20=libur 2026-08-21=malam 2026-08-22=pagi 2026-08-23=libur --divisi=kasir --recompute` (Dea)
-- [ ] `roster:set 16 2026-08-22=malam --divisi=kasir --recompute` (Sinta)
-- [ ] `roster:jam-khusus 2026-08-21 pagi 08:00 16:00 --recompute`
-- [ ] `roster:jam-khusus 2026-08-21 malam 13:30 22:30 --recompute`
-- [ ] `attendance:waive-late 11 2026-08-18 --alasan="Motor mogok"` (Fikri)
-
-Sebelum menganggap salah satunya selesai, **lihat outputnya** — beberapa
-perintah sebelumnya dikira sudah jalan padahal belum.
+Catatan urutan yang terbukti sekali lagi di sini: `roster:set 2` yang pertama
+**tidak jadi** dan tidak ada yang sadar sampai rekapnya dilihat. Sebelum
+menganggap sebuah perintah selesai, **lihat outputnya**.
 
 **Keputusan/pekerjaan yang belum tuntas:**
+
+- [ ] Scan yang dibuang jendela kerja masih tidak kelihatan di rekap maupun
+      di halaman admin — cuma ketahuan kalau `attendance:jelaskan` /
+      `attendance:periksa` dijalankan. Idealnya baris rekap yang punya scan
+      terbuang diberi tanda sendiri, supaya kegagalannya berteriak, bukan
+      menunggu ditanya.
 
 - [ ] Payroll belum pernah digenerate sama sekali. Begitu dijalankan pertama
       kali, cek dulu apakah ada slip lama yang perlu diabaikan.
@@ -486,6 +519,25 @@ perintah sebelumnya dikira sudah jalan padahal belum.
    tabel sendiri berkunci (work_date, shift_id), supaya berlaku untuk
    siapa pun yang terjadwal di situ tanpa peduli urutan.
 
+9. **"Hari" untuk scan = HARI OPERASIONAL (06:00–06:00), bukan tanggal
+   kalender.** Shift malam berakhir 01:00, jadi scan pulangnya jatuh di
+   tanggal berikutnya tapi tetap milik hari kemarin. Kalau mengambil rentang
+   scan satu hari, **kedua batasnya harus ikut ambang yang sama**
+   (`ATTENDANCE_DASHBOARD_CUTOVER_HOUR`) — memakai tengah malam sebagai batas
+   bawah sementara batas atasnya 06:00 membuat scan pulang shift malam kemarin
+   terhitung sebagai "scan pertama hari ini". Sudah menggigit sekali, dan
+   akibatnya bukan error melainkan **laporan yang salah tapi meyakinkan**
+   (57 temuan palsu, lihat 4.15). Pakai `AttendanceComputer::scanHarian()`,
+   jangan menulis rentangnya sendiri.
+
+10. **`attendance:periksa` tidak menangkap roster yang salah kalau tidak ada
+   scan yang terbuang.** Orang yang terjadwal di shift yang salah tapi scan
+   pertamanya kebetulan masih masuk jendela shift itu tidak akan muncul — dia
+   cuma terlihat sebagai telat besar yang tidak masuk akal. Contoh nyatanya
+   Dava 21 Agustus: terjadwal Middle (11:30), datang 12:53, terbaca telat
+   1j 24m, padahal shift yang dia jalani mulai 13:30. Telat yang janggal tetap
+   harus dicurigai sebagai roster salah, bukan cuma dimaafkan.
+
 ## 8. Perintah yang sering dipakai (jalankan di server, folder live)
 
 Semua ini artisan command — **jangan lagi pakai skrip PHP tempelan lewat
@@ -509,6 +561,13 @@ php artisan roster:apply-waiters --recompute
 
 # Hitung ulang rekap absensi
 php artisan attendance:compute --from=2026-08-18 --to=2026-08-20
+
+# Kenapa rekap seseorang berbunyi begitu — SELURUH scan hari itu, termasuk
+# yang dibuang jendela kerja, berikut alasannya
+php artisan attendance:jelaskan <pin> [tanggal]
+
+# Sapu semua orang: cari rekap yang jam masuknya bukan scan pertamanya
+php artisan attendance:periksa --from=2026-08-15 --to=2026-08-21
 
 # Lihat aliran data absensi hari ini, dari callback sampai rekap
 php artisan attendance:status
