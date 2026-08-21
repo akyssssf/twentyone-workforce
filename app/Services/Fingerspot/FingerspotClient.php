@@ -99,6 +99,42 @@ class FingerspotClient
     }
 
     /**
+     * Kirim data pengguna ke mesin: PIN, nama, dan template biometrik.
+     *
+     * ASINKRON — dan ini bukan detail kecil. Respons yang dikembalikan cuma
+     * tanda perintahnya DITERIMA; hasil sebenarnya (berhasil atau gagal
+     * dieksekusi mesin) baru datang belakangan ke webhook perangkat, dicocokkan
+     * lewat trans_id. Karena itu method ini mengembalikan trans_id-nya, bukan
+     * boolean: pemanggil yang ingin tahu hasilnya HARUS menunggu callback itu.
+     * Memperlakukan kembalinya method ini sebagai "sudah terdaftar" adalah
+     * kesalahan yang tidak akan menimbulkan error sampai orangnya gagal absen.
+     *
+     * @param  array{name?: ?string, privilege?: ?string, password?: ?string, rfid?: ?string, template?: ?string}  $data
+     * @return string trans_id yang dipakai, untuk mencocokkan callback-nya
+     */
+    public function setUserInfo(string $pin, array $data = [], ?string $cloudId = null, ?string $transId = null): string
+    {
+        $transId ??= $this->transId();
+
+        $isi = array_filter([
+            'pin' => $pin,
+            'name' => $data['name'] ?? null,
+            'privilege' => $data['privilege'] ?? null,
+            'password' => $data['password'] ?? null,
+            'rfid' => $data['rfid'] ?? null,
+            'template' => $data['template'] ?? null,
+        ], fn ($nilai) => $nilai !== null && $nilai !== '');
+
+        $this->post('set_userinfo', [
+            'trans_id' => $transId,
+            'cloud_id' => $this->resolveCloudId($cloudId),
+            'data' => $isi,
+        ]);
+
+        return $transId;
+    }
+
+    /**
      * @param  array<string, mixed>  $body
      * @return array<string, mixed>
      */
