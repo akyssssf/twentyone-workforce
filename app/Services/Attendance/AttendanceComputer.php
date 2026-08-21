@@ -116,6 +116,66 @@ class AttendanceComputer
     }
 
     /**
+     * Jejak lengkap perhitungan satu karyawan pada satu tanggal — untuk
+     * diagnosis, tidak menyimpan apa pun.
+     *
+     * Ditaruh di kelas ini, bukan di perintah artisan yang memanggilnya, supaya
+     * penjelasannya memakai helper yang PERSIS SAMA dengan yang dipakai
+     * perhitungan asli. Diagnosis yang punya salinan logikanya sendiri akan
+     * menyimpang diam-diam dari kenyataan, dan diagnosis yang berbohong lebih
+     * berbahaya daripada tidak ada diagnosis sama sekali.
+     *
+     * @return list<array<string, mixed>>
+     */
+    public function jejak(Employee $employee, Carbon $workDate): array
+    {
+        $timezone = config('attendance.timezone', 'Asia/Jakarta');
+        $date = $workDate->copy()->setTimezone($timezone)->startOfDay();
+
+        $hasil = [];
+
+        foreach ($this->assignmentsFor($employee, $date) as $assignment) {
+            /** @var ?Shift $shift */
+            $shift = $assignment?->shift ?? $this->guessShift($employee, $date);
+
+            if ($shift === null) {
+                $hasil[] = ['assignment' => $assignment, 'shift' => null];
+
+                continue;
+            }
+
+            $window = WorkWindow::for($shift, $date, $assignment);
+            $logs = $this->logsIn($employee, $window);
+
+            [$checkIn, $checkOut] = $this->resolveCheckInOut($logs, $window->scheduledOut);
+
+            $hasil[] = [
+                'assignment' => $assignment,
+                'shift' => $shift,
+
+                // Shift hasil tebakan tidak pernah kebagian jam khusus, karena
+                // jam khusus menempel di baris roster yang justru tidak ada.
+                'ditebak' => $assignment?->shift === null,
+
+                'window' => $window,
+                'logs' => $logs,
+                'check_in' => $checkIn,
+                'check_out' => $checkOut,
+                'adjustments' => AttendanceAdjustment::query()
+                    ->effectiveFor($employee->id, $date, (int) $shift->id)
+                    ->get(),
+                'attendance' => Attendance::query()
+                    ->where('employee_id', $employee->id)
+                    ->where('work_date', $date)
+                    ->where('shift_key', (int) $shift->id)
+                    ->first(),
+            ];
+        }
+
+        return $hasil;
+    }
+
+    /**
      * Buang baris attendances lama milik employee+tanggal ini yang tidak ikut
      * kebuat lagi di hitungan barusan.
      *
