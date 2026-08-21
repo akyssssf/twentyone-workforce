@@ -179,18 +179,45 @@ class AttendanceComputer
      * Semua scan yang MUNGKIN milik satu hari kerja — termasuk yang nanti
      * dibuang jendela.
      *
-     * Batas atasnya ikut ambang pergantian hari di dashboard, bukan tengah
-     * malam: scan pulang shift malam jatuh di tanggal berikutnya dan tetap
-     * milik hari ini. Berhenti di jam itu juga menahan scan datang orang esok
-     * paginya supaya tidak ikut terdaftar sebagai "terbuang".
+     * Rentangnya HARI OPERASIONAL, bukan tanggal kalender: 06:00 hari itu
+     * sampai 06:00 besoknya (ATTENDANCE_DASHBOARD_CUTOVER_HOUR, konvensi yang
+     * sama dengan dashboard). Kedua batas harus ikut ambang yang sama — memakai
+     * tengah malam sebagai batas bawah sementara batas atasnya 06:00 membuat
+     * scan PULANG shift malam kemarin (jatuh sekitar 01:00) terhitung sebagai
+     * "scan pertama hari ini". Itu bukan kesalahan teoretis: pernah membuat
+     * seluruh karyawan terlapor bermasalah selama seminggu penuh.
      *
+     * Diperlebar mengikuti jendela shift hari itu kalau jendelanya keluar dari
+     * hari operasional — shift pagi dengan jam khusus 08:00 jendelanya sudah
+     * dibuka 04:00, dan orang yang datang jam segitu tetap harus kelihatan.
+     *
+     * @param  list<array<string, mixed>>  $jejak  hasil jejak(), untuk batas jendela
      * @return Collection<int, AttendanceLog>
      */
-    public function scanHarian(Employee $employee, Carbon $workDate): Collection
+    public function scanHarian(Employee $employee, Carbon $workDate, array $jejak = []): Collection
     {
         $timezone = config('attendance.timezone', 'Asia/Jakarta');
-        $mulai = $workDate->copy()->setTimezone($timezone)->startOfDay();
-        $selesai = $mulai->copy()->addDay()->addHours((int) config('attendance.dashboard_cutover_hour', 6));
+        $ambang = (int) config('attendance.dashboard_cutover_hour', 6);
+
+        $mulai = $workDate->copy()->setTimezone($timezone)->startOfDay()->addHours($ambang);
+        $selesai = $mulai->copy()->addDay();
+
+        foreach ($jejak as $baris) {
+            if (($baris['shift'] ?? null) === null) {
+                continue;
+            }
+
+            /** @var WorkWindow $window */
+            $window = $baris['window'];
+
+            if ($window->start->lessThan($mulai)) {
+                $mulai = $window->start->copy();
+            }
+
+            if ($window->end->greaterThan($selesai)) {
+                $selesai = $window->end->copy();
+            }
+        }
 
         return AttendanceLog::query()
             ->where('employee_id', $employee->id)

@@ -151,6 +151,58 @@ class PeriksaScanTerbuangTest extends TestCase
         $this->assertStringNotContainsString('Normal Saja', $keluaran);
     }
 
+    /**
+     * Regresi dari kejadian nyata: penyapu ini pernah melaporkan 57 rekap
+     * bermasalah dalam seminggu, dan SEMUANYA salah — yang dikira "scan datang
+     * pagi yang terbuang" ternyata scan PULANG shift malam hari sebelumnya,
+     * yang memang jatuh sekitar 01:00. Hari operasional baru berganti jam
+     * 06:00, jadi scan 01:00 itu milik tanggal kemarin, bukan hari ini.
+     *
+     * Diagnosis yang salah lebih berbahaya daripada tidak ada diagnosis: laporan
+     * itu nyaris dipakai untuk membetulkan roster satu minggu penuh yang
+     * sebenarnya sudah benar.
+     */
+    public function test_scan_pulang_shift_malam_kemarin_bukan_scan_pertama_hari_ini(): void
+    {
+        $orang = $this->karyawan('Pulang Dini Hari', '73');
+
+        $this->jadwalkan($orang, '2026-08-20');
+        $this->jadwalkan($orang, '2026-08-21');
+
+        // Shift malam 20 Agustus: datang 16:50, pulang 01:00 tanggal 21.
+        $this->scan($orang, '2026-08-20 16:50:00');
+        $this->scan($orang, '2026-08-21 01:00:37');
+
+        // Shift malam 21 Agustus: datang 16:45.
+        $this->scan($orang, '2026-08-21 16:45:00');
+
+        $this->assertStringContainsString('Tidak ada temuan', $this->periksa('2026-08-21'));
+    }
+
+    /** Datang lebih awal dari ambang hari operasional tetap harus terlihat. */
+    public function test_scan_sebelum_jam_enam_tetap_dihitung_kalau_masih_di_jendela(): void
+    {
+        $pagi = Shift::where('code', 'pagi')->firstOrFail();
+        $orang = $this->karyawan('Datang Subuh', '74');
+
+        $service = app(RosterService::class);
+        $service->assign(
+            $service->findOrCreate(2026, 8),
+            $orang,
+            Carbon::parse('2026-08-21', 'Asia/Jakarta'),
+            $pagi->id,
+        );
+
+        // Jendela shift pagi (master 09:00) dibuka 05:00, jadi 05:30 masih sah
+        // sebagai jam masuk walaupun hari operasional baru mulai 06:00.
+        $this->scan($orang, '2026-08-21 05:30:00');
+
+        $this->assertStringContainsString('Tidak ada temuan', $this->periksa('2026-08-21'));
+
+        Artisan::call('attendance:jelaskan', ['pin' => '74', 'tanggal' => '2026-08-21']);
+        $this->assertStringContainsString('05:30:00', Artisan::output());
+    }
+
     public function test_rentang_terbalik_ditolak(): void
     {
         $this->artisan('attendance:periksa --from=2026-08-21 --to=2026-08-20')->assertFailed();

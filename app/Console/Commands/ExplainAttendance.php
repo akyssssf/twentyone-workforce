@@ -139,7 +139,7 @@ class ExplainAttendance extends Command
     protected function baris(Employee $employee, Carbon $tanggal, Collection $jejak): void
     {
         $timezone = config('attendance.timezone', 'Asia/Jakarta');
-        $logs = $this->computer->scanHarian($employee, $tanggal);
+        $logs = $this->computer->scanHarian($employee, $tanggal, $jejak->all());
 
         if ($logs->isEmpty()) {
             $this->line('  (tidak ada scan sama sekali di rentang ini)');

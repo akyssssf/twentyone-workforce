@@ -109,7 +109,7 @@ class AuditDiscardedScans extends Command
             return null;
         }
 
-        $semua = $computer->scanHarian($orang, $tanggal);
+        $semua = $computer->scanHarian($orang, $tanggal, $jejak->all());
 
         if ($semua->isEmpty()) {
             return null;
