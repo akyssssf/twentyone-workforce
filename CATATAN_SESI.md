@@ -361,6 +361,35 @@ atasnya sudah memakai ambang 06:00 — dua batas yang tidak konsisten di satu
 fungsi yang sama. Laporan itu nyaris dipakai untuk membetulkan roster satu minggu
 penuh yang sebenarnya sudah benar. Sekarang dikunci tes (lihat jebakan nomor 9).
 
+### 4.16 Pendaftaran karyawan baru bisa sepenuhnya jarak jauh
+
+Dulu satu bagian selalu mengharuskan orang berdiri di depan mesin: pendaftaran
+biometrik. Sekarang tidak, karena mesinnya mendukung pendaftaran WAJAH lewat
+API — cukup minta swafoto.
+
+`employee:daftar-wajah <pin> <foto.jpg>` memakai endpoint `set_userinfo`.
+Tiga hal yang perlu diketahui sebelum menyentuhnya:
+
+1. **Template wajah itu base64 GANDA.** Foto JPEG di-base64, dibungkus JSON
+   `{"face":"<base64-jpeg>"}`, lalu SELURUH string JSON itu di-base64 sekali
+   lagi. Satu lapis terlewat = ditolak mesin. Ada di `FaceTemplate`, jangan
+   disusun ulang di tempat lain. Berlaku untuk Seri VIDA/VIVO; template tidak
+   bisa dipindah antar tipe mesin yang berbeda.
+2. **Foto wajib JPEG dan maksimal 100 KB**, close-up. Diperiksa dari byte
+   pembuka berkasnya, bukan dari akhiran namanya — PNG yang diganti nama jadi
+   `.jpg` akan terkirim mulus lalu gagal di mesin tanpa keterangan.
+3. **`set_userinfo` ASINKRON.** Respons `success: true` cuma berarti perintahnya
+   DITERIMA. Hasil sebenarnya datang belakangan ke webhook mesin dengan
+   `data.status` (1 sukses, 2 gagal), dicocokkan lewat `trans_id`. Perintahnya
+   menunggu callback itu; **tidak ada jawaban sengaja keluar dengan kode gagal**,
+   supaya hasil yang tidak diketahui tidak pernah terbaca beres.
+
+Yang masih harus dikerjakan lewat panel admin: **divisi**. `employee:add` dan
+`employee:edit` tidak punya opsi divisi (relasinya `employee_divisions` dengan
+penanda divisi utama), jadi setelah mendaftar, buka Karyawan → Detail dan set
+divisinya. Kalau dilewat, orangnya tidak terhitung mengisi kuota tenaga di
+validator roster.
+
 ## 5. Data & keputusan bisnis yang sudah diambil (bukan cuma kode)
 
 - **Roster Agustus** (mulai 15 Agustus) & **September penuh** sudah diisi
@@ -573,6 +602,8 @@ php artisan attendance:periksa --from=2026-08-15 --to=2026-08-21
 php artisan attendance:status
 
 # Karyawan
+php artisan employee:add --pin=21 --name="Nama" --shift="Shift Pagi" --joined=2026-08-22
+php artisan employee:daftar-wajah 21 /path/foto.jpg     # JPEG, maks 100 KB
 php artisan employee:list
 php artisan employee:edit <pin> --name="Nama Baru"
 ```
