@@ -29,11 +29,14 @@ class SetRosterShift extends Command
 {
     protected $signature = 'roster:set
                             {pin : PIN karyawan di mesin}
-                            {jadwal* : Pasangan tanggal=shift, mis. 2026-08-21=malam 2026-08-22=pagi 2026-08-23=libur}
+                            {jadwal* : Pasangan tanggal=shift, mis. 2026-08-21=malam 2026-08-23=libur. Tanggal boleh rentang: 2026-09-01..2026-09-30=pagi}
                             {--divisi= : Kode divisi (kasir, waiter, chef, barista, logistik). Kosong = ikut divisi utamanya}
                             {--recompute : Hitung ulang absensi tanggal-tanggal itu}';
 
     protected $description = 'Ubah jadwal shift seseorang pada satu atau beberapa tanggal';
+
+    /** Batas jumlah hari untuk satu rentang, penjaga terhadap salah ketik tahun. */
+    protected const MAX_HARI = 62;
 
     public function handle(RosterService $service): int
     {
@@ -69,7 +72,6 @@ class SetRosterShift extends Command
 
             [$tgl, $kodeShift] = explode('=', $pasangan, 2);
 
-            $tanggal = DateInput::parseOrFail(trim($tgl), 'tanggal');
             $kodeShift = strtolower(trim($kodeShift));
 
             // "libur"/"off"/"-" berarti tidak ada shift, bukan shift bernama itu.
@@ -84,7 +86,17 @@ class SetRosterShift extends Command
                 return self::FAILURE;
             }
 
-            $rencana[] = [$tanggal, $shift];
+            try {
+                $tanggalnya = $this->tanggalDari(trim($tgl));
+            } catch (\InvalidArgumentException $e) {
+                $this->error($e->getMessage());
+
+                return self::FAILURE;
+            }
+
+            foreach ($tanggalnya as $tanggal) {
+                $rencana[] = [$tanggal, $shift];
+            }
         }
 
         $this->line("Karyawan: {$employee->name} (PIN {$employee->pin_device})");
@@ -118,15 +130,64 @@ class SetRosterShift extends Command
             $this->newLine();
             $this->info('Menghitung ulang absensi...');
 
-            foreach ($rencana as [$tanggal, $shift]) {
-                Artisan::call('attendance:compute', [
-                    '--from' => $tanggal->toDateString(),
-                    '--to' => $tanggal->toDateString(),
-                ]);
-            }
+            // Sekali jalan dari tanggal paling awal sampai paling akhir, bukan
+            // satu panggilan per tanggal: sebulan penuh berarti 30 panggilan
+            // yang masing-masing menyapu seluruh karyawan. Tanggal di antaranya
+            // yang tidak diubah ikut terhitung ulang, dan itu tidak apa-apa —
+            // attendances memang tabel turunan yang boleh dibangun ulang.
+            $semua = array_map(fn (array $baris) => $baris[0], $rencana);
+
+            Artisan::call('attendance:compute', [
+                '--from' => min($semua)->toDateString(),
+                '--to' => max($semua)->toDateString(),
+            ]);
         }
 
         return $gagal > 0 ? self::FAILURE : self::SUCCESS;
+    }
+
+    /**
+     * Satu tanggal, atau rentang "2026-09-01..2026-09-30".
+     *
+     * Rentang ada karena ada posisi yang masuk hampir setiap hari (Logistik),
+     * dan menulis 30 pasangan tanggal=shift satu per satu adalah undangan untuk
+     * kelewat satu tanpa ada yang sadar — tepat jenis kesalahan yang baru
+     * ketahuan waktu orangnya terlanjur tercatat Alpha.
+     *
+     * @return list<Carbon>
+     */
+    protected function tanggalDari(string $teks): array
+    {
+        if (! str_contains($teks, '..')) {
+            return [DateInput::parseOrFail($teks, 'tanggal')];
+        }
+
+        [$dari, $sampai] = explode('..', $teks, 2);
+
+        $mulai = DateInput::parseOrFail(trim($dari), 'tanggal awal');
+        $akhir = DateInput::parseOrFail(trim($sampai), 'tanggal akhir');
+
+        if ($akhir->lessThan($mulai)) {
+            throw new \InvalidArgumentException("Rentang terbalik: \"{$teks}\".");
+        }
+
+        $hari = (int) $mulai->diffInDays($akhir) + 1;
+
+        // Batas waras. Salah ketik tahun ("2027-09-30") tanpa ini akan membuat
+        // ribuan baris roster tanpa satu pun peringatan.
+        if ($hari > self::MAX_HARI) {
+            throw new \InvalidArgumentException(
+                "Rentang {$hari} hari melebihi batas ".self::MAX_HARI.' hari. Pecah jadi beberapa perintah kalau memang disengaja.'
+            );
+        }
+
+        $tanggal = [];
+
+        for ($t = $mulai->copy(); $t->lessThanOrEqualTo($akhir); $t->addDay()) {
+            $tanggal[] = $t->copy();
+        }
+
+        return $tanggal;
     }
 
     protected function jadwalSaatIni(Employee $employee, Carbon $tanggal): string

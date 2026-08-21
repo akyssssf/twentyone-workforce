@@ -143,6 +143,53 @@ class AdminShortcutCommandTest extends TestCase
         $this->assertNull($baris[2]->shift_id);
     }
 
+    /**
+     * Rentang tanggal, untuk posisi yang masuk hampir tiap hari (Logistik).
+     * Menulis 30 pasangan satu per satu adalah undangan untuk kelewat satu.
+     */
+    public function test_roster_set_menerima_rentang_tanggal(): void
+    {
+        $this->artisan('roster:set 77 2026-09-01..2026-09-30=pagi')->assertSuccessful();
+
+        $baris = RosterAssignment::where('employee_id', $this->karyawan->id)
+            ->whereBetween('work_date', ['2026-09-01 00:00:00', '2026-09-30 23:59:59'])
+            ->get();
+
+        $this->assertCount(30, $baris);
+        $this->assertTrue($baris->every(fn ($b) => $b->shift_id === $this->pagi->id));
+    }
+
+    /** Rentang dan tanggal tunggal boleh dicampur dalam satu perintah. */
+    public function test_rentang_bisa_dicampur_dengan_tanggal_tunggal(): void
+    {
+        $this->artisan('roster:set 77 2026-09-01..2026-09-05=pagi 2026-09-03=libur')
+            ->assertSuccessful();
+
+        $tanggal = fn (string $t) => RosterAssignment::where('employee_id', $this->karyawan->id)
+            ->whereDate('work_date', Carbon::parse($t))->first();
+
+        // Yang belakangan menang: 3 September jadi libur walaupun rentangnya
+        // sudah menjadwalkannya pagi.
+        $this->assertSame($this->pagi->id, $tanggal('2026-09-02')->shift_id);
+        $this->assertNull($tanggal('2026-09-03')->shift_id);
+        $this->assertSame($this->pagi->id, $tanggal('2026-09-04')->shift_id);
+    }
+
+    /** Salah ketik tahun tidak boleh diam-diam membuat ribuan baris. */
+    public function test_rentang_kepanjangan_ditolak(): void
+    {
+        $this->artisan('roster:set 77 2026-09-01..2027-09-30=pagi')->assertFailed();
+
+        $this->assertSame(0, RosterAssignment::where('employee_id', $this->karyawan->id)->count());
+    }
+
+    public function test_rentang_terbalik_ditolak(): void
+    {
+        $this->artisan('roster:set 77 2026-09-30..2026-09-01=pagi')->assertFailed();
+
+        $this->assertSame(0, RosterAssignment::where('employee_id', $this->karyawan->id)->count());
+    }
+
     /** Mengubah shift harus MEMINDAHKAN, bukan menambah baris kedua. */
     public function test_roster_set_dua_kali_tetap_satu_baris(): void
     {
