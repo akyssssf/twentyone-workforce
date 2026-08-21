@@ -7,6 +7,7 @@ use App\Models\DeviceCallback;
 use App\Models\Employee;
 use App\Models\Shift;
 use App\Services\Fingerspot\FaceTemplate;
+use App\Services\Fingerspot\FingerspotClient;
 use App\Services\Fingerspot\FingerspotException;
 use Database\Seeders\MasterDataSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -77,26 +78,35 @@ class DaftarWajahTest extends TestCase
         return $path;
     }
 
-    protected function transId(): string
+    /**
+     * Tiruan Fingerspot menerima perintah.
+     *
+     * $status yang diisi berarti mesin ikut menjawab: callback-nya dibuat dari
+     * trans_id yang BENAR-BENAR dikirim, bukan dari nilai yang ditebak tes.
+     * Menebaknya pernah menyembunyikan bug sungguhan — mesin memangkas trans_id
+     * kegedean, dan tes yang memakai nilai tebakannya sendiri tidak akan pernah
+     * melihat itu.
+     */
+    protected function fakeTerima(?string $status = null): void
     {
-        return (string) Carbon::now()->getTimestampMs();
+        Http::fake(['*/set_userinfo' => function ($request) use ($status) {
+            $transId = (string) ($request->data()['trans_id'] ?? '');
+
+            if ($status !== null) {
+                $this->jawabanMesin($transId, $status);
+            }
+
+            return Http::response(['success' => true, 'trans_id' => $transId]);
+        }]);
     }
 
-    protected function fakeTerima(): void
-    {
-        Http::fake(['*/set_userinfo' => Http::response([
-            'success' => true,
-            'trans_id' => $this->transId(),
-        ])]);
-    }
-
-    protected function jawabanMesin(string $status): void
+    protected function jawabanMesin(string $transId, string $status): void
     {
         DeviceCallback::create([
             'cloud_id' => 'XXXXX',
             'type' => 'set_userinfo',
-            'trans_id' => $this->transId(),
-            'payload' => ['type' => 'set_userinfo', 'cloud_id' => 'XXXXX', 'trans_id' => $this->transId(), 'data' => ['status' => $status]],
+            'trans_id' => $transId,
+            'payload' => ['type' => 'set_userinfo', 'cloud_id' => 'XXXXX', 'trans_id' => $transId, 'data' => ['status' => $status]],
             'parsed' => false,
             'received_at' => Carbon::now(),
         ]);
@@ -104,8 +114,7 @@ class DaftarWajahTest extends TestCase
 
     public function test_mesin_mengonfirmasi_wajah_terdaftar(): void
     {
-        $this->fakeTerima();
-        $this->jawabanMesin('1');
+        $this->fakeTerima('1');
 
         $this->artisan("employee:daftar-wajah 21 {$this->foto}")
             ->assertSuccessful();
@@ -114,11 +123,33 @@ class DaftarWajahTest extends TestCase
     /** Status 2 = ditolak mesin. Tidak boleh terbaca sebagai berhasil. */
     public function test_penolakan_mesin_dilaporkan_gagal(): void
     {
-        $this->fakeTerima();
-        $this->jawabanMesin('2');
+        $this->fakeTerima('2');
 
         $this->artisan("employee:daftar-wajah 21 {$this->foto}")
             ->assertFailed();
+    }
+
+    /**
+     * Regresi dari kejadian nyata: trans_id 1787319375917 (timestamp milidetik)
+     * dipantulkan mesin sebagai 2147483647 — dipangkas ke batas atas int32.
+     * Akibatnya callback-nya tidak pernah cocok, dan pendaftaran yang SEBENARNYA
+     * BERHASIL terlaporkan sebagai "mesin tidak menjawab". Semua nilai kegedean
+     * dipangkas ke angka yang sama, jadi dua perintah pun jadi tak terbedakan.
+     */
+    public function test_trans_id_muat_di_integer_32_bit(): void
+    {
+        $this->fakeTerima('1');
+
+        $this->artisan("employee:daftar-wajah 21 {$this->foto}")->assertSuccessful();
+
+        Http::assertSent(function ($request) {
+            $transId = $request->data()['trans_id'] ?? null;
+
+            return $transId !== null
+                && ctype_digit((string) $transId)
+                && (int) $transId >= 1
+                && (int) $transId <= FingerspotClient::MAX_TRANS_ID;
+        });
     }
 
     /**

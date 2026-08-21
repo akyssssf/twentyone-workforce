@@ -14,6 +14,9 @@ use Illuminate\Support\Facades\Http;
  */
 class FingerspotClient
 {
+    /** Batas atas int32 bertanda — lihat transId(). */
+    public const MAX_TRANS_ID = 2147483647;
+
     public function __construct(
         protected ?string $token = null,
         protected ?string $cloudId = null,
@@ -209,13 +212,24 @@ class FingerspotClient
     }
 
     /**
-     * trans_id wajib ada dan dipilih pemanggil. Untuk endpoint sinkron nilainya
-     * tidak dipakai mengaitkan apa pun, tapi tetap harus unik supaya jejaknya
-     * bisa ditelusuri di sisi Fingerspot.
+     * trans_id wajib ada dan dipilih pemanggil, dan HARUS muat di integer 32-bit
+     * bertanda.
+     *
+     * Ditemukan dari kejadian nyata, bukan dari dokumentasi: nilai yang dikirim
+     * 1787319375917 (timestamp milidetik) dipantulkan balik mesin sebagai
+     * 2147483647 — persis 2^31-1. Nilainya dipangkas ke batas atas int32, jadi
+     * callback-nya tidak pernah cocok dengan yang ditunggu, dan pendaftaran yang
+     * SEBENARNYA BERHASIL terlaporkan sebagai "mesin tidak menjawab". Lebih
+     * buruk lagi: semua nilai kegedean dipangkas ke angka yang SAMA, jadi dua
+     * perintah berbeda jadi tidak bisa dibedakan lagi.
+     *
+     * Angka acak, bukan timestamp detik: dua perintah di detik yang sama akan
+     * bertabrakan, dan tabrakan trans_id berarti jawaban perintah satu terbaca
+     * sebagai jawaban perintah lain.
      */
     protected function transId(): string
     {
-        return (string) Carbon::now()->getTimestampMs();
+        return (string) random_int(1, self::MAX_TRANS_ID);
     }
 
     protected function timezone(): string

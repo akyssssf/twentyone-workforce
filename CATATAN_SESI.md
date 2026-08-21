@@ -567,6 +567,19 @@ menganggap sebuah perintah selesai, **lihat outputnya**.
    1j 24m, padahal shift yang dia jalani mulai 13:30. Telat yang janggal tetap
    harus dicurigai sebagai roster salah, bukan cuma dimaafkan.
 
+11. **`trans_id` ke Fingerspot HARUS muat di integer 32-bit bertanda
+   (maks 2147483647).** Ditemukan dari kejadian nyata, tidak ada di
+   dokumentasi: nilai 1787319375917 (timestamp milidetik) dipantulkan mesin
+   balik sebagai **2147483647** — dipangkas ke batas atas int32. Akibatnya
+   callback-nya tidak pernah cocok dengan yang ditunggu, dan pendaftaran
+   wajah yang **sebenarnya BERHASIL** terlaporkan sebagai "mesin tidak
+   menjawab". Semua nilai kegedean dipangkas ke angka yang SAMA, jadi dua
+   perintah berbeda pun jadi tidak bisa dibedakan lagi. Sekarang `transId()`
+   memakai `random_int(1, 2147483647)` — acak, bukan timestamp detik, supaya
+   dua perintah di detik yang sama tidak bertabrakan. Contoh di dokumentasi
+   resmi memakai `"trans_id": "1"`, dan itu petunjuk yang baru masuk akal
+   setelah tahu batasnya.
+
 ## 8. Perintah yang sering dipakai (jalankan di server, folder live)
 
 Semua ini artisan command — **jangan lagi pakai skrip PHP tempelan lewat
@@ -604,6 +617,11 @@ php artisan attendance:status
 # Karyawan
 php artisan employee:add --pin=21 --name="Nama" --shift="Shift Pagi" --joined=2026-08-22
 php artisan employee:daftar-wajah 21 /path/foto.jpg     # JPEG, maks 100 KB
+
+# Jawaban asinkron dari mesin (set_userinfo dll). Tanpa argumen = 10 terakhir,
+# sekalian memastikan webhook-nya hidup.
+php artisan fingerspot:callback <trans_id>
+php artisan fingerspot:callback
 php artisan employee:list
 php artisan employee:edit <pin> --name="Nama Baru"
 ```
