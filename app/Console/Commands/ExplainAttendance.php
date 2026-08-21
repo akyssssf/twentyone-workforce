@@ -2,7 +2,6 @@
 
 namespace App\Console\Commands;
 
-use App\Models\AttendanceLog;
 use App\Models\Employee;
 use App\Services\Attendance\AttendanceComputer;
 use App\Services\Attendance\WorkWindow;
@@ -34,8 +33,12 @@ class ExplainAttendance extends Command
 
     protected $description = 'Jelaskan asal-usul rekap absensi seseorang pada satu tanggal';
 
+    protected AttendanceComputer $computer;
+
     public function handle(AttendanceComputer $computer): int
     {
+        $this->computer = $computer;
+
         $employee = Employee::where('pin_device', (string) $this->argument('pin'))->first();
 
         if ($employee === null) {
@@ -120,27 +123,23 @@ class ExplainAttendance extends Command
     /** Semua scan hari itu, termasuk yang dibuang. Ini inti perintahnya. */
     protected function scan(Employee $employee, Carbon $tanggal, Collection $jejak): void
     {
+        $strategi = (string) config('attendance.check_in_out_strategy');
+
         $this->newLine();
         $this->line('<comment>SEMUA SCAN</comment>');
+        $this->line(sprintf('  <fg=gray>strategi jam masuk/pulang: %s — %s</>',
+            $strategi,
+            $strategi === 'status_scan'
+                ? 'ikut tombol fungsi mesin, jadi jam masuk BELUM TENTU scan paling awal'
+                : 'scan paling awal di jendela jadi jam masuk'));
+
         $this->baris($employee, $tanggal, $jejak);
     }
 
     protected function baris(Employee $employee, Carbon $tanggal, Collection $jejak): void
     {
         $timezone = config('attendance.timezone', 'Asia/Jakarta');
-        $mulai = $tanggal->copy()->setTimezone($timezone)->startOfDay();
-
-        // Batas atas ikut ambang pergantian hari di dashboard, bukan tengah
-        // malam: scan pulang shift malam jatuh di tanggal berikutnya dan tetap
-        // milik hari ini. Berhenti di jam itu juga menahan scan datang orang
-        // esok paginya supaya tidak ikut terdaftar sebagai "diabaikan".
-        $selesai = $mulai->copy()->addDay()->addHours((int) config('attendance.dashboard_cutover_hour', 6));
-
-        $logs = AttendanceLog::query()
-            ->where('employee_id', $employee->id)
-            ->whereBetween('scanned_at', [$mulai, $selesai])
-            ->orderBy('scanned_at')
-            ->get();
+        $logs = $this->computer->scanHarian($employee, $tanggal);
 
         if ($logs->isEmpty()) {
             $this->line('  (tidak ada scan sama sekali di rentang ini)');
