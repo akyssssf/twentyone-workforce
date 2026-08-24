@@ -80,8 +80,69 @@
             </p>
             @break
 
-        {{-- ------------------------------------------------- tukar shift --}}
+        {{-- --------------------------------------- tukar shift / libur --}}
         @case('swap')
+            <div class="rounded-xl border border-slate-200 p-4">
+                <p class="text-sm font-semibold">Mau menukar apa?</p>
+                <label class="mt-2 flex items-start gap-2 text-sm">
+                    <input type="radio" name="mode" value="shift" class="mt-1" checked
+                           onchange="pilihModeTukar()">
+                    <span>
+                        <span class="font-medium">Tukar shift</span> —
+                        rekan mengambil alih shift saya di satu tanggal.
+                    </span>
+                </label>
+                <label class="mt-2 flex items-start gap-2 text-sm">
+                    <input type="radio" name="mode" value="libur" class="mt-1"
+                           onchange="pilihModeTukar()">
+                    <span>
+                        <span class="font-medium">Tukar libur</span> —
+                        saya dan rekan bertukar hari libur. Dua tanggal sekaligus:
+                        saya masuk di hari libur saya, dia libur; dan sebaliknya.
+                    </span>
+                </label>
+            </div>
+
+            <fieldset id="tukar-libur" class="hidden space-y-4" disabled>
+                <div>
+                    <label class="block text-sm font-medium">Libur saya yang ingin dilepas</label>
+                    <select name="requester_assignment_id" class="kolom mt-1">
+                        @forelse ($liburSaya as $l)
+                            <option value="{{ $l->id }}">
+                                {{ $l->work_date->translatedFormat('D, d M Y') }}
+                            </option>
+                        @empty
+                            <option value="">Tidak ada hari libur mendatang di jadwal Anda</option>
+                        @endforelse
+                    </select>
+                </div>
+
+                <div class="rounded-xl border border-amber-200 bg-amber-50 p-4">
+                    <label class="block text-sm font-semibold text-amber-900">
+                        Libur rekan yang saya inginkan <span class="text-red-500">*</span>
+                    </label>
+                    <p class="mb-2 mt-0.5 text-xs text-amber-800">
+                        Rekannya ikut dari pilihan ini. Dia harus menyatakan bersedia
+                        lebih dulu, lalu manajer yang mengesahkan.
+                    </p>
+                    <select name="partner_assignment_id" class="kolom">
+                        <option value="">— pilih libur rekan —</option>
+                        @foreach ($liburRekan as $l)
+                            <option value="{{ $l->id }}">
+                                {{ $l->employee?->name }} — {{ $l->work_date->translatedFormat('D, d M Y') }}
+                            </option>
+                        @endforeach
+                    </select>
+                </div>
+
+                <p class="text-xs text-slate-500">
+                    Anda harus terjadwal kerja di tanggal libur rekan, dan dia harus
+                    terjadwal kerja di tanggal libur Anda. Kalau salah satunya tidak,
+                    pengajuannya ditolak karena tukarnya jadi tidak impas.
+                </p>
+            </fieldset>
+
+            <fieldset id="tukar-shift" class="space-y-4">
             <div>
                 <label class="block text-sm font-medium">Jadwal saya yang ingin ditukar</label>
                 <select name="requester_assignment_id" required class="kolom mt-1">
@@ -102,7 +163,7 @@
                 <p class="mb-2 mt-0.5 text-xs text-amber-800">
                     Dia sekaligus jadi pengganti Anda, dan harus menyatakan bersedia lebih dulu.
                 </p>
-                <select name="partner_employee_id" required class="kolom">
+                <select name="partner_employee_id" class="kolom">
                     <option value="">— pilih rekan —</option>
                     @foreach ($rekan as $r)
                         <option value="{{ $r->id }}" @selected(old('partner_employee_id') == $r->id)>
@@ -111,6 +172,25 @@
                     @endforeach
                 </select>
             </div>
+            </fieldset>
+
+            {{--
+                Bagian yang tidak dipilih di-DISABLE, bukan cuma disembunyikan:
+                field yang disabled tidak ikut terkirim sama sekali, jadi tidak
+                mungkin tanggal dari mode yang salah ikut terbawa.
+            --}}
+            <script>
+                function pilihModeTukar() {
+                    const libur = document.querySelector('input[name="mode"][value="libur"]').checked;
+
+                    document.getElementById('tukar-libur').classList.toggle('hidden', !libur);
+                    document.getElementById('tukar-libur').disabled = !libur;
+                    document.getElementById('tukar-shift').classList.toggle('hidden', libur);
+                    document.getElementById('tukar-shift').disabled = libur;
+                }
+
+                pilihModeTukar();
+            </script>
             @break
 
         {{-- ----------------------------------------------------- koreksi --}}

@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Karyawan;
 
+use App\Enums\AssignmentStatus;
 use App\Enums\RequestType;
 use App\Http\Controllers\Controller;
 use App\Models\Attendance;
@@ -12,7 +13,6 @@ use App\Models\RosterAssignment;
 use App\Services\Requests\OvertimeCodeService;
 use App\Services\Requests\RequestService;
 use Illuminate\Http\Request;
-use Illuminate\Support\Carbon;
 use RuntimeException;
 
 /**
@@ -75,6 +75,31 @@ class EmployeeRequestController extends Controller
                 ->limit(60)
                 ->get(),
 
+            // Hari libur saya yang masih di depan — kandidat untuk ditukar.
+            // Cuti sengaja tidak ikut: itu keputusan yang sudah disahkan, bukan
+            // libur biasa yang boleh dipindah-pindah.
+            'liburSaya' => RosterAssignment::query()
+                ->where('employee_id', $employee->id)
+                ->whereDate('work_date', '>=', today())
+                ->whereNull('shift_id')
+                ->where('status', AssignmentStatus::Off->value)
+                ->orderBy('work_date')
+                ->limit(60)
+                ->get(),
+
+            // Hari libur rekan-rekan. Satu daftar berisi orang DAN tanggalnya
+            // sekaligus, supaya pengaju tidak bisa memilih kombinasi orang dan
+            // tanggal yang tidak nyambung.
+            'liburRekan' => RosterAssignment::query()
+                ->with('employee')
+                ->whereHas('employee', fn ($q) => $q->tracked()->where('id', '!=', $employee->id))
+                ->whereDate('work_date', '>=', today())
+                ->whereNull('shift_id')
+                ->where('status', AssignmentStatus::Off->value)
+                ->orderBy('work_date')
+                ->limit(200)
+                ->get(),
+
             // Kandidat pengganti. Hanya yang ikut diabsen: admin tidak bisa
             // menutup shift karena memang tidak dijadwalkan.
             'rekan' => Employee::query()
@@ -117,12 +142,22 @@ class EmployeeRequestController extends Controller
                 // adalah penunjukan admin + kode aktivasi.
                 RequestType::Overtime => abort(404),
 
-                RequestType::Swap => $this->service->submitSwap($employee, $request->validate([
-                    'requester_assignment_id' => ['required', 'exists:roster_assignments,id'],
-                    'partner_employee_id' => ['required', 'exists:employees,id'],
-                    'partner_assignment_id' => ['nullable', 'exists:roster_assignments,id'],
-                    'reason' => ['required', 'string', 'min:5'],
-                ])),
+                // Satu tipe pengajuan, dua bentuk: tukar shift satu tanggal,
+                // atau tukar hari libur yang menyentuh dua tanggal sekaligus.
+                // Rekan tidak diminta terpisah pada tukar libur — orangnya ikut
+                // dari baris libur yang dipilih.
+                RequestType::Swap => $request->input('mode') === 'libur'
+                    ? $this->service->submitSwapOff($employee, $request->validate([
+                        'requester_assignment_id' => ['required', 'exists:roster_assignments,id'],
+                        'partner_assignment_id' => ['required', 'exists:roster_assignments,id'],
+                        'reason' => ['required', 'string', 'min:5'],
+                    ]))
+                    : $this->service->submitSwap($employee, $request->validate([
+                        'requester_assignment_id' => ['required', 'exists:roster_assignments,id'],
+                        'partner_employee_id' => ['required', 'exists:employees,id'],
+                        'partner_assignment_id' => ['nullable', 'exists:roster_assignments,id'],
+                        'reason' => ['required', 'string', 'min:5'],
+                    ])),
 
                 RequestType::Correction => $this->service->submitCorrection($employee, $request->validate([
                     'work_date' => ['required', 'date'],
@@ -162,6 +197,10 @@ class EmployeeRequestController extends Controller
                 'employee', 'decider', 'attachments',
                 'leave.leaveType', 'overtime', 'swap.partner', 'substitute',
                 'swap.requesterAssignment.shift', 'swap.partnerAssignment.shift',
+                // Pasangan kedua hanya terisi pada tukar libur, tapi tetap ikut
+                // dimuat: tampilannya menyebut kedua tanggal, dan tanpa ini
+                // halaman persetujuan menembak query per baris.
+                'swap.requesterAssignment2.shift', 'swap.partnerAssignment2.shift',
                 'correction',
             ]),
             'milikSaya' => $milikSaya,
@@ -188,7 +227,7 @@ class EmployeeRequestController extends Controller
         }
 
         return back()->with('status',
-            'Lembur ' . $record->work_date->translatedFormat('d M Y') . ' aktif. Selamat bekerja.');
+            'Lembur '.$record->work_date->translatedFormat('d M Y').' aktif. Selamat bekerja.');
     }
 
     public function cancel(PengajuanModel $request, Request $httpRequest)

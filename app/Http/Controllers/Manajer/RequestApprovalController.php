@@ -3,7 +3,6 @@
 namespace App\Http\Controllers\Manajer;
 
 use App\Enums\OvertimeOccasion;
-use App\Enums\RequestStatus;
 use App\Http\Controllers\Controller;
 use App\Models\Employee;
 use App\Models\OvertimeRecord;
@@ -54,6 +53,10 @@ class RequestApprovalController extends Controller
                 'employee', 'substitute', 'decider', 'attachments',
                 'leave.leaveType', 'overtime', 'swap.partner',
                 'swap.requesterAssignment.shift', 'swap.partnerAssignment.shift',
+                // Pasangan kedua hanya terisi pada tukar libur, tapi tetap ikut
+                // dimuat: tampilannya menyebut kedua tanggal, dan tanpa ini
+                // halaman persetujuan menembak query per baris.
+                'swap.requesterAssignment2.shift', 'swap.partnerAssignment2.shift',
                 'correction',
             ]),
         ]);
@@ -197,7 +200,7 @@ class RequestApprovalController extends Controller
 
         return back()->with('status',
             "{$dibuat} penugasan lembur dibuat dan disetujui. "
-            . 'Bagikan kode masing-masing ke orangnya — tanpa kode, lemburnya tidak bisa diaktifkan.');
+            .'Bagikan kode masing-masing ke orangnya — tanpa kode, lemburnya tidak bisa diaktifkan.');
     }
 
     /**
@@ -226,7 +229,7 @@ class RequestApprovalController extends Controller
         if (! $record->isActivated() && $data['payable_minutes'] > 0 && blank($data['note'])) {
             return back()->withErrors([
                 'lembur' => "{$record->employee?->name} belum mengaktifkan lembur ini dengan kodenya. "
-                    . 'Isi catatan kalau tetap mau disahkan.',
+                    .'Isi catatan kalau tetap mau disahkan.',
             ]);
         }
 

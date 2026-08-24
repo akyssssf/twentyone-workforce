@@ -13,10 +13,13 @@ class ShiftSwapRequest extends Model
 
     public $incrementing = false;
 
+    /** Tukar hari libur antara dua orang, bukan tukar shift satu tanggal. */
+    public const KIND_LIBUR = 'libur';
+
     protected $fillable = [
-        'request_id', 'requester_assignment_id', 'partner_employee_id',
-        'partner_assignment_id', 'partner_accepted_at', 'partner_rejected_at',
-        'partner_note', 'reason',
+        'request_id', 'kind', 'requester_assignment_id', 'partner_employee_id',
+        'partner_assignment_id', 'requester_assignment_2_id', 'partner_assignment_2_id',
+        'partner_accepted_at', 'partner_rejected_at', 'partner_note', 'reason',
     ];
 
     protected function casts(): array
@@ -45,5 +48,21 @@ class ShiftSwapRequest extends Model
     public function partner(): BelongsTo
     {
         return $this->belongsTo(Employee::class, 'partner_employee_id');
+    }
+
+    /** Pasangan baris kedua — hanya terisi pada tukar libur. */
+    public function requesterAssignment2(): BelongsTo
+    {
+        return $this->belongsTo(RosterAssignment::class, 'requester_assignment_2_id');
+    }
+
+    public function partnerAssignment2(): BelongsTo
+    {
+        return $this->belongsTo(RosterAssignment::class, 'partner_assignment_2_id');
+    }
+
+    public function isTukarLibur(): bool
+    {
+        return $this->kind === self::KIND_LIBUR;
     }
 }

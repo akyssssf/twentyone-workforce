@@ -390,6 +390,41 @@ penanda divisi utama), jadi setelah mendaftar, buka Karyawan → Detail dan set
 divisinya. Kalau dilewat, orangnya tidak terhitung mengisi kuota tenaga di
 validator roster.
 
+### 4.17 Tukar libur: dua orang bertukar hari libur
+
+Ditumpangkan ke `shift_swap_requests` yang sudah ada (kolom `kind`, plus
+pasangan baris kedua), **bukan tabel baru** — karena tukar libur secara mekanis
+adalah DUA kali tukar shift: isi baris kedua orang ditukar di tanggal libur
+pengaju, lalu ditukar lagi di tanggal libur rekannya. Mesin penukarnya sudah
+menyelesaikan bagian tersulitnya (menukar ISI baris, bukan kepemilikannya,
+karena SQLite tidak menunda pengecekan constraint unik — lihat jebakan 2), dan
+tabel kedua berarti menyalin pelajaran itu ke tempat yang akan menyimpang.
+
+Alurnya lewat Pengajuan seperti tukar shift: pengaju memilih **hari liburnya
+sendiri** dan **hari libur rekan yang dia inginkan** — rekannya ikut dari
+pilihan kedua, tidak dipilih terpisah, supaya tidak mungkin terkirim kombinasi
+orang dan tanggal yang tidak nyambung. Lalu rekan menyatakan bersedia, baru
+manajer mengesahkan.
+
+Ditolak kalau: rekan tidak terjadwal kerja di tanggal libur pengaju (atau
+sebaliknya) — tukarnya jadi tidak impas, satu orang kehilangan libur tanpa ada
+yang menggantikan; yang dipilih ternyata hari kerja atau **cuti** (cuti sudah
+disahkan, tidak boleh dipindah lewat jalur ini); tanggalnya sudah lewat; atau
+kedua liburnya jatuh di tanggal yang sama.
+
+**Dua jebakan yang ketahuan saat mengerjakannya, keduanya sudah dikunci tes:**
+
+1. **Status harus ikut ditukar, bukan cuma `shift_id`.** Baris libur yang
+   menerima shift tetap berstatus `Off` kalau statusnya tidak disesuaikan, dan
+   `AttendanceComputer` membaca STATUS — bukan `shift_id` — untuk memutuskan
+   hari itu hari kerja atau bukan. Akibatnya orang yang benar-benar masuk tetap
+   tercatat Libur, tanpa error apa pun.
+2. **Semua nilai harus dibaca SEBELUM update pertama.** `$model->update()`
+   mengubah modelnya di tempat, jadi membaca `$mine->shift_id` setelah `$mine`
+   di-update mengembalikan nilai BARU — dan baris kedua ikut menerima shift
+   yang sama, bukan shift lawannya. Gejalanya cuma "satu orang tidak jadi
+   libur", tanpa error.
+
 ## 5. Data & keputusan bisnis yang sudah diambil (bukan cuma kode)
 
 - **Roster Agustus** (mulai 15 Agustus) & **September penuh** sudah diisi

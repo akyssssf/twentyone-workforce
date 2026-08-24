@@ -44,8 +44,26 @@
                     @break
 
                 @case('swap')
-                    <div class="flex px-5 py-3"><dt class="w-40 text-slate-500">Jadwal pengaju</dt>
-                        <dd>{{ $d?->requesterAssignment?->work_date?->translatedFormat('d M Y') }} — {{ $d?->requesterAssignment?->shift?->name }}</dd></div>
+                    @if ($d?->isTukarLibur())
+                        {{--
+                            Tukar libur menyentuh DUA tanggal. Menampilkannya
+                            seperti tukar shift biasa membuat yang menyetujui
+                            tidak tahu ada tanggal kedua yang ikut berubah.
+                        --}}
+                        <div class="flex px-5 py-3"><dt class="w-40 shrink-0 text-slate-500">Bentuk</dt>
+                            <dd class="font-medium">Tukar hari libur</dd></div>
+                        <div class="flex px-5 py-3"><dt class="w-40 shrink-0 text-slate-500">Libur pengaju</dt>
+                            <dd>{{ $d?->requesterAssignment?->work_date?->translatedFormat('D, d M Y') }} —
+                                jadi masuk {{ $d?->partnerAssignment?->shift?->name }},
+                                dan {{ $d?->partner?->name }} yang libur</dd></div>
+                        <div class="flex px-5 py-3"><dt class="w-40 shrink-0 text-slate-500">Libur rekan</dt>
+                            <dd>{{ $d?->partnerAssignment2?->work_date?->translatedFormat('D, d M Y') }} —
+                                {{ $d?->partner?->name }} jadi masuk {{ $d?->requesterAssignment2?->shift?->name }},
+                                dan pengaju yang libur</dd></div>
+                    @else
+                        <div class="flex px-5 py-3"><dt class="w-40 text-slate-500">Jadwal pengaju</dt>
+                            <dd>{{ $d?->requesterAssignment?->work_date?->translatedFormat('d M Y') }} — {{ $d?->requesterAssignment?->shift?->name }}</dd></div>
+                    @endif
                     <div class="flex px-5 py-3"><dt class="w-40 text-slate-500">Rekan</dt><dd class="font-medium">{{ $d?->partner?->name }}</dd></div>
                     <div class="flex px-5 py-3"><dt class="w-40 text-slate-500">Jawaban rekan</dt>
                         <dd>{{ $d?->partner_accepted_at ? 'Menerima ' . $d->partner_accepted_at->translatedFormat('d M H:i') : ($d?->partner_rejected_at ? 'Menolak' : 'Belum menjawab') }}</dd></div>

@@ -2,19 +2,18 @@
 
 namespace App\Services\Requests;
 
-use App\Enums\AttendanceStatus;
+use App\Enums\AssignmentStatus;
 use App\Enums\OvertimeOccasion;
 use App\Enums\RequestStatus;
 use App\Enums\RequestType;
 use App\Models\AttendanceAdjustment;
 use App\Models\Branch;
 use App\Models\Employee;
-use App\Models\LeaveBalance;
-use App\Models\LeaveLedger;
 use App\Models\OvertimeRecord;
 use App\Models\OvertimeRequest;
 use App\Models\Request;
 use App\Models\RosterAssignment;
+use App\Models\ShiftSwapRequest;
 use App\Models\User;
 use App\Services\Attendance\OvertimeResolver;
 use App\Services\Audit\AuditLogger;
@@ -99,7 +98,7 @@ class RequestService
             $ringkas,
             route('karyawan.pengajuan.show', $request),
             whatsapp: implode("\n", [
-                '[' . config('app.name') . '] Anda diminta jadi pengganti',
+                '['.config('app.name').'] Anda diminta jadi pengganti',
                 '',
                 $ringkas,
                 '',
@@ -182,7 +181,7 @@ class RequestService
         if (! $this->overtimeResolver->bolehLembur($shift)) {
             throw new RuntimeException(
                 "{$employee->name} kebagian {$shift->name} yang berakhir setelah tengah malam. "
-                . 'Setelah itu kafe tutup, jadi tidak ada shift yang bisa disambung.'
+                .'Setelah itu kafe tutup, jadi tidak ada shift yang bisa disambung.'
             );
         }
 
@@ -314,13 +313,130 @@ class RequestService
                     $partner->user,
                     'Permintaan tukar shift',
                     "{$employee->name} ingin menukar shift tanggal "
-                        . $assignment->work_date->translatedFormat('d M Y'),
+                        .$assignment->work_date->translatedFormat('d M Y'),
                     route('karyawan.pengajuan.show', $request),
                 );
             }
 
             return $request;
         });
+    }
+
+    /**
+     * Tukar hari libur antara dua orang.
+     *
+     * Yang dipilih pengaju cuma DUA hal: hari liburnya sendiri yang mau
+     * dilepas, dan hari libur rekan yang dia inginkan. Rekannya tidak dipilih
+     * terpisah — orangnya ikut dari baris libur yang dipilih, sehingga tidak
+     * mungkin terkirim kombinasi orang dan tanggal yang tidak nyambung.
+     *
+     * Secara mekanis ini dua kali tukar shift: di tanggal libur pengaju, isi
+     * barisnya ditukar dengan baris kerja rekan; di tanggal libur rekan,
+     * sebaliknya. Karena itu keempat barisnya harus sudah ada — kalau roster
+     * salah satu tanggal belum diisi, tidak ada yang bisa ditukar dan lebih
+     * baik ditolak sekarang daripada menghasilkan setengah tukar.
+     */
+    public function submitSwapOff(Employee $employee, array $data): Request
+    {
+        $liburSaya = RosterAssignment::findOrFail($data['requester_assignment_id']);
+        $liburRekan = RosterAssignment::findOrFail($data['partner_assignment_id']);
+
+        if ($liburSaya->employee_id !== $employee->id) {
+            throw new RuntimeException('Hari libur yang ditukar bukan milik Anda.');
+        }
+
+        if ($liburRekan->employee_id === $employee->id) {
+            throw new RuntimeException('Pilih hari libur milik rekan, bukan milik Anda sendiri.');
+        }
+
+        foreach ([$liburSaya, $liburRekan] as $baris) {
+            // Cuti yang sudah disetujui juga "tidak masuk", tapi bukan hari
+            // libur biasa — menukarkannya diam-diam membatalkan keputusan yang
+            // sudah disahkan.
+            if ($baris->shift_id !== null || $baris->status !== AssignmentStatus::Off) {
+                throw new RuntimeException('Yang ditukar harus sama-sama hari libur biasa, bukan hari kerja atau cuti.');
+            }
+
+            if ($baris->work_date->lessThan(today())) {
+                throw new RuntimeException('Tidak bisa menukar hari libur yang tanggalnya sudah lewat.');
+            }
+
+            $this->lockGuard->ensureUnlocked($baris->work_date);
+        }
+
+        if ($liburSaya->work_date->isSameDay($liburRekan->work_date)) {
+            throw new RuntimeException('Kedua hari libur jatuh di tanggal yang sama — tidak ada yang bisa ditukar.');
+        }
+
+        $rekan = Employee::findOrFail($liburRekan->employee_id);
+
+        // Pasangan tiap tanggal: rekan harus BEKERJA di tanggal libur saya, dan
+        // saya harus bekerja di tanggal libur dia. Itu yang membuat tukarnya
+        // impas — kalau salah satunya tidak bekerja, yang terjadi cuma satu
+        // orang kehilangan libur tanpa ada yang menggantikan.
+        $kerjaRekan = $this->barisKerja($rekan, $liburSaya->work_date, $rekan->name);
+        $kerjaSaya = $this->barisKerja($employee, $liburRekan->work_date, 'Anda');
+
+        $pengganti = $this->assertSubstitute($employee, $rekan->id);
+
+        return DB::transaction(function () use ($employee, $data, $rekan, $pengganti, $liburSaya, $liburRekan, $kerjaRekan, $kerjaSaya) {
+            $request = $this->createRequest($employee, RequestType::Swap, RequestStatus::PendingPeer, $pengganti);
+
+            // Kedaluwarsa mengikuti tanggal yang PALING DEKAT: begitu satu sisi
+            // tukarnya lewat, sisanya tidak lagi impas.
+            $paling_dekat = $liburSaya->work_date->lessThan($liburRekan->work_date)
+                ? $liburSaya->work_date
+                : $liburRekan->work_date;
+
+            $request->update(['expires_at' => $paling_dekat->copy()->subDay()->endOfDay()]);
+
+            $request->swap()->create([
+                'kind' => ShiftSwapRequest::KIND_LIBUR,
+
+                // Pasangan selalu (requester_N, partner_N) di TANGGAL YANG SAMA.
+                'requester_assignment_id' => $liburSaya->id,
+                'partner_assignment_id' => $kerjaRekan->id,
+                'requester_assignment_2_id' => $kerjaSaya->id,
+                'partner_assignment_2_id' => $liburRekan->id,
+
+                'partner_employee_id' => $rekan->id,
+                'reason' => $data['reason'],
+            ]);
+
+            if ($rekan->user) {
+                $this->notifier->send(
+                    $rekan->user,
+                    'Permintaan tukar libur',
+                    "{$employee->name} ingin menukar libur "
+                        .$liburSaya->work_date->translatedFormat('d M Y')
+                        .' dengan libur Anda '
+                        .$liburRekan->work_date->translatedFormat('d M Y'),
+                    route('karyawan.pengajuan.show', $request),
+                );
+            }
+
+            return $request;
+        });
+    }
+
+    /** Baris kerja seseorang di satu tanggal, atau tolak dengan alasan jelas. */
+    protected function barisKerja(Employee $employee, Carbon $tanggal, string $sebutan): RosterAssignment
+    {
+        $baris = RosterAssignment::query()
+            ->where('employee_id', $employee->id)
+            ->whereDate('work_date', $tanggal)
+            ->working()
+            ->first();
+
+        if ($baris === null) {
+            throw new RuntimeException(sprintf(
+                '%s tidak dijadwalkan kerja pada %s, jadi tidak ada shift yang bisa ditukar.',
+                $sebutan,
+                $tanggal->translatedFormat('d M Y'),
+            ));
+        }
+
+        return $baris;
     }
 
     public function submitCorrection(Employee $employee, array $data): Request
@@ -470,8 +586,8 @@ class RequestService
 
         if (! $request->substituteConfirmed()) {
             throw new RuntimeException(
-                'Pengganti (' . ($request->substitute?->name ?? '-') . ') belum menyatakan bersedia. '
-                . 'Persetujuan menunggu konfirmasi pengganti lebih dulu.'
+                'Pengganti ('.($request->substitute?->name ?? '-').') belum menyatakan bersedia. '
+                .'Persetujuan menunggu konfirmasi pengganti lebih dulu.'
             );
         }
 
@@ -666,27 +782,75 @@ class RequestService
             return;
         }
 
-        // Tukar ISI kedua baris (shift & divisi), BUKAN kepemilikannya.
-        //
-        // Kepemilikan sengaja tidak disentuh sama sekali. Kalau yang ditukar
-        // employee_id-nya, dua baris yang KEBETULAN shift_key-nya sama
-        // (dua-duanya sama-sama Shift Pagi, cuma beda posisi) akan sempat
-        // bertabrakan di tengah proses: begitu baris pertama selesai
-        // dipindah, untuk sesaat dua baris sama-sama menunjuk employee yang
-        // sama dengan shift_key yang identik, sebelum baris kedua sempat
-        // diproses. SQLite tidak menunda pengecekan constraint unik sampai
-        // akhir — bahkan dalam satu UPDATE yang menyentuh banyak baris
-        // sekaligus — jadi urutan apa pun dipakai, satu di antaranya pasti
-        // nabrak. Menukar isi sambil employee_id tiap baris tetap tidak
-        // pernah menimbulkan keadaan antara seperti itu.
+        $this->tukarIsiBaris($mine, $theirs, $request);
+
+        // Tukar libur menukar DUA pasang baris: satu pasang di tanggal libur
+        // pengaju, satu lagi di tanggal libur rekannya. Tanpa pasangan kedua,
+        // yang terjadi cuma pengaju kehilangan liburnya tanpa dapat ganti.
+        if ($swap->requesterAssignment2 !== null && $swap->partnerAssignment2 !== null) {
+            $this->tukarIsiBaris($swap->requesterAssignment2, $swap->partnerAssignment2, $request);
+        }
+    }
+
+    /**
+     * Tukar ISI dua baris roster di tanggal yang sama (shift, divisi, status),
+     * BUKAN kepemilikannya.
+     *
+     * Kepemilikan sengaja tidak disentuh sama sekali. Kalau yang ditukar
+     * employee_id-nya, dua baris yang KEBETULAN shift_key-nya sama
+     * (dua-duanya sama-sama Shift Pagi, cuma beda posisi) akan sempat
+     * bertabrakan di tengah proses: begitu baris pertama selesai dipindah,
+     * untuk sesaat dua baris sama-sama menunjuk employee yang sama dengan
+     * shift_key identik, sebelum baris kedua sempat diproses. SQLite tidak
+     * menunda pengecekan constraint unik sampai akhir — bahkan dalam satu
+     * UPDATE yang menyentuh banyak baris sekaligus — jadi urutan apa pun
+     * dipakai, satu di antaranya pasti nabrak. Menukar isi sambil employee_id
+     * tiap baris tetap tidak pernah menimbulkan keadaan antara seperti itu.
+     */
+    protected function tukarIsiBaris(RosterAssignment $mine, RosterAssignment $theirs, Request $request): void
+    {
         $isiMine = ['shift_id' => $mine->shift_id, 'division_id' => $mine->division_id];
         $isiTheirs = ['shift_id' => $theirs->shift_id, 'division_id' => $theirs->division_id];
 
         $this->assertTidakDobelShift($mine->work_date, (int) ($theirs->shift_id ?? 0), $mine->employee, $mine->id);
         $this->assertTidakDobelShift($theirs->work_date, (int) ($mine->shift_id ?? 0), $theirs->employee, $theirs->id);
 
-        $mine->update($isiTheirs + ['source' => 'swap', 'source_request_id' => $request->id]);
-        $theirs->update($isiMine + ['source' => 'swap', 'source_request_id' => $request->id]);
+        // Kedua status dihitung SEBELUM update pertama. update() mengubah
+        // modelnya di tempat, jadi membaca $mine->shift_id setelah $mine
+        // di-update akan mengembalikan nilai yang BARU — dan baris kedua ikut
+        // menerima shift yang sama, bukan shift lawannya. Sudah kejadian, dan
+        // gejalanya cuma satu orang tidak jadi libur.
+        $statusMine = $this->statusUntuk($mine, $isiTheirs['shift_id']);
+        $statusTheirs = $this->statusUntuk($theirs, $isiMine['shift_id']);
+
+        $jejak = ['source' => 'swap', 'source_request_id' => $request->id];
+
+        $mine->update($isiTheirs + $statusMine + $jejak);
+        $theirs->update($isiMine + $statusTheirs + $jejak);
+    }
+
+    /**
+     * Status yang harus menyertai shift baru sebuah baris.
+     *
+     * Wajib ikut ditukar pada TUKAR LIBUR, dan ini tidak kelihatan: baris libur
+     * yang menerima shift tetap berstatus Off kalau statusnya tidak ikut
+     * disesuaikan, dan AttendanceComputer membaca status — bukan shift_id —
+     * untuk memutuskan hari itu hari kerja atau bukan. Akibatnya orang yang
+     * benar-benar masuk tetap tercatat Libur, tanpa error apa pun.
+     *
+     * Baris yang statusnya bukan Scheduled/Off (cuti, libur nasional, batal)
+     * tidak pernah disentuh — status itu keputusan yang berdiri sendiri, bukan
+     * turunan dari ada-tidaknya shift.
+     *
+     * @return array<string, mixed>
+     */
+    protected function statusUntuk(RosterAssignment $baris, ?int $shiftBaru): array
+    {
+        if (! in_array($baris->status, [AssignmentStatus::Scheduled, AssignmentStatus::Off], true)) {
+            return [];
+        }
+
+        return ['status' => $shiftBaru === null ? AssignmentStatus::Off : AssignmentStatus::Scheduled];
     }
 
     /**
@@ -718,7 +882,7 @@ class RequestService
         if ($sudahAda) {
             throw new RuntimeException(
                 "{$penerima->name} sudah dijadwalkan shift yang sama pada tanggal yang sama, "
-                . 'jadi tukar ini akan membuatnya dobel di shift yang persis sama.'
+                .'jadi tukar ini akan membuatnya dobel di shift yang persis sama.'
             );
         }
     }
@@ -789,13 +953,13 @@ class RequestService
         $mulai = substr($overtime->planned_start, 0, 5);
 
         return implode("\n", [
-            'Halo ' . $request->employee->name . ',',
+            'Halo '.$request->employee->name.',',
             '',
             'Anda ditugaskan lembur:',
             $tanggal,
-            'Menyambung shift, mulai jam ' . $mulai,
+            'Menyambung shift, mulai jam '.$mulai,
             '',
-            'KODE LEMBUR: ' . $overtime->secret_code,
+            'KODE LEMBUR: '.$overtime->secret_code,
             '',
             'Buka menu Lembur di aplikasi dan masukkan kode ini sebelum mulai bekerja.',
             'Tanpa diaktifkan, lembur tidak dibayar walaupun Anda tetap scan.',
@@ -825,8 +989,8 @@ class RequestService
 
     protected function nextCode(): string
     {
-        $prefix = 'REQ-' . now()->format('Y-m');
-        $count = Request::where('code', 'like', $prefix . '%')->count() + 1;
+        $prefix = 'REQ-'.now()->format('Y-m');
+        $count = Request::where('code', 'like', $prefix.'%')->count() + 1;
 
         return sprintf('%s-%04d', $prefix, $count);
     }
@@ -841,10 +1005,10 @@ class RequestService
             route('manajer.pengajuan.show', $request),
             ['request_id' => $request->id],
             whatsapp: implode("\n", [
-                '[' . config('app.name') . '] ' . $title,
+                '['.config('app.name').'] '.$title,
                 '',
                 $ringkas,
-                'Pengganti: ' . ($request->substitute?->name ?? 'belum ditunjuk'),
+                'Pengganti: '.($request->substitute?->name ?? 'belum ditunjuk'),
                 '',
                 route('manajer.pengajuan.show', $request),
             ]),
@@ -867,10 +1031,10 @@ class RequestService
             $ringkas,
             route('karyawan.pengajuan.show', $request),
             whatsapp: implode("\n", array_filter([
-                '[' . config('app.name') . '] ' . $title,
+                '['.config('app.name').'] '.$title,
                 '',
                 $ringkas,
-                $request->decision_note ? 'Catatan: ' . $request->decision_note : null,
+                $request->decision_note ? 'Catatan: '.$request->decision_note : null,
             ])),
         );
     }
