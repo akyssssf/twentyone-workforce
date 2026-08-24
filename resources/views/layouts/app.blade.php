@@ -56,14 +56,26 @@
             ],
         ]
         : [
-            'Menu' => [
+            // array_filter: menu "Libur Saya" cuma ada untuk posisi yang jatah
+            // liburnya per bulan dan tanggalnya dipilih sendiri. Aturannya
+            // ditanya ke service yang sama dengan yang menegakkannya, bukan
+            // ditulis ulang di sini — dua salinan aturan akan menyimpang, dan
+            // yang menyimpang di tampilan berarti menu nongol lalu 403.
+            'Menu' => array_values(array_filter([
                 ['route' => 'karyawan.beranda', 'label' => 'Beranda', 'ikon' => 'hari', 'utama' => true],
                 ['route' => 'karyawan.jadwal', 'label' => 'Jadwal Saya', 'pendek' => 'Jadwal', 'ikon' => 'roster', 'utama' => true],
                 ['route' => 'karyawan.absensi', 'label' => 'Absensi Saya', 'pendek' => 'Absensi', 'ikon' => 'rekap', 'utama' => true],
                 ['route' => 'karyawan.lembur.index', 'label' => 'Lembur', 'ikon' => 'lembur', 'utama' => true, 'lencana' => $lemburMenunggu ?? null],
                 ['route' => 'karyawan.pengajuan.index', 'label' => 'Pengajuan', 'pendek' => 'Ajukan', 'match' => 'karyawan.pengajuan.*', 'ikon' => 'pengajuan', 'utama' => true],
                 ['route' => 'karyawan.slip.index', 'label' => 'Slip Gaji', 'pendek' => 'Slip', 'match' => 'karyawan.slip.*', 'ikon' => 'slip', 'utama' => true],
-            ],
+
+                // Sengaja tanpa 'utama': nav bawah di ponsel sudah penuh enam
+                // item, dan yang ketujuh membuat semuanya terlalu sempit.
+                auth()->user()?->employee !== null
+                    && app(\App\Services\Roster\LiburPilihanService::class)->berlakuUntuk(auth()->user()->employee)
+                        ? ['route' => 'karyawan.libur.index', 'label' => 'Libur Saya', 'match' => 'karyawan.libur.*', 'ikon' => 'roster']
+                        : null,
+            ])),
         ];
 
     $semua = collect($grup)->flatten(1);

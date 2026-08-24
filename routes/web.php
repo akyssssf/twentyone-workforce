@@ -5,6 +5,7 @@ use App\Http\Controllers\Auth\PasswordController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\Karyawan\EmployeePortalController;
 use App\Http\Controllers\Karyawan\EmployeeRequestController;
+use App\Http\Controllers\Karyawan\LiburPilihanController;
 use App\Http\Controllers\Karyawan\PayslipController;
 use App\Http\Controllers\Manajer\AuditController;
 use App\Http\Controllers\Manajer\EmployeeController;
@@ -14,9 +15,9 @@ use App\Http\Controllers\Manajer\RosterController;
 use App\Http\Controllers\Manajer\RuleController;
 use App\Http\Controllers\ReportController;
 use App\Http\Controllers\ScanActivityController;
+use App\Http\Middleware\EnsurePasswordIsChanged;
 use App\Http\Middleware\EnsureUserIsActive;
 use App\Http\Middleware\EnsureUserIsEmployee;
-use App\Http\Middleware\EnsurePasswordIsChanged;
 use App\Http\Middleware\EnsureUserIsManagement;
 use Illuminate\Support\Facades\Route;
 
@@ -133,6 +134,13 @@ Route::middleware(['auth', EnsureUserIsActive::class, EnsurePasswordIsChanged::c
         Route::get('pengajuan/{request}', [EmployeeRequestController::class, 'show'])->name('pengajuan.show');
         Route::post('pengajuan/{request}/batal', [EmployeeRequestController::class, 'cancel'])->name('pengajuan.cancel');
         Route::post('pengajuan/{request}/jawab', [EmployeeRequestController::class, 'respond'])->name('pengajuan.respond');
+
+        // Libur pilihan sendiri — cuma untuk posisi yang jatah liburnya per
+        // bulan dan tanggalnya bebas (Logistik). Controller-nya menolak 403
+        // untuk yang lain; menu di sidebar juga disembunyikan, tapi itu cuma
+        // kenyamanan, bukan penjagaan.
+        Route::get('libur', [LiburPilihanController::class, 'index'])->name('libur.index');
+        Route::post('libur', [LiburPilihanController::class, 'store'])->name('libur.store');
 
         Route::get('lembur', [EmployeePortalController::class, 'overtime'])->name('lembur.index');
         Route::post('lembur/aktivasi', [EmployeeRequestController::class, 'activateOvertime'])->name('lembur.aktivasi');

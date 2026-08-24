@@ -425,6 +425,32 @@ kedua liburnya jatuh di tanggal yang sama.
    yang sama, bukan shift lawannya. Gejalanya cuma "satu orang tidak jadi
    libur", tanpa error.
 
+### 4.18 Libur pilihan sendiri untuk Logistik
+
+Logistik masuk hampir tiap hari dan jatah liburnya **2 hari per bulan
+kalender**, tanggalnya **dipilih sendiri** oleh orangnya lewat halaman
+`karyawan/libur`. Aturannya di `App\Services\Roster\LiburPilihanService`,
+angkanya di `config/attendance.php` bagian `libur_pilihan`.
+
+Keputusan yang membentuknya:
+
+- **Berlaku LANGSUNG tanpa persetujuan manajer.** Karena itu jatahnya
+  ditegakkan di service, bukan di tampilan — menu yang disembunyikan tidak
+  menghentikan siapa pun yang mengirim form-nya langsung, dan yang
+  dipertaruhkan di sini jadwal kafe. Ada tesnya yang mengirim POST langsung.
+- **Ada satu langkah konfirmasi.** Pilihannya tidak bisa dibatalkan sendiri,
+  jadi satu salah klik berarti satu hari libur hilang. Layar konfirmasi
+  menyebut tanggalnya dan sisa jatah setelahnya.
+- **Jatah dijaga ketat** — pilihan ketiga ditolak, bukan cuma diperingatkan.
+- **Libur yang dipasang admin lewat `roster:set` TIDAK memotong jatah.** Yang
+  dihitung cuma baris dengan `source = 'pilihan'`.
+- Berlaku untuk **divisi Logistik saja**, lewat daftar kode divisi di config
+  supaya menambah divisi lain nanti tidak perlu menyentuh kode.
+
+Jatah dihitung per bulan **tanggal yang dipilih**, bukan bulan berjalan —
+daftar kandidat mencakup 60 hari ke depan jadi pilihannya bisa jatuh di bulan
+berikutnya, dan layar konfirmasi menyebut angka bulan itu.
+
 ## 5. Data & keputusan bisnis yang sudah diambil (bukan cuma kode)
 
 - **Roster Agustus** (mulai 15 Agustus) & **September penuh** sudah diisi

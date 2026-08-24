@@ -168,6 +168,34 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Libur yang dipilih sendiri karyawan
+    |--------------------------------------------------------------------------
+    |
+    | Posisi tertentu (Logistik) masuk hampir setiap hari dan jatah liburnya
+    | dihitung per bulan, bukan per minggu — dan tanggalnya dipilih sendiri oleh
+    | orangnya, bukan ditetapkan di roster.
+    |
+    | divisi        : kode divisi yang boleh memakai jalur ini. Sengaja daftar,
+    |                 bukan satu nilai, supaya menambah divisi lain nanti tidak
+    |                 perlu menyentuh kode.
+    | jatah_per_bulan: berapa hari libur yang boleh dipilih dalam satu bulan
+    |                 kalender. Pilihan yang melebihi ini DITOLAK, bukan sekadar
+    |                 diperingatkan.
+    | source        : penanda asal baris roster untuk libur pilihan sendiri.
+    |                 Dipakai menghitung jatah terpakai, sehingga libur yang
+    |                 dipasang admin lewat roster:set tidak ikut memotong jatah
+    |                 orangnya.
+    |
+    */
+
+    'libur_pilihan' => [
+        'divisi' => ['logistik'],
+        'jatah_per_bulan' => (int) env('ATTENDANCE_LIBUR_PILIHAN_PER_BULAN', 2),
+        'source' => 'pilihan',
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Status hasil olahan
     |--------------------------------------------------------------------------
     */
