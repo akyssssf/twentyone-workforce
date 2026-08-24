@@ -586,6 +586,10 @@ Semua ini artisan command — **jangan lagi pakai skrip PHP tempelan lewat
 SSH**, itu sudah terbukti sering kelewat separuh tanpa ada yang sadar.
 
 ```bash
+# Tandai status satu hari: sakit, izin, cuti, hadir, libur, alpha (alasan WAJIB)
+php artisan attendance:tandai <pin> <tanggal> sakit --alasan="Ada surat dokter"
+php artisan attendance:tandai <pin> <tanggal> sakit --batal    # kembalikan
+
 # Maafkan telat (alasan WAJIB, tanpa itu ditolak)
 php artisan attendance:waive-late <pin> [tanggal] --alasan="Motor mogok"
 php artisan attendance:waive-late <pin> [tanggal] --batal     # kembalikan
