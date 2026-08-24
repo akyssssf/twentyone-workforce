@@ -194,6 +194,33 @@ class TukarLiburTest extends TestCase
      * pengaju kehilangan libur tanpa ada yang menggantikan. Harus ditolak
      * dengan alasan yang bisa dipahami, bukan menghasilkan setengah tukar.
      */
+    /**
+     * Halaman detail yang dilihat REKAN harus menyebut KEDUA tanggal.
+     *
+     * Cacat nyata yang lolos sekali: halamannya cuma menampilkan satu tanggal,
+     * padahal di situlah rekan memutuskan bersedia atau tidak — jadi dia
+     * menyetujui sesuatu yang belum dia lihat seluruhnya. Lolos karena tidak
+     * ada tes yang benar-benar membuka halamannya; seluruh alur diuji lewat
+     * service, dan service-nya memang sudah benar.
+     */
+    public function test_rekan_melihat_kedua_tanggal_sebelum_menyetujui(): void
+    {
+        $akunRekan = User::factory()->create([
+            'role' => UserRole::Karyawan,
+            'employee_id' => $this->budi->id,
+            'is_active' => true,
+        ]);
+
+        $request = $this->ajukan();
+
+        $halaman = $this->actingAs($akunRekan)->get("/karyawan/pengajuan/{$request->id}");
+
+        $halaman->assertOk();
+        $halaman->assertSee('Tukar hari libur');
+        $halaman->assertSee($this->liburAni->translatedFormat('D, d M Y'));
+        $halaman->assertSee($this->liburBudi->translatedFormat('D, d M Y'));
+    }
+
     public function test_ditolak_kalau_rekan_tidak_kerja_di_tanggal_libur_pengaju(): void
     {
         // Budi jadi ikut libur di tanggal libur Ani.

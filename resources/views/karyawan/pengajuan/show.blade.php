@@ -40,8 +40,27 @@
                 @break
 
             @case('swap')
-                <div class="flex gap-3 px-4 py-3 sm:px-5"><dt class="w-32 shrink-0 text-slate-500">Jadwal</dt>
-                    <dd>{{ $d?->requesterAssignment?->work_date?->translatedFormat('d M Y') }} — {{ $d?->requesterAssignment?->shift?->name }}</dd></div>
+                @if ($d?->isTukarLibur())
+                    {{--
+                        Halaman ini yang dilihat REKAN saat memutuskan bersedia
+                        atau tidak. Tukar libur menyentuh dua tanggal, jadi
+                        menampilkan satu saja berarti dia menyetujui sesuatu
+                        yang belum dia lihat seluruhnya.
+                    --}}
+                    <div class="flex gap-3 px-4 py-3 sm:px-5"><dt class="w-32 shrink-0 text-slate-500">Bentuk</dt>
+                        <dd class="font-medium">Tukar hari libur</dd></div>
+                    <div class="flex gap-3 px-4 py-3 sm:px-5"><dt class="w-32 shrink-0 text-slate-500">Libur pengaju</dt>
+                        <dd>{{ $d?->requesterAssignment?->work_date?->translatedFormat('D, d M Y') }} —
+                            pengaju jadi masuk {{ $d?->partnerAssignment?->shift?->name }},
+                            {{ $d?->partner?->name }} yang libur</dd></div>
+                    <div class="flex gap-3 px-4 py-3 sm:px-5"><dt class="w-32 shrink-0 text-slate-500">Libur rekan</dt>
+                        <dd>{{ $d?->partnerAssignment2?->work_date?->translatedFormat('D, d M Y') }} —
+                            {{ $d?->partner?->name }} jadi masuk {{ $d?->requesterAssignment2?->shift?->name }},
+                            pengaju yang libur</dd></div>
+                @else
+                    <div class="flex gap-3 px-4 py-3 sm:px-5"><dt class="w-32 shrink-0 text-slate-500">Jadwal</dt>
+                        <dd>{{ $d?->requesterAssignment?->work_date?->translatedFormat('d M Y') }} — {{ $d?->requesterAssignment?->shift?->name }}</dd></div>
+                @endif
                 @break
 
             @case('correction')
