@@ -7,6 +7,7 @@ use App\Models\Division;
 use App\Models\Employee;
 use App\Models\Shift;
 use App\Services\Audit\AuditLogger;
+use App\Support\SandiAcak;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\Rule;
@@ -177,17 +178,10 @@ class EmployeeController extends Controller
         return back()->with('status', "Nama panggilan diubah jadi \"{$data['username']}\".");
     }
 
+    /** Dipindah ke App\Support\SandiAcak: dipakai juga oleh employee:akun. */
     protected function sandiAcak(): string
     {
-        // Tanpa huruf/angka yang rancu saat dibacakan: 0/O, 1/l/I.
-        $abjad = 'abcdefghjkmnpqrstuvwxyz23456789';
-        $sandi = '';
-
-        for ($i = 0; $i < 8; $i++) {
-            $sandi .= $abjad[random_int(0, strlen($abjad) - 1)];
-        }
-
-        return $sandi;
+        return SandiAcak::buat();
     }
 
     public function syncDivisions(Employee $employee, Request $request)

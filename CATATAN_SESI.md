@@ -451,6 +451,27 @@ Jatah dihitung per bulan **tanggal yang dipilih**, bukan bulan berjalan —
 daftar kandidat mencakup 60 hari ke depan jadi pilihannya bisa jatuh di bulan
 berikutnya, dan layar konfirmasi menyebut angka bulan itu.
 
+### 4.19 Membuat akun login karyawan
+
+Sebelum ini **tidak ada jalur mana pun yang bisa MEMBUAT akun karyawan**. Panel
+admin bisa mengganti nama panggilan dan mengatur ulang sandi, tapi keduanya
+berhenti dengan "belum punya akun login"; `user:add` berbasis email dan tidak
+menautkan akunnya ke karyawan. Jadi karyawan baru tidak pernah bisa masuk
+sampai ada yang menyentuh database langsung.
+
+`employee:akun <pin> --username=umin` membuat akunnya, menautkan ke karyawan,
+memberi sandi acak, dan menandainya **wajib ganti sandi saat login pertama** —
+sandi buatan admin belum jadi rahasia milik orangnya sampai dia menggantinya.
+Sandinya ditampilkan SEKALI; yang tersimpan cuma hash-nya.
+
+Hal-hal yang mengikat di tabel `users` dan gampang bikin bingung:
+`email` **wajib terisi dan unik** padahal login memakai nama panggilan dan tidak
+ada satu pun email yang dikirim (pemberitahuan lewat WhatsApp). Mengikuti pola
+akun yang sudah ada: `nama@kafe.test` — `.test` TLD cadangan yang dijamin tidak
+pernah resolve, jadi tidak mungkin ada surat nyasar ke alamat orang lain. Nama
+panggilan dibatasi huruf kecil dan angka saja karena spasi dan huruf besar gagal
+diketik di layar ponsel.
+
 ## 5. Data & keputusan bisnis yang sudah diambil (bukan cuma kode)
 
 - **Roster Agustus** (mulai 15 Agustus) & **September penuh** sudah diisi
@@ -680,6 +701,7 @@ php artisan attendance:periksa --from=2026-08-15 --to=2026-08-21
 php artisan attendance:status
 
 # Karyawan
+php artisan employee:akun <pin> --username=umin   # akun login + sandi acak
 php artisan employee:add --pin=21 --name="Nama" --shift="Shift Pagi" --joined=2026-08-22
 php artisan employee:daftar-wajah 21 /path/foto.jpg     # JPEG, maks 100 KB
 
