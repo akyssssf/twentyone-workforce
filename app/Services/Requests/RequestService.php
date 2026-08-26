@@ -15,6 +15,7 @@ use App\Models\Request;
 use App\Models\RosterAssignment;
 use App\Models\ShiftSwapRequest;
 use App\Models\User;
+use App\Services\Attendance\AttendanceComputer;
 use App\Services\Attendance\OvertimeResolver;
 use App\Services\Audit\AuditLogger;
 use App\Services\Notifications\Notifier;
@@ -45,6 +46,7 @@ class RequestService
         protected Notifier $notifier,
         protected LeaveService $leave,
         protected OvertimeResolver $overtimeResolver,
+        protected AttendanceComputer $computer,
     ) {}
 
     // ------------------------------------------------------------ pengganti
@@ -591,7 +593,7 @@ class RequestService
             );
         }
 
-        return DB::transaction(function () use ($request, $decider, $note) {
+        $hasil = DB::transaction(function () use ($request, $decider, $note) {
             $request->update([
                 'status' => RequestStatus::Approved,
                 'decided_by' => $decider->id,
@@ -617,6 +619,17 @@ class RequestService
 
             return $request;
         });
+
+        // Rekap absensi TIDAK ikut berubah sendiri. Cron cuma menghitung ulang
+        // dua hari terakhir, jadi persetujuan untuk tanggal yang lebih lama
+        // dari itu mengubah roster tanpa pernah menyentuh rekapnya: di halaman
+        // Roster perubahannya terlihat, di Rekap Absensi tidak — dan bedanya
+        // tidak menimbulkan error apa pun. Dijalankan SETELAH transaksi commit
+        // supaya perhitungan membaca roster yang sudah final, bukan yang masih
+        // menggantung di dalam transaksi.
+        $this->hitungUlang($this->tanggalTerdampak($hasil));
+
+        return $hasil;
     }
 
     public function reject(Request $request, User $decider, string $note): Request
@@ -758,6 +771,76 @@ class RequestService
                 'status' => 'pending_confirmation',
             ],
         );
+    }
+
+    /**
+     * Tanggal-tanggal yang rekapnya ikut berubah oleh sebuah persetujuan.
+     *
+     * @return list<Carbon>
+     */
+    protected function tanggalTerdampak(Request $request): array
+    {
+        return match ($request->type) {
+            RequestType::Leave => $this->rentangHarian(
+                $request->leave?->start_date,
+                $request->leave?->end_date,
+            ),
+
+            RequestType::Overtime => array_filter([$request->overtime?->work_date]),
+
+            // Tukar libur menyentuh dua tanggal; tukar shift satu. Diambil dari
+            // baris rosternya, bukan ditebak, supaya tidak ada tanggal yang
+            // kelewat waktu bentuk tukarnya bertambah.
+            RequestType::Swap => array_filter([
+                $request->swap?->requesterAssignment?->work_date,
+                $request->swap?->partnerAssignment?->work_date,
+                $request->swap?->requesterAssignment2?->work_date,
+                $request->swap?->partnerAssignment2?->work_date,
+            ]),
+
+            RequestType::Correction => array_filter([$request->correction?->work_date]),
+        };
+    }
+
+    /** @return list<Carbon> */
+    protected function rentangHarian(?Carbon $dari, ?Carbon $sampai): array
+    {
+        if ($dari === null || $sampai === null) {
+            return [];
+        }
+
+        $tanggal = [];
+
+        for ($t = $dari->copy(); $t->lessThanOrEqualTo($sampai); $t->addDay()) {
+            $tanggal[] = $t->copy();
+        }
+
+        return $tanggal;
+    }
+
+    /**
+     * Hitung ulang rekap untuk tanggal-tanggal itu.
+     *
+     * Kegagalannya sengaja tidak menjatuhkan persetujuan: keputusannya sudah
+     * tersimpan dan sah, dan rekap adalah tabel turunan yang bisa dibangun ulang
+     * kapan saja. Melempar exception di sini akan membuat manajer mengira
+     * persetujuannya gagal lalu menekan tombolnya lagi.
+     *
+     * @param  list<Carbon>  $tanggal
+     */
+    protected function hitungUlang(array $tanggal): void
+    {
+        $unik = collect($tanggal)
+            ->filter()
+            ->keyBy(fn (Carbon $t) => $t->toDateString());
+
+        foreach ($unik as $t) {
+            try {
+                $this->computer->computeDate($t->copy());
+            } catch (\Throwable $e) {
+                report($e);
+            }
+        }
     }
 
     protected function applySwap(Request $request): void

@@ -472,6 +472,29 @@ pernah resolve, jadi tidak mungkin ada surat nyasar ke alamat orang lain. Nama
 panggilan dibatasi huruf kecil dan angka saja karena spasi dan huruf besar gagal
 diketik di layar ponsel.
 
+### 4.20 Pengajuan yang disetujui tidak pernah masuk ke rekap
+
+**Masalah**: cron `attendance:compute` hanya menghitung ulang **dua hari
+terakhir**, dan `approve()` tidak pernah memicu hitung ulang sama sekali. Jadi
+persetujuan untuk tanggal yang lebih lama dari dua hari mengubah roster dan
+menulis koreksi, tapi rekapnya tetap memperlihatkan angka lama: di halaman
+Roster perubahannya terlihat, di Rekap Absensi tidak. Tanpa error, tanpa tanda
+apa pun.
+
+Ironisnya semua jalur ADMIN sudah menghitung ulang (`roster:set --recompute`,
+`attendance:tandai`, `attendance:waive-late`, `roster:jam-khusus --recompute`) —
+justru jalur yang dipakai KARYAWAN yang tidak. Itu sebabnya lama tidak
+ketahuan: yang mengurus data sehari-hari selalu lewat perintah admin.
+
+**Solusi**: `approve()` mengumpulkan tanggal terdampak per jenis pengajuan
+(cuti: seluruh rentang; lembur & koreksi: satu tanggal; tukar: tanggal baris
+rosternya, satu untuk tukar shift dan dua untuk tukar libur) lalu menghitung
+ulang **setelah transaksi commit** — supaya perhitungannya membaca roster final,
+bukan yang masih menggantung. Kegagalan hitung ulang sengaja TIDAK menjatuhkan
+persetujuan: keputusannya sudah sah dan rekap adalah tabel turunan, sementara
+melempar exception di situ akan membuat manajer mengira persetujuannya gagal
+lalu menekan tombolnya lagi.
+
 ## 5. Data & keputusan bisnis yang sudah diambil (bukan cuma kode)
 
 - **Roster Agustus** (mulai 15 Agustus) & **September penuh** sudah diisi
