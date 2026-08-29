@@ -732,6 +732,10 @@ php artisan attendance:tandai <pin> <tanggal> sakit --batal    # kembalikan
 php artisan attendance:waive-late <pin> [tanggal] --alasan="Motor mogok"
 php artisan attendance:waive-late <pin> [tanggal] --batal     # kembalikan
 
+# Hapus SATU baris roster (buat baris dobel yang keliru). roster:set tidak
+# bisa: dia melindungi baris ber-source swap/leave.
+php artisan roster:hapus <pin> <tanggal> <kode-shift>
+
 # Ubah jadwal satu orang, boleh beberapa tanggal sekaligus
 php artisan roster:set <pin> 2026-08-21=malam 2026-08-22=pagi 2026-08-23=libur \
     --divisi=kasir --recompute
