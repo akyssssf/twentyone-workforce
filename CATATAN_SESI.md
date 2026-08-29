@@ -757,6 +757,10 @@ php artisan attendance:periksa --from=2026-08-15 --to=2026-08-21
 # tidak menyebutkan siapa — ini yang mencarinya.
 php artisan attendance:daftar --status=alpha --from=2026-08-01 --to=2026-08-31
 
+# Telat yang JANGGAL hampir selalu berarti jadwalnya yang salah, bukan orangnya
+# yang telat. --status=semua supaya yang berstatus hadir ikut terjaring.
+php artisan attendance:daftar --status=semua --telat-min=120 --from=2026-08-01 --to=2026-08-31
+
 # Lihat aliran data absensi hari ini, dari callback sampai rekap
 php artisan attendance:status
 

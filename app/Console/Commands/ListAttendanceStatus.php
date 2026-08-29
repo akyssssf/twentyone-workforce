@@ -24,7 +24,8 @@ use Illuminate\Console\Command;
 class ListAttendanceStatus extends Command
 {
     protected $signature = 'attendance:daftar
-                            {--status=alpha : Status yang dicari: alpha, hadir, izin, sakit, cuti, libur}
+                            {--status=alpha : Status yang dicari, atau "semua" untuk semua status}
+                            {--telat-min= : Hanya yang telatnya minimal sekian MENIT}
                             {--from= : Tanggal awal (YYYY-MM-DD), kosong berarti hari ini}
                             {--to= : Tanggal akhir, kosong berarti sama dengan --from}';
 
@@ -32,14 +33,31 @@ class ListAttendanceStatus extends Command
 
     public function handle(): int
     {
-        $status = AttendanceStatus::tryFrom(strtolower(trim((string) $this->option('status'))));
+        $kodeStatus = strtolower(trim((string) $this->option('status')));
 
-        if ($status === null) {
+        // "semua" ada supaya penyaring telat bisa dipakai lintas status: telat
+        // yang janggal tidak selalu berstatus alpha, dan justru yang berstatus
+        // hadir-lah yang paling gampang lolos dari perhatian.
+        $status = in_array($kodeStatus, ['semua', 'all', ''], true)
+            ? null
+            : AttendanceStatus::tryFrom($kodeStatus);
+
+        if ($status === null && ! in_array($kodeStatus, ['semua', 'all', ''], true)) {
             $this->error("Status '{$this->option('status')}' tidak dikenal.");
-            $this->line('Yang tersedia: '.collect(AttendanceStatus::cases())->pluck('value')->implode(', '));
+            $this->line('Yang tersedia: '.collect(AttendanceStatus::cases())->pluck('value')->implode(', ').', atau semua');
 
             return self::FAILURE;
         }
+
+        $telatMin = $this->option('telat-min');
+
+        if ($telatMin !== null && ! ctype_digit((string) $telatMin)) {
+            $this->error('--telat-min harus angka menit, mis. --telat-min=120 untuk 2 jam.');
+
+            return self::FAILURE;
+        }
+
+        $telatMin = $telatMin === null ? null : (int) $telatMin;
 
         $dari = $this->option('from')
             ? DateInput::parseOrFail((string) $this->option('from'), 'from')
@@ -57,7 +75,8 @@ class ListAttendanceStatus extends Command
 
         $baris = Attendance::query()
             ->with(['employee', 'shift'])
-            ->where('status', $status->value)
+            ->when($status !== null, fn ($q) => $q->where('status', $status->value))
+            ->when($telatMin !== null, fn ($q) => $q->where('late_minutes', '>=', $telatMin))
 
             // Batas atas eksplisit sampai akhir hari: work_date tersimpan
             // sebagai "Y-m-d 00:00:00", jadi whereBetween dengan string tanggal
@@ -66,32 +85,39 @@ class ListAttendanceStatus extends Command
                 $dari->copy()->startOfDay(),
                 $sampai->copy()->endOfDay(),
             ])
+            // Kalau yang dicari telat, yang paling parah harus di atas — itu
+            // yang paling mungkin bukan telat sungguhan.
+            ->when($telatMin !== null, fn ($q) => $q->orderByDesc('late_minutes'))
             ->orderBy('work_date')
             ->get();
 
         $this->newLine();
 
+        $sebutan = trim(($status?->label() ?? 'semua status')
+            .($telatMin !== null ? " dengan telat ≥ {$telatMin} menit" : ''));
+
         if ($baris->isEmpty()) {
-            $this->info(sprintf('Tidak ada yang berstatus %s antara %s dan %s.',
-                $status->label(), $dari->toDateString(), $sampai->toDateString()));
+            $this->info(sprintf('Tidak ada rekap %s antara %s dan %s.',
+                $sebutan, $dari->toDateString(), $sampai->toDateString()));
 
             return self::SUCCESS;
         }
 
-        $this->line(sprintf('<comment>%d rekap berstatus %s (%s s/d %s):</comment>',
-            $baris->count(), $status->label(), $dari->toDateString(), $sampai->toDateString()));
+        $this->line(sprintf('<comment>%d rekap %s (%s s/d %s):</comment>',
+            $baris->count(), $sebutan, $dari->toDateString(), $sampai->toDateString()));
         $this->newLine();
 
         $this->table(
-            ['Tanggal', 'Karyawan', 'PIN', 'Shift', 'Masuk', 'Telat', 'Koreksi'],
+            ['Tanggal', 'Karyawan', 'PIN', 'Shift', 'Jadwal', 'Masuk', 'Telat', 'Status'],
             $baris->map(fn (Attendance $a) => [
                 $a->work_date->toDateString(),
                 $a->employee?->name ?? '—',
                 (string) ($a->employee?->pin_device ?? '—'),
                 $a->shift?->name ?? '—',
+                $a->scheduled_in?->format('H:i') ?? '—',
                 $a->check_in_at?->format('H:i:s') ?? '—',
                 Durasi::menit((int) $a->late_minutes),
-                $a->source_note ?? '—',
+                $a->status->label(),
             ])->all(),
         );
 

@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\AttendanceLog;
 use App\Models\Branch;
 use App\Models\Employee;
 use App\Models\Shift;
@@ -67,6 +68,20 @@ class DaftarStatusTest extends TestCase
         return $orang;
     }
 
+    protected function scan(Employee $orang, string $waktu): void
+    {
+        $at = Carbon::parse($waktu, 'Asia/Jakarta');
+
+        AttendanceLog::create([
+            'cloud_id' => 'UJI',
+            'employee_id' => $orang->id,
+            'pin' => $orang->pin_device,
+            'scanned_at' => $at,
+            'scan_minute' => $at->copy()->startOfMinute(),
+            'source' => 'webhook',
+        ]);
+    }
+
     protected function jalankan(string $argumen): string
     {
         Artisan::call('attendance:daftar '.$argumen);
@@ -95,7 +110,7 @@ class DaftarStatusTest extends TestCase
             '--alasan' => 'Ada surat dokter',
         ]);
 
-        $this->assertStringContainsString('Tidak ada yang berstatus',
+        $this->assertStringContainsString('Tidak ada rekap',
             $this->jalankan('--from=2026-08-23 --to=2026-08-23'));
 
         $this->assertStringContainsString('Si Alpha',
@@ -119,8 +134,35 @@ class DaftarStatusTest extends TestCase
     {
         $this->alpha('Alpha Luar', '53', '2026-08-20');
 
-        $this->assertStringContainsString('Tidak ada yang berstatus',
+        $this->assertStringContainsString('Tidak ada rekap',
             $this->jalankan('--from=2026-08-23 --to=2026-08-25'));
+    }
+
+    /**
+     * Penyaring telat: cara mencari telat yang JANGGAL, bukan telat sungguhan.
+     * Telat berjam-jam hampir selalu berarti jadwalnya yang salah, dan yang
+     * berstatus hadir justru paling gampang lolos dari perhatian — karena itu
+     * --status=semua harus bisa dipakai bersamanya.
+     */
+    public function test_menyaring_telat_di_atas_ambang(): void
+    {
+        $telatBanget = $this->alpha('Telat Banget', '54', '2026-08-23');
+        $this->scan($telatBanget, '2026-08-23 15:07:00');
+
+        $sebentar = $this->alpha('Telat Sebentar', '55', '2026-08-23');
+        $this->scan($sebentar, '2026-08-23 09:05:00');
+
+        Artisan::call('attendance:compute', ['--from' => '2026-08-23', '--to' => '2026-08-23']);
+
+        $keluaran = $this->jalankan('--status=semua --telat-min=120 --from=2026-08-23 --to=2026-08-23');
+
+        $this->assertStringContainsString('Telat Banget', $keluaran);
+        $this->assertStringNotContainsString('Telat Sebentar', $keluaran);
+    }
+
+    public function test_telat_min_harus_angka(): void
+    {
+        $this->artisan('attendance:daftar --telat-min=duajam')->assertFailed();
     }
 
     public function test_status_ngawur_ditolak(): void
