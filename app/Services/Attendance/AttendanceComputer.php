@@ -105,8 +105,8 @@ class AttendanceComputer
             return collect();
         }
 
-        $hasil = $this->assignmentsFor($employee, $date)
-            ->map(fn (?RosterAssignment $assignment) => $this->computeAssignment($employee, $date, $assignment))
+        $hasil = collect($this->konteksHarian($employee, $date))
+            ->map(fn (array $konteks) => $this->computeAssignment($employee, $date, $konteks))
             ->filter()
             ->values();
 
@@ -134,22 +134,52 @@ class AttendanceComputer
 
         $hasil = [];
 
+        foreach ($this->konteksHarian($employee, $date) as $konteks) {
+            [$checkIn, $checkOut] = $this->resolveCheckInOut(
+                $konteks['logs'], $konteks['window']->scheduledOut,
+            );
+
+            $hasil[] = $konteks + [
+                'check_in' => $checkIn,
+                'check_out' => $checkOut,
+                'adjustments' => AttendanceAdjustment::query()
+                    ->effectiveFor($employee->id, $date, (int) $konteks['shift']->id)
+                    ->get(),
+                'attendance' => Attendance::query()
+                    ->where('employee_id', $employee->id)
+                    ->where('work_date', $date)
+                    ->where('shift_key', (int) $konteks['shift']->id)
+                    ->first(),
+            ];
+        }
+
+        return $hasil;
+    }
+
+    /**
+     * Konteks perhitungan tiap baris jadwal pada satu tanggal: shift, jendela,
+     * dan scan yang menjadi MILIKNYA.
+     *
+     * Dipakai bersama oleh perhitungan asli dan diagnosis, supaya keduanya tidak
+     * mungkin menyimpang.
+     *
+     * @return list<array<string, mixed>>
+     */
+    protected function konteksHarian(Employee $employee, Carbon $date): array
+    {
+        $konteks = [];
+
         foreach ($this->assignmentsFor($employee, $date) as $assignment) {
             /** @var ?Shift $shift */
             $shift = $assignment?->shift ?? $this->guessShift($employee, $date);
 
+            // Tidak punya shift sama sekali: bukan urusan hari ini, dan itu
+            // berbeda dari alpha. Alpha berarti seharusnya masuk tapi tidak scan.
             if ($shift === null) {
-                $hasil[] = ['assignment' => $assignment, 'shift' => null];
-
                 continue;
             }
 
-            $window = WorkWindow::for($shift, $date, $assignment);
-            $logs = $this->logsIn($employee, $window);
-
-            [$checkIn, $checkOut] = $this->resolveCheckInOut($logs, $window->scheduledOut);
-
-            $hasil[] = [
+            $konteks[] = [
                 'assignment' => $assignment,
                 'shift' => $shift,
 
@@ -157,22 +187,117 @@ class AttendanceComputer
                 // jam khusus menempel di baris roster yang justru tidak ada.
                 'ditebak' => $assignment?->shift === null,
 
-                'window' => $window,
-                'logs' => $logs,
-                'check_in' => $checkIn,
-                'check_out' => $checkOut,
-                'adjustments' => AttendanceAdjustment::query()
-                    ->effectiveFor($employee->id, $date, (int) $shift->id)
-                    ->get(),
-                'attendance' => Attendance::query()
-                    ->where('employee_id', $employee->id)
-                    ->where('work_date', $date)
-                    ->where('shift_key', (int) $shift->id)
-                    ->first(),
+                'window' => WorkWindow::for($shift, $date, $assignment),
+                'logs' => collect(),
             ];
         }
 
-        return $hasil;
+        return $this->bagikanScan($employee, $konteks);
+    }
+
+    /**
+     * Bagikan scan ke baris jadwal yang paling pas — tiap scan cuma ke SATU baris.
+     *
+     * Sebelumnya tiap baris mencari scannya sendiri-sendiri, dan pada orang yang
+     * punya dua jadwal di hari yang sama jendelanya saling tumpang tindih: satu
+     * kali menempel jari jam 14:06 terbaca sebagai jam masuk untuk KEDUA shift
+     * sekaligus — telat 7 menit di shift yang benar, dan telat 6 jam 7 menit di
+     * shift pagi yang tidak pernah dia jalani. Telat sebesar itu adalah potongan
+     * gaji atas hari yang tidak pernah terjadi, dan tidak ada error apa pun yang
+     * menandainya.
+     *
+     * Kepemilikan diukur ke SELURUH rentang jadwal (jam masuk sampai jam pulang),
+     * bukan ke jam masuknya saja. Kalau diukur ke jam masuk, scan PULANG akan
+     * lari ke shift berikutnya yang jam mulainya kebetulan lebih dekat — orang
+     * yang benar-benar kerja dua shift terpisah kehilangan jam pulang shift
+     * pertamanya lalu terbaca telat berjam-jam di shift kedua. Itu sebabnya
+     * perbaikan yang paling gampang justru salah.
+     *
+     * @param  list<array<string, mixed>>  $konteks
+     * @return list<array<string, mixed>>
+     */
+    protected function bagikanScan(Employee $employee, array $konteks): array
+    {
+        if ($konteks === []) {
+            return [];
+        }
+
+        // Satu jadwal saja: tidak ada yang perlu dibagi, dan jalurnya sengaja
+        // dibiarkan persis seperti dulu — ini kasus hampir semua orang.
+        if (count($konteks) === 1) {
+            $konteks[0]['logs'] = $this->logsIn($employee, $konteks[0]['window']);
+
+            return $konteks;
+        }
+
+        $mulai = $konteks[0]['window']->start->copy();
+        $selesai = $konteks[0]['window']->end->copy();
+
+        foreach ($konteks as $k) {
+            $mulai = $k['window']->start->lessThan($mulai) ? $k['window']->start->copy() : $mulai;
+            $selesai = $k['window']->end->greaterThan($selesai) ? $k['window']->end->copy() : $selesai;
+        }
+
+        $logs = AttendanceLog::query()
+            ->where('employee_id', $employee->id)
+            ->whereBetween('scanned_at', [$mulai, $selesai])
+            ->orderBy('scanned_at')
+            ->get();
+
+        foreach ($logs as $log) {
+            $pilihan = null;
+            $jarakTerbaik = null;
+            $selisihMasukTerbaik = null;
+
+            foreach ($konteks as $i => $k) {
+                // Scan di luar jendela tetap dibuang seperti sebelumnya —
+                // pembagian ini tidak melonggarkan syarat kepemilikan.
+                if (! $k['window']->contains($log->scanned_at)) {
+                    continue;
+                }
+
+                $jarak = $this->jarakKeJadwal($k['window'], $log->scanned_at);
+                $selisihMasuk = abs($log->scanned_at->getTimestamp() - $k['window']->scheduledIn->getTimestamp());
+
+                // Seri berarti scan itu berada di dalam rentang dua jadwal
+                // sekaligus — shift yang jamnya memang tumpang tindih, yang di
+                // kafe ini selalu berarti salah jadwal karena tidak ada dua
+                // shift yang bisa dijalani bersamaan. Pemenangnya yang jam
+                // masuknya paling dekat; yang kalah tidak dapat scan sama
+                // sekali lalu jatuh ke alpha, dan itu memang yang seharusnya
+                // terjadi: salah jadwalnya jadi terlihat, bukan tersamar
+                // sebagai telat berjam-jam.
+                $lebihBaik = $jarakTerbaik === null
+                    || $jarak < $jarakTerbaik
+                    || ($jarak === $jarakTerbaik && $selisihMasuk < $selisihMasukTerbaik);
+
+                if ($lebihBaik) {
+                    $jarakTerbaik = $jarak;
+                    $selisihMasukTerbaik = $selisihMasuk;
+                    $pilihan = $i;
+                }
+            }
+
+            if ($pilihan !== null) {
+                $konteks[$pilihan]['logs']->push($log);
+            }
+        }
+
+        return $konteks;
+    }
+
+    /** Nol kalau scan ada di dalam rentang jadwal; selain itu jarak ke ujung terdekat, dalam detik. */
+    protected function jarakKeJadwal(WorkWindow $window, Carbon $waktu): int
+    {
+        $t = $waktu->getTimestamp();
+        $mulai = $window->scheduledIn->getTimestamp();
+        $selesai = $window->scheduledOut->getTimestamp();
+
+        if ($t >= $mulai && $t <= $selesai) {
+            return 0;
+        }
+
+        return (int) min(abs($t - $mulai), abs($t - $selesai));
     }
 
     /**
@@ -267,20 +392,24 @@ class AttendanceComputer
         return $assignments->isNotEmpty() ? $assignments : collect([null]);
     }
 
-    protected function computeAssignment(Employee $employee, Carbon $date, ?RosterAssignment $assignment): ?Attendance
+    /** @param  array<string, mixed>  $konteks  hasil konteksHarian(): shift, jendela, dan scan miliknya */
+    protected function computeAssignment(Employee $employee, Carbon $date, array $konteks): ?Attendance
     {
-        /** @var ?Shift $shift */
-        $shift = $assignment?->shift ?? $this->guessShift($employee, $date);
+        /** @var ?RosterAssignment $assignment */
+        $assignment = $konteks['assignment'];
 
-        // Tidak punya shift sama sekali: bukan urusan hari ini, dan itu berbeda
-        // dari alpha. Alpha berarti seharusnya masuk tapi tidak ada scan.
-        if ($shift === null) {
-            return null;
-        }
+        /** @var Shift $shift */
+        $shift = $konteks['shift'];
 
-        $window = WorkWindow::for($shift, $date, $assignment);
+        /** @var WorkWindow $window */
+        $window = $konteks['window'];
+
         $timezone = config('attendance.timezone', 'Asia/Jakarta');
-        $logs = $this->logsIn($employee, $window);
+
+        // Scan sudah dibagikan eksklusif di konteksHarian(), jadi baris ini
+        // tidak boleh mencari sendiri lagi — di situlah dulu satu scan bisa
+        // diklaim dua shift sekaligus.
+        $logs = $konteks['logs'];
 
         // Hari yang jendelanya belum selesai belum bisa disimpulkan. Tanpa
         // penjagaan ini, menghitung hari berjalan di pagi hari akan menandai

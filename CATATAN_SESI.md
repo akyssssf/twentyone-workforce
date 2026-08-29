@@ -495,6 +495,39 @@ persetujuan: keputusannya sudah sah dan rekap adalah tabel turunan, sementara
 melempar exception di situ akan membuat manajer mengira persetujuannya gagal
 lalu menekan tombolnya lagi.
 
+### 4.21 Satu scan diklaim dua shift sekaligus
+
+**Masalah**: seseorang terjadwal Pagi (08:00–18:00) DAN Malam (14:00–01:00) di
+hari yang sama, lalu menempel jari **sekali** jam 14:06. Jendela kedua shift itu
+tumpang tindih, dan tiap baris mencari scannya sendiri-sendiri lewat
+`logsIn()` — jadi scan yang sama jadi jam masuk untuk KEDUANYA: telat 7 menit di
+shift yang benar, dan **telat 6 jam 7 menit** di shift pagi yang tidak pernah dia
+jalani. Tidak ada error; yang ada cuma potongan gaji atas hari yang tidak pernah
+terjadi.
+
+**Solusi**: `konteksHarian()` membagikan scan secara EKSKLUSIF — tiap scan cuma
+milik satu baris jadwal — dan `computeAssignment()` tidak lagi mencari scannya
+sendiri. Diagnosis (`jejak()`) memakai konteks yang sama, jadi tidak mungkin
+menyimpang dari perhitungan asli.
+
+**Kenapa perbaikan yang paling gampang justru salah**: aturan "berikan scan ke
+shift yang jam mulainya paling dekat" membereskan kasus di atas tapi merusak
+dobel shift yang ASLI — scan PULANG shift pertama akan lari ke shift kedua yang
+jam mulainya kebetulan lebih dekat, dan orangnya terbaca telat berjam-jam.
+Karena itu kepemilikan diukur ke **seluruh rentang jadwal** (jam masuk sampai
+jam pulang): nol kalau scan ada di dalamnya, selain itu jarak ke ujung terdekat.
+Seri dipecahkan oleh jam masuk terdekat. Keduanya dikunci di
+`SatuScanSatuShiftTest`.
+
+Baris yang kalah tidak dapat scan sama sekali lalu jatuh ke **Alpha** — dan itu
+memang yang diinginkan: salah jadwalnya jadi terlihat, bukan tersamar sebagai
+telat berjam-jam.
+
+**Catatan untuk tes**: `MasterDataSeeder` masih membawa jam shift LAMA (Pagi
+09:00–17:00, Malam 17:00–01:00), sedangkan produksi sudah Pagi 08:00–18:00 dan
+Malam 14:00–01:00. Tes yang bergantung pada tumpang tindih jam harus menyetelnya
+sendiri, jangan mengandalkan seeder.
+
 ## 5. Data & keputusan bisnis yang sudah diambil (bukan cuma kode)
 
 - **Roster Agustus** (mulai 15 Agustus) & **September penuh** sudah diisi
