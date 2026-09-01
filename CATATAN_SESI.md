@@ -728,6 +728,10 @@ SSH**, itu sudah terbukti sering kelewat separuh tanpa ada yang sadar.
 php artisan attendance:tandai <pin> <tanggal> sakit --alasan="Ada surat dokter"
 php artisan attendance:tandai <pin> <tanggal> sakit --batal    # kembalikan
 
+# Koreksi jam masuk/pulang buat yang LUPA absen (alasan WAJIB)
+php artisan attendance:jam <pin> <tanggal> --masuk=08:00 --pulang=18:00 --alasan="Lupa tempel jari"
+php artisan attendance:jam <pin> <tanggal> --batal
+
 # Maafkan telat (alasan WAJIB, tanpa itu ditolak)
 php artisan attendance:waive-late <pin> [tanggal] --alasan="Motor mogok"
 php artisan attendance:waive-late <pin> [tanggal] --batal     # kembalikan
