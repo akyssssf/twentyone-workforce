@@ -744,6 +744,11 @@ php artisan roster:set <pin> 2026-08-21=malam 2026-08-22=pagi 2026-08-23=libur \
 php artisan roster:jam-khusus 2026-08-21 pagi 08:00 16:00 --recompute
 php artisan roster:jam-khusus 2026-08-21 pagi 08:00 16:00 --hapus --recompute
 
+# Lihat roster sebulan sebagai kalender, satu baris per orang
+php artisan roster:lihat 2026-08
+php artisan roster:lihat 2026-08 --divisi=kasir
+php artisan roster:lihat 2026-08 --pin=20
+
 # Periksa kewajaran roster sebulan: bentrok shift, kurang tenaga, dan siapa
 # yang belum dijadwalkan sama sekali
 php artisan roster:periksa 2026-09
