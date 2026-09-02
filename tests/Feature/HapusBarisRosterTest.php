@@ -173,6 +173,61 @@ class HapusBarisRosterTest extends TestCase
         $this->assertNotNull(Request::find($pengajuan->id));
     }
 
+    /**
+     * Rentang: buat orang yang sudah keluar tapi rosternya terlanjur terisi
+     * sebulan penuh. Menghapusnya satu per satu berarti tiga puluh perintah,
+     * dan yang mengetik tiga puluh perintah akan melewatkan satu.
+     */
+    public function test_menghapus_serentang_sekaligus(): void
+    {
+        $roster = app(RosterService::class);
+
+        foreach (range(1, 5) as $hari) {
+            $roster->assign(
+                $roster->findOrCreate(2026, 9),
+                $this->karyawan,
+                Carbon::create(2026, 9, $hari, 0, 0, 0, 'Asia/Jakarta'),
+                $this->pagi->id,
+            );
+        }
+
+        $this->artisan('roster:hapus 91 2026-09-01..2026-09-05')
+            ->expectsConfirmation('Hapus 5 baris ini?', 'yes')
+            ->assertSuccessful();
+
+        $this->assertSame(0, RosterAssignment::where('employee_id', $this->karyawan->id)
+            ->whereBetween('work_date', ['2026-09-01 00:00:00', '2026-09-05 23:59:59'])
+            ->count());
+    }
+
+    /** Menjawab tidak berarti tidak ada yang tersentuh sama sekali. */
+    public function test_bisa_dibatalkan_saat_konfirmasi(): void
+    {
+        $roster = app(RosterService::class);
+
+        foreach (range(1, 3) as $hari) {
+            $roster->assign(
+                $roster->findOrCreate(2026, 9),
+                $this->karyawan,
+                Carbon::create(2026, 9, $hari, 0, 0, 0, 'Asia/Jakarta'),
+                $this->pagi->id,
+            );
+        }
+
+        $this->artisan('roster:hapus 91 2026-09-01..2026-09-03')
+            ->expectsConfirmation('Hapus 3 baris ini?', 'no')
+            ->assertSuccessful();
+
+        $this->assertSame(3, RosterAssignment::where('employee_id', $this->karyawan->id)
+            ->whereBetween('work_date', ['2026-09-01 00:00:00', '2026-09-03 23:59:59'])
+            ->count());
+    }
+
+    public function test_rentang_terbalik_ditolak(): void
+    {
+        $this->artisan('roster:hapus 91 2026-09-05..2026-09-01')->assertFailed();
+    }
+
     public function test_baris_yang_tidak_ada_ditolak(): void
     {
         $this->artisan('roster:hapus 91 2026-08-28 middle')->assertFailed();

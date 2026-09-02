@@ -739,6 +739,7 @@ php artisan attendance:waive-late <pin> [tanggal] --batal     # kembalikan
 # Hapus SATU baris roster (buat baris dobel yang keliru). roster:set tidak
 # bisa: dia melindungi baris ber-source swap/leave.
 php artisan roster:hapus <pin> <tanggal> <kode-shift>
+php artisan roster:hapus <pin> 2026-09-01..2026-09-30      # serentang, semua shift
 
 # Ubah jadwal satu orang, boleh beberapa tanggal sekaligus
 php artisan roster:set <pin> 2026-08-21=malam 2026-08-22=pagi 2026-08-23=libur \

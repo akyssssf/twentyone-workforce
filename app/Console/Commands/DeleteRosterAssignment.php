@@ -8,6 +8,7 @@ use App\Models\Shift;
 use App\Models\ShiftSwapRequest;
 use App\Support\DateInput;
 use Illuminate\Console\Command;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Artisan;
 
 /**
@@ -29,10 +30,10 @@ class DeleteRosterAssignment extends Command
 {
     protected $signature = 'roster:hapus
                             {pin : PIN karyawan di mesin}
-                            {tanggal : Tanggal (YYYY-MM-DD)}
-                            {shift : Kode shift baris yang mau dihapus, mis. malam}';
+                            {tanggal : Tanggal, atau rentang 2026-09-01..2026-09-30}
+                            {shift? : Kode shift. Kosong berarti SEMUA baris di tanggal itu}';
 
-    protected $description = 'Hapus satu baris roster seseorang pada satu tanggal';
+    protected $description = 'Hapus baris roster seseorang pada satu tanggal atau serentang';
 
     public function handle(): int
     {
@@ -44,72 +45,130 @@ class DeleteRosterAssignment extends Command
             return self::FAILURE;
         }
 
-        $tanggal = DateInput::parseOrFail((string) $this->argument('tanggal'), 'tanggal');
-        $kode = strtolower(trim((string) $this->argument('shift')));
-
-        $shift = Shift::where('code', $kode)->first();
-
-        if ($shift === null) {
-            $this->error("Shift dengan kode '{$kode}' tidak ada.");
-            $this->line('Yang tersedia: '.Shift::pluck('code')->implode(', '));
+        try {
+            [$dari, $sampai] = $this->rentang((string) $this->argument('tanggal'));
+        } catch (\InvalidArgumentException $e) {
+            $this->error($e->getMessage());
 
             return self::FAILURE;
         }
 
-        $this->line("Karyawan: {$employee->name}  Tanggal: {$tanggal->toDateString()}");
-        $this->line('Sebelum : '.$this->ringkas($employee, $tanggal));
+        $shift = null;
+
+        if ($kode = $this->argument('shift')) {
+            $shift = Shift::where('code', strtolower(trim((string) $kode)))->first();
+
+            if ($shift === null) {
+                $this->error("Shift dengan kode '{$kode}' tidak ada.");
+                $this->line('Yang tersedia: '.Shift::pluck('code')->implode(', '));
+
+                return self::FAILURE;
+            }
+        }
 
         $baris = RosterAssignment::query()
+            ->with('shift')
             ->where('employee_id', $employee->id)
-            ->whereDate('work_date', $tanggal)
-            ->where('shift_id', $shift->id)
-            ->first();
+            ->whereBetween('work_date', [$dari->copy()->startOfDay(), $sampai->copy()->endOfDay()])
+            ->when($shift !== null, fn ($q) => $q->where('shift_id', $shift->id))
+            ->orderBy('work_date')
+            ->get();
 
-        if ($baris === null) {
-            $this->error("{$employee->name} tidak punya baris {$shift->name} pada tanggal itu.");
+        $this->line("Karyawan: {$employee->name}");
+        $this->line('Rentang : '.$dari->toDateString().' s/d '.$sampai->toDateString());
+
+        if ($baris->isEmpty()) {
+            $this->error('Tidak ada baris roster yang cocok di rentang itu.');
 
             return self::FAILURE;
         }
 
-        if (($pengajuan = $this->pengajuanYangMerujuk($baris)) !== null) {
-            // Migrasi memasang cascadeOnDelete dari shift_swap_requests ke
-            // roster_assignments. Menghapus baris yang jadi requester_assignment
-            // sebuah pengajuan tukar akan IKUT MENGHAPUS pengajuannya —
-            // riwayat keputusan yang sudah disetujui lenyap tanpa jejak, dan
-            // tidak ada yang memberi tahu. Ditolak di sini, bukan dibiarkan.
-            $this->error("Baris ini dirujuk pengajuan tukar {$pengajuan} sebagai jadwal pengaju.");
+        // Migrasi memasang cascadeOnDelete dari shift_swap_requests ke
+        // roster_assignments. Menghapus baris yang jadi requester_assignment
+        // sebuah pengajuan tukar akan IKUT MENGHAPUS pengajuannya — riwayat
+        // keputusan yang sudah disetujui lenyap tanpa jejak, dan tidak ada yang
+        // memberi tahu. Seluruh rentang diperiksa lebih dulu, jadi tidak ada
+        // kemungkinan separuh terhapus lalu berhenti di tengah jalan.
+        $terkunci = $baris->filter(fn (RosterAssignment $b) => $this->pengajuanYangMerujuk($b) !== null);
+
+        if ($terkunci->isNotEmpty()) {
+            $this->error($terkunci->count().' baris dirujuk pengajuan tukar sebagai jadwal pengaju:');
+
+            foreach ($terkunci as $b) {
+                $this->line('   '.$b->work_date->toDateString().'  '.($b->shift?->name ?? 'LIBUR')
+                    .'  → pengajuan '.$this->pengajuanYangMerujuk($b));
+            }
+
             $this->line('Menghapusnya akan ikut menghapus riwayat pengajuan itu (cascade).');
             $this->line('Batalkan atau selesaikan pengajuannya dulu lewat panel manajer.');
 
             return self::FAILURE;
         }
 
-        $sisa = RosterAssignment::query()
-            ->where('employee_id', $employee->id)
-            ->whereDate('work_date', $tanggal)
-            ->count();
+        $this->newLine();
 
-        $baris->delete();
+        foreach ($baris as $b) {
+            $this->line('   '.$b->work_date->translatedFormat('D, d M Y').'  '
+                .($b->shift?->name ?? 'LIBUR').'  ('.($b->source ?? 'manual').')');
+        }
 
-        $this->info("Baris {$shift->name} dihapus.");
+        $this->newLine();
 
-        if ($sisa <= 1) {
-            // Tidak punya baris sama sekali BUKAN sama dengan libur: shift-nya
-            // jadi hasil tebakan dari jam scan, dan tidak masuk sama sekali
-            // tidak lagi terhitung alpha.
-            $this->warn('Sekarang dia tidak punya baris roster sama sekali di tanggal itu.');
-            $this->line('Kalau maksudnya libur, tandai eksplisit: <info>php artisan roster:set '
-                .$employee->pin_device.' '.$tanggal->toDateString().'=libur</info>');
+        if ($baris->count() > 1 && ! $this->confirm("Hapus {$baris->count()} baris ini?", false)) {
+            $this->line('Dibatalkan, tidak ada yang dihapus.');
+
+            return self::SUCCESS;
+        }
+
+        RosterAssignment::whereIn('id', $baris->pluck('id'))->delete();
+
+        $this->info($baris->count().' baris roster dihapus.');
+
+        // Tanggal yang barisnya hilang TIDAK sama dengan libur: shift-nya jadi
+        // hasil tebakan dari jam scan, dan tidak masuk sama sekali tidak lagi
+        // terhitung alpha. Aman untuk orang yang memang sudah keluar, menyesatkan
+        // untuk orang yang masih bekerja.
+        if ($employee->is_active) {
+            $this->newLine();
+            $this->warn($employee->name.' masih berstatus AKTIF.');
+            $this->line('Tanggal tanpa baris roster tidak pernah terhitung alpha. Kalau maksudnya');
+            $this->line('libur, tandai eksplisit dengan <info>roster:set</info> ...=libur, jangan dibiarkan kosong.');
         }
 
         Artisan::call('attendance:compute', [
-            '--from' => $tanggal->toDateString(),
-            '--to' => $tanggal->toDateString(),
+            '--from' => $dari->toDateString(),
+            '--to' => $sampai->toDateString(),
         ]);
 
-        $this->line('Sesudah : '.$this->ringkas($employee, $tanggal));
+        $this->newLine();
+        $this->line('Sesudah : '.$this->ringkas($employee, $dari, $sampai));
 
         return self::SUCCESS;
+    }
+
+    /**
+     * Satu tanggal, atau rentang "2026-09-01..2026-09-30".
+     *
+     * @return array{0: Carbon, 1: Carbon}
+     */
+    protected function rentang(string $teks): array
+    {
+        if (! str_contains($teks, '..')) {
+            $t = DateInput::parseOrFail($teks, 'tanggal');
+
+            return [$t, $t->copy()];
+        }
+
+        [$a, $b] = explode('..', $teks, 2);
+
+        $dari = DateInput::parseOrFail(trim($a), 'tanggal awal');
+        $sampai = DateInput::parseOrFail(trim($b), 'tanggal akhir');
+
+        if ($sampai->lessThan($dari)) {
+            throw new \InvalidArgumentException("Rentang terbalik: \"{$teks}\".");
+        }
+
+        return [$dari, $sampai];
     }
 
     /** Kode pengajuan tukar yang memakai baris ini sebagai jadwal pengaju, kalau ada. */
@@ -123,20 +182,15 @@ class DeleteRosterAssignment extends Command
         return $swap?->request?->code ?? ($swap !== null ? '#'.$swap->request_id : null);
     }
 
-    protected function ringkas(Employee $employee, $tanggal): string
+    protected function ringkas(Employee $employee, Carbon $dari, Carbon $sampai): string
     {
-        $baris = RosterAssignment::with('shift')
+        $sisa = RosterAssignment::query()
             ->where('employee_id', $employee->id)
-            ->whereDate('work_date', $tanggal)
-            ->get();
+            ->whereBetween('work_date', [$dari->copy()->startOfDay(), $sampai->copy()->endOfDay()])
+            ->count();
 
-        if ($baris->isEmpty()) {
-            return '(tidak ada baris roster)';
-        }
-
-        return $baris->map(fn (RosterAssignment $b) => sprintf('%s (%s)',
-            $b->shift?->name ?? 'LIBUR',
-            $b->source ?? 'manual',
-        ))->implode(' + ');
+        return $sisa === 0
+            ? 'tidak ada baris roster tersisa di rentang itu'
+            : "{$sisa} baris roster masih tersisa di rentang itu";
     }
 }
