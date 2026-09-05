@@ -32,9 +32,11 @@ class WaiveLate extends Command
                             {pin : PIN karyawan di mesin}
                             {tanggal? : Tanggal (YYYY-MM-DD), kosong berarti hari ini}
                             {--alasan= : Kenapa dimaafkan}
+                            {--pulang-cepat : Maafkan pulang cepatnya, bukan telatnya}
+                            {--keduanya : Maafkan telat DAN pulang cepat}
                             {--batal : Batalkan koreksi yang sudah ada, bukan membuat baru}';
 
-    protected $description = 'Maafkan keterlambatan seorang karyawan pada satu tanggal';
+    protected $description = 'Maafkan keterlambatan atau pulang cepat seorang karyawan pada satu tanggal';
 
     public function handle(): int
     {
@@ -50,49 +52,68 @@ class WaiveLate extends Command
             ? DateInput::parseOrFail((string) $this->argument('tanggal'), 'tanggal')
             : OperationalDate::today();
 
+        $jenis = $this->jenisYangDimaafkan();
+
         $this->line("Karyawan: {$employee->name}  Tanggal: {$tanggal->toDateString()}");
         $this->line('Sebelum : '.$this->ringkas($employee, $tanggal));
 
-        $koreksi = AttendanceAdjustment::query()
-            ->where('employee_id', $employee->id)
-            ->whereDate('work_date', $tanggal)
-            ->where('type', 'waive_late')
-            ->whereNull('reverted_by_id')
-            ->first();
-
         if ($this->option('batal')) {
-            if ($koreksi === null) {
-                $this->error('Tidak ada koreksi telat yang aktif pada tanggal itu.');
+            $dibatalkan = AttendanceAdjustment::query()
+                ->where('employee_id', $employee->id)
+                ->whereDate('work_date', $tanggal)
+                ->whereIn('type', $jenis)
+                ->whereNull('reverted_by_id')
+                ->get();
+
+            if ($dibatalkan->isEmpty()) {
+                $this->error('Tidak ada koreksi yang aktif pada tanggal itu.');
 
                 return self::FAILURE;
             }
 
-            // Ditandai batal, bukan dihapus — tabel ini append-only supaya
-            // jejak keputusannya tidak hilang.
-            $koreksi->update(['reverted_by_id' => $koreksi->id]);
-            $this->info('Koreksi dibatalkan, telatnya dihitung lagi.');
-        } elseif ($koreksi !== null) {
-            $this->warn('Sudah pernah dimaafkan untuk tanggal ini — tidak dibuat lagi.');
+            foreach ($dibatalkan as $koreksi) {
+                // Ditandai batal, bukan dihapus — tabel ini append-only supaya
+                // jejak keputusannya tidak hilang.
+                $koreksi->update(['reverted_by_id' => $koreksi->id]);
+            }
+
+            $this->info($dibatalkan->count().' koreksi dibatalkan, dihitung lagi seperti biasa.');
         } else {
             $alasan = (string) $this->option('alasan');
 
             if (trim($alasan) === '') {
-                $this->error('Isi --alasan. Memaafkan telat menyangkut uang, jadi harus bisa dijelaskan nanti.');
+                $this->error('Isi --alasan. Memaafkan telat atau pulang cepat menyangkut uang, jadi harus bisa dijelaskan nanti.');
 
                 return self::FAILURE;
             }
 
-            AttendanceAdjustment::create([
-                'employee_id' => $employee->id,
-                'work_date' => $tanggal,
-                'shift_key' => 0,
-                'type' => 'waive_late',
-                'reason' => $alasan,
-                'approved_by' => (User::where('role', 'admin')->first() ?? User::first())?->id,
-                'approved_at' => now(),
-            ]);
+            foreach ($jenis as $tipe) {
+                $sudah = AttendanceAdjustment::query()
+                    ->where('employee_id', $employee->id)
+                    ->whereDate('work_date', $tanggal)
+                    ->where('type', $tipe)
+                    ->whereNull('reverted_by_id')
+                    ->exists();
 
-            $this->info("Telat {$employee->name} pada {$tanggal->toDateString()} dimaafkan.");
+                if ($sudah) {
+                    $this->warn($this->sebutan($tipe).' sudah pernah dimaafkan untuk tanggal ini — tidak dibuat lagi.');
+
+                    continue;
+                }
+
+                AttendanceAdjustment::create([
+                    'employee_id' => $employee->id,
+                    'work_date' => $tanggal,
+                    'shift_key' => 0,
+                    'type' => $tipe,
+                    'reason' => $alasan,
+                    'approved_by' => (User::where('role', 'admin')->first() ?? User::first())?->id,
+                    'approved_at' => now(),
+                ]);
+
+                $this->info(sprintf('%s %s pada %s dimaafkan.',
+                    $this->sebutan($tipe), $employee->name, $tanggal->toDateString()));
+            }
         }
 
         Artisan::call('attendance:compute', [
@@ -105,21 +126,44 @@ class WaiveLate extends Command
         return self::SUCCESS;
     }
 
+    /**
+     * Jenis koreksi yang diminta. Bawaannya telat saja, supaya perilaku lama
+     * perintah ini tidak berubah bagi yang sudah terbiasa memakainya.
+     *
+     * @return list<string>
+     */
+    protected function jenisYangDimaafkan(): array
+    {
+        if ($this->option('keduanya')) {
+            return ['waive_late', 'waive_early_leave'];
+        }
+
+        return $this->option('pulang-cepat') ? ['waive_early_leave'] : ['waive_late'];
+    }
+
+    protected function sebutan(string $tipe): string
+    {
+        return $tipe === 'waive_early_leave' ? 'Pulang cepat' : 'Telat';
+    }
+
     protected function ringkas(Employee $employee, Carbon $tanggal): string
     {
         $a = Attendance::with('shift')
             ->where('employee_id', $employee->id)
             ->whereDate('work_date', $tanggal)
             ->orderByDesc('late_minutes')
+            ->orderByDesc('early_leave_minutes')
             ->first();
 
         if ($a === null) {
             return '(belum ada rekap absensi untuk tanggal ini)';
         }
 
-        return sprintf('%s, masuk %s, telat %s',
+        return sprintf('%s, masuk %s, pulang %s, telat %s, pulang cepat %s',
             $a->shift?->name ?? '-',
             $a->check_in_at?->format('H:i') ?? '-',
-            Durasi::menit($a->late_minutes));
+            $a->check_out_at?->format('H:i') ?? '-',
+            Durasi::menit($a->late_minutes),
+            Durasi::menit($a->early_leave_minutes));
     }
 }

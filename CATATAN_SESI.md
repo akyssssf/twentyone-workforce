@@ -528,6 +528,30 @@ telat berjam-jam.
 Malam 14:00–01:00. Tes yang bergantung pada tumpang tindih jam harus menyetelnya
 sendiri, jangan mengandalkan seeder.
 
+### 4.22 Izin pulang awal: dua langkah, dan yang pertama sering dikira tidak perlu
+
+Ditemukan saat menangani izin pulang awal yang sudah disetujui pemilik:
+**pulang jauh lebih awal TIDAK menghasilkan potongan pulang cepat sama sekali.**
+Scan pulang hanya ditangkap kalau jaraknya ≤60 menit dari jam pulang terjadwal
+(`checkout_capture_minutes`), jadi orang yang pulang jam 15:00 dari shift yang
+berakhir 18:00 tidak punya jam pulang di rekap — `early_leave_minutes` nol.
+
+Yang rusak justru **jam kerjanya: terbaca NOL**, karena jam kerja butuh jam
+masuk DAN jam pulang. Jadi membiarkannya bukan pilihan yang aman; itu
+menghilangkan seluruh jam kerja hari itu dari rekap.
+
+Urutan yang benar dua langkah:
+
+1. `attendance:jam <pin> <tanggal> --pulang=15:00 --alasan="..."` — catat jam
+   pulang yang sebenarnya, supaya jam kerjanya benar.
+2. `attendance:waive-late <pin> <tanggal> --pulang-cepat --alasan="..."` —
+   baru maafkan pulang cepat yang muncul akibat langkah 1.
+
+Mekanisme `waive_early_leave` sudah lama ada di `AttendanceComputer`, tapi tidak
+pernah ada perintah yang bisa membuatnya. Sekarang lewat opsi `--pulang-cepat`
+dan `--keduanya` di `attendance:waive-late`; tanpa opsi, perilakunya tetap
+seperti dulu (telat saja).
+
 ## 5. Data & keputusan bisnis yang sudah diambil (bukan cuma kode)
 
 - **Roster Agustus** (mulai 15 Agustus) & **September penuh** sudah diisi
@@ -734,6 +758,8 @@ php artisan attendance:jam <pin> <tanggal> --batal
 
 # Maafkan telat (alasan WAJIB, tanpa itu ditolak)
 php artisan attendance:waive-late <pin> [tanggal] --alasan="Motor mogok"
+php artisan attendance:waive-late <pin> [tanggal] --pulang-cepat --alasan="Izin acara"
+php artisan attendance:waive-late <pin> [tanggal] --keduanya --alasan="..."
 php artisan attendance:waive-late <pin> [tanggal] --batal     # kembalikan
 
 # Hapus SATU baris roster (buat baris dobel yang keliru). roster:set tidak
