@@ -102,6 +102,34 @@ class FingerspotClient
     }
 
     /**
+     * Tanya info seorang pengguna langsung ke MESIN.
+     *
+     * Read-only dan asinkron: API cuma menerima perintahnya, mesin yang
+     * menjawab belakangan lewat webhook. Justru sifat itu yang berguna —
+     * datangnya callback membuktikan mesin masih terhubung ke cloud Fingerspot
+     * SAAT INI, sesuatu yang tidak bisa dibuktikan get_device (itu cuma membaca
+     * catatan cloud tentang perangkat, bukan menyentuh perangkatnya).
+     *
+     * Dipakai sebagai denyut: kalau scan berhenti masuk, ini memisahkan "mesin
+     * tidak terhubung" dari "mesin terhubung tapi tidak ada yang scan" — tanpa
+     * perlu ada orang di depan mesin.
+     *
+     * @return string trans_id yang dipakai, untuk mencocokkan callback-nya
+     */
+    public function getUserInfo(string $pin, ?string $cloudId = null, ?string $transId = null): string
+    {
+        $transId ??= $this->transId();
+
+        $this->post('get_userinfo', [
+            'trans_id' => $transId,
+            'cloud_id' => $this->resolveCloudId($cloudId),
+            'pin' => $pin,
+        ]);
+
+        return $transId;
+    }
+
+    /**
      * Kirim data pengguna ke mesin: PIN, nama, dan template biometrik.
      *
      * ASINKRON — dan ini bukan detail kecil. Respons yang dikembalikan cuma

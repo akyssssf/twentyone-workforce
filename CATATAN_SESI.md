@@ -805,6 +805,10 @@ php artisan attendance:daftar --status=alpha --from=2026-08-01 --to=2026-08-31
 # yang telat. --status=semua supaya yang berstatus hadir ikut terjaring.
 php artisan attendance:daftar --status=semua --telat-min=120 --from=2026-08-01 --to=2026-08-31
 
+# Apakah MESIN masih terhubung? (fingerspot:check TIDAK bisa menjawab ini —
+# get_device cuma membaca catatan cloud, tetap berhasil walau mesin tercabut)
+php artisan fingerspot:ping
+
 # Lihat aliran data absensi hari ini, dari callback sampai rekap
 php artisan attendance:status
 
