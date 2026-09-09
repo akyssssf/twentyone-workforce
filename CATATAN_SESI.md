@@ -552,6 +552,28 @@ pernah ada perintah yang bisa membuatnya. Sekarang lewat opsi `--pulang-cepat`
 dan `--keduanya` di `attendance:waive-late`; tanpa opsi, perilakunya tetap
 seperti dulu (telat saja).
 
+### 4.23 Lembur tidak terhitung sampai DIAKTIFKAN, dan kodenya kedaluwarsa
+
+Ketahuan saat membuat `lembur:tugaskan`: menugaskan lembur **tidak menghasilkan
+apa pun yang terbayar**. `OvertimeResolver::isiRealisasi()` hanya menghitung
+baris yang `activated_at`-nya terisi — aktivasi kode oleh karyawan adalah
+satu-satunya bukti bahwa orang yang ditunjuk benar-benar mengerjakannya.
+Penugasan tanpa aktivasi terlihat sah di layar tapi nol di rekap.
+
+Dan kodenya **cuma berlaku ±1 hari dari tanggal lemburnya**
+(`OvertimeCodeService::activate`). Untuk lembur yang baru dicatat beberapa hari
+kemudian — kejadian biasa, karena admin mengurusnya belakangan — jalur kode itu
+sudah tertutup dan tidak ada cara lain menghitungnya.
+
+Karena itu `lembur:tugaskan` punya `--aktifkan`: manajer yang menyatakan
+lemburnya memang terjadi, dan pernyataan itu dicatat atas namanya
+(`activated_by`). Tanpa opsi itu, perintahnya menampilkan kodenya lalu
+memperingatkan dengan jelas bahwa lemburnya **BELUM dihitung** — supaya
+penugasan yang tidak pernah diaktifkan tidak diam-diam berakhir sebagai nol.
+
+Durasinya sendiri tetap dihitung sistem: dari jam pulang terjadwal sampai scan
+terakhir, dan penuh sampai jam tutup kalau tidak ada scan pulang.
+
 ## 5. Data & keputusan bisnis yang sudah diambil (bukan cuma kode)
 
 - **Roster Agustus** (mulai 15 Agustus) & **September penuh** sudah diisi
@@ -786,6 +808,11 @@ php artisan roster:periksa 2026-09
 
 # Rotasi 4-mingguan waiters (17 Agt = Minggu 1)
 php artisan roster:apply-waiters --recompute
+
+# Tugaskan lembur. Jamnya TIDAK diketik — selalu menyambung shift orangnya,
+# dari jam pulang terjadwal sampai kafe tutup. --aktifkan untuk yang sudah lewat.
+php artisan lembur:tugaskan <pin> <tanggal> --keperluan=acara --alasan="..."
+php artisan lembur:tugaskan <pin> <tanggal> --keperluan=pengganti --pengganti=<pin> --alasan="..." --aktifkan
 
 # Hitung ulang rekap absensi
 php artisan attendance:compute --from=2026-08-18 --to=2026-08-20
