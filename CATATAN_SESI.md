@@ -584,12 +584,12 @@ terakhir, dan penuh sampai jam tutup kalau tidak ada scan pulang.
 - **Cleaning Service dinonaktifkan** (`is_active=false`, syarat tenaga
   dinolkan) — posisi ini memang belum ada orangnya, biar warning validator
   roster berhenti bising.
-- **Shift Middle**: 11:30–01:00 (crosses midnight), berlaku Jumat/Sabtu/Minggu
-  untuk waiters. Jam-nya **sengaja disembunyikan dari tampilan**
-  (`shifts.show_hours = false`) karena belum final dikonfirmasi ke bos —
-  datanya tetap dipakai penuh untuk hitung telat & jendela absen, cuma tidak
-  ditulis ke layar. Kalau nanti sudah pasti, `show_hours` tinggal
-  dikembalikan ke `true`.
+- **Shift Middle**: sejak 13 September 2026 jam masuknya **12:00** (sebelumnya
+  11:30, yang ternyata tidak pernah dikonfirmasi dan menghasilkan telat palsu
+  ~30 menit untuk semua yang dijadwalkan Middle). Diubah lewat `shift:edit`.
+  Jam pulang tetap 01:00. Jam-nya masih disembunyikan dari layar karyawan
+  (`shifts.show_hours = false`); tampilkan dengan `shift:edit middle
+  --tampilkan-jam` begitu dianggap final.
 - **Nama karyawan pernah diubah**: "Dea Sofiyanti" → **"Dea Shofita Nur
   Utami"** (PIN 20, Kasir). Sekarang ada TIGA orang dengan "Nur" di namanya —
   Nuryati (waiters, 19), Nurdiansyah (kitchen, 8), dan Dea (kasir, 20).
@@ -792,6 +792,11 @@ php artisan roster:hapus <pin> 2026-09-01..2026-09-30      # serentang, semua sh
 # Ubah jadwal satu orang, boleh beberapa tanggal sekaligus
 php artisan roster:set <pin> 2026-08-21=malam 2026-08-22=pagi 2026-08-23=libur \
     --divisi=kasir --recompute
+
+# Ubah jam MASTER shift — berlaku untuk SEMUA tanggal, termasuk yang lewat.
+# Wajib konfirmasi. Setelahnya hitung ulang dari tanggal shift itu mulai dipakai.
+php artisan shift:edit middle --mulai=12:00
+php artisan shift:edit middle --tampilkan-jam
 
 # Jam shift khusus untuk SATU tanggal (tidak menyentuh master shift)
 php artisan roster:jam-khusus 2026-08-21 pagi 08:00 16:00 --recompute
