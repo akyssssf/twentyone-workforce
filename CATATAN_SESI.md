@@ -846,6 +846,7 @@ php artisan attendance:status
 
 # Karyawan
 php artisan employee:akun <pin> --username=umin   # akun login + sandi acak
+php artisan employee:reset-sandi <pin>             # lupa sandi: sandi acak sekali tampil
 php artisan employee:add --pin=21 --name="Nama" --shift="Shift Pagi" --joined=2026-08-22
 php artisan employee:daftar-wajah 21 /path/foto.jpg     # JPEG, maks 100 KB
 
