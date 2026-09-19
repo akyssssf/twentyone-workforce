@@ -228,6 +228,44 @@ class HapusBarisRosterTest extends TestCase
         $this->artisan('roster:hapus 91 2026-09-05..2026-09-01')->assertFailed();
     }
 
+    /**
+     * Baris yang dirujuk pengajuan tidak bisa dihapus tanpa melenyapkan
+     * riwayatnya — tapi bisa DIBATALKAN. Efeknya ke absensi sama persis
+     * dengan dihapus, sementara pengajuannya tetap utuh.
+     */
+    public function test_batalkan_menonaktifkan_baris_tanpa_menghapus_pengajuan(): void
+    {
+        $barisMalam = RosterAssignment::where('employee_id', $this->karyawan->id)
+            ->where('shift_id', $this->malam->id)->sole();
+
+        $pengajuan = Request::create([
+            'code' => 'UJI-002',
+            'branch_id' => Branch::current()->id,
+            'type' => RequestType::Swap,
+            'employee_id' => $this->karyawan->id,
+            'status' => RequestStatus::Approved,
+            'submitted_at' => now(),
+        ]);
+
+        ShiftSwapRequest::create([
+            'request_id' => $pengajuan->id,
+            'requester_assignment_id' => $barisMalam->id,
+            'partner_employee_id' => $this->karyawan->id,
+            'reason' => 'Uji rujukan',
+        ]);
+
+        $this->artisan('roster:hapus 91 2026-08-28 malam --batalkan')->assertSuccessful();
+
+        // Barisnya masih ada dan pengajuannya utuh.
+        $this->assertSame(AssignmentStatus::Cancelled, RosterAssignment::find($barisMalam->id)->status);
+        $this->assertNotNull(Request::find($pengajuan->id));
+
+        // Tapi absensinya berperilaku seolah baris itu tidak ada: scan pulang
+        // 18:15 kembali ke shift pagi, dan tidak ada rekap Malam.
+        $this->assertNull($this->rekap($this->malam));
+        $this->assertSame('18:19:18', $this->rekap($this->pagi)?->check_out_at?->format('H:i:s'));
+    }
+
     public function test_baris_yang_tidak_ada_ditolak(): void
     {
         $this->artisan('roster:hapus 91 2026-08-28 middle')->assertFailed();

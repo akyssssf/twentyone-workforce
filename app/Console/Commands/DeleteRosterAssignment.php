@@ -2,6 +2,7 @@
 
 namespace App\Console\Commands;
 
+use App\Enums\AssignmentStatus;
 use App\Models\Employee;
 use App\Models\RosterAssignment;
 use App\Models\Shift;
@@ -31,7 +32,8 @@ class DeleteRosterAssignment extends Command
     protected $signature = 'roster:hapus
                             {pin : PIN karyawan di mesin}
                             {tanggal : Tanggal, atau rentang 2026-09-01..2026-09-30}
-                            {shift? : Kode shift. Kosong berarti SEMUA baris di tanggal itu}';
+                            {shift? : Kode shift. Kosong berarti SEMUA baris di tanggal itu}
+                            {--batalkan : Tandai batal, bukan hapus — untuk baris yang dirujuk pengajuan}';
 
     protected $description = 'Hapus baris roster seseorang pada satu tanggal atau serentang';
 
@@ -91,7 +93,11 @@ class DeleteRosterAssignment extends Command
         // kemungkinan separuh terhapus lalu berhenti di tengah jalan.
         $terkunci = $baris->filter(fn (RosterAssignment $b) => $this->pengajuanYangMerujuk($b) !== null);
 
-        if ($terkunci->isNotEmpty()) {
+        // Membatalkan tidak menyentuh barisnya, cuma statusnya — jadi rujukan
+        // dari pengajuan tetap utuh, dan riwayat keputusannya tidak hilang.
+        // Baris berstatus batal tidak pernah dibaca AttendanceComputer, jadi
+        // efeknya ke absensi sama persis dengan dihapus.
+        if ($terkunci->isNotEmpty() && ! $this->option('batalkan')) {
             $this->error($terkunci->count().' baris dirujuk pengajuan tukar sebagai jadwal pengaju:');
 
             foreach ($terkunci as $b) {
@@ -100,7 +106,8 @@ class DeleteRosterAssignment extends Command
             }
 
             $this->line('Menghapusnya akan ikut menghapus riwayat pengajuan itu (cascade).');
-            $this->line('Batalkan atau selesaikan pengajuannya dulu lewat panel manajer.');
+            $this->line('Pakai <info>--batalkan</info>: barisnya ditandai batal, tidak dihitung absensi,');
+            $this->line('dan riwayat pengajuannya tetap utuh.');
 
             return self::FAILURE;
         }
@@ -114,15 +121,27 @@ class DeleteRosterAssignment extends Command
 
         $this->newLine();
 
-        if ($baris->count() > 1 && ! $this->confirm("Hapus {$baris->count()} baris ini?", false)) {
-            $this->line('Dibatalkan, tidak ada yang dihapus.');
+        $kata = $this->option('batalkan') ? 'Batalkan' : 'Hapus';
+
+        if ($baris->count() > 1 && ! $this->confirm("{$kata} {$baris->count()} baris ini?", false)) {
+            $this->line('Dibatalkan, tidak ada yang disentuh.');
 
             return self::SUCCESS;
         }
 
-        RosterAssignment::whereIn('id', $baris->pluck('id'))->delete();
+        if ($this->option('batalkan')) {
+            // Lewat instance, bukan query builder: event saving() milik
+            // HasShiftKey harus ikut jalan (jebakan nomor 1).
+            foreach ($baris as $b) {
+                $b->update(['status' => AssignmentStatus::Cancelled]);
+            }
 
-        $this->info($baris->count().' baris roster dihapus.');
+            $this->info($baris->count().' baris roster ditandai batal.');
+        } else {
+            RosterAssignment::whereIn('id', $baris->pluck('id'))->delete();
+
+            $this->info($baris->count().' baris roster dihapus.');
+        }
 
         // Tanggal yang barisnya hilang TIDAK sama dengan libur: shift-nya jadi
         // hasil tebakan dari jam scan, dan tidak masuk sama sekali tidak lagi
