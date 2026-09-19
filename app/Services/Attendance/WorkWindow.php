@@ -34,8 +34,13 @@ class WorkWindow
         $timezone = config('attendance.timezone', 'Asia/Jakarta');
         $date = $workDate->copy()->setTimezone($timezone)->startOfDay();
 
-        $mulai = $assignment?->start_time_override ?? $shift->start_time;
-        $selesai = $assignment?->end_time_override ?? $shift->end_time;
+        // Urutan: jam khusus per-orang di baris roster, lalu jam shift yang
+        // berlaku pada tanggal itu (bisa berbeda dari master kalau jamnya
+        // pernah diubah di tengah jalan), baru jam master.
+        $jam = $shift->jamPada($date);
+
+        $mulai = $assignment?->start_time_override ?? $jam['start_time'];
+        $selesai = $assignment?->end_time_override ?? $jam['end_time'];
 
         $scheduledIn = self::applyTime($date, $mulai);
         $shiftEnd = self::applyTime($date, $selesai);

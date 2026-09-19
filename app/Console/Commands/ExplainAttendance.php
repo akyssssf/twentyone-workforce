@@ -88,14 +88,21 @@ class ExplainAttendance extends Command
             $shift = $b['shift'];
             $a = $b['assignment'];
 
-            $master = substr((string) $shift->start_time, 0, 5).'–'.substr((string) $shift->end_time, 0, 5);
+            // Jam yang benar-benar dipakai hari itu, berikut asalnya — kalau
+            // yang tertulis jam master padahal yang berlaku jam periode,
+            // pembacanya akan mencari kesalahan di tempat yang salah.
+            $berlaku = $shift->jamPada($tanggal);
+            $teksBerlaku = substr($berlaku['start_time'], 0, 5).'–'.substr($berlaku['end_time'], 0, 5);
+            $asalJam = $berlaku['override'] !== null
+                ? 'berlaku sejak '.$berlaku['override']->effective_from->translatedFormat('d M Y')
+                : 'master';
 
             $jam = $a?->start_time_override !== null
-                ? sprintf('jam khusus %s–%s (master %s)',
+                ? sprintf('jam khusus %s–%s (%s %s)',
                     substr((string) $a->start_time_override, 0, 5),
                     substr((string) $a->end_time_override, 0, 5),
-                    $master)
-                : "jam master {$master}";
+                    $asalJam, $teksBerlaku)
+                : "jam {$asalJam} {$teksBerlaku}";
 
             $asal = $b['ditebak']
                 ? '<fg=yellow>TEBAKAN dari jam scan — tidak ada baris roster</>'

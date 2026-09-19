@@ -574,6 +574,29 @@ penugasan yang tidak pernah diaktifkan tidak diam-diam berakhir sebagai nol.
 Durasinya sendiri tetap dihitung sistem: dari jam pulang terjadwal sampai scan
 terakhir, dan penuh sampai jam tutup kalau tidak ada scan pulang.
 
+### 4.24 Jam shift berlaku per rentang tanggal (`shift_time_overrides`)
+
+Pemicu: jam operasional berubah **mulai 21 September 2026** — Shift 2 tutup
+23:30, bukan lagi 01:00. Tidak ada satu pun mekanisme lama yang bisa
+menanganinya dengan benar: `shift:edit` mengubah jam master yang berlaku ke
+semua tanggal (riwayat Agustus–September yang belum digaji ikut bergeser begitu
+dihitung ulang), dan `roster:jam-khusus` menempel per-orang per-tanggal (rapuh
+terhadap urutan, jebakan 8).
+
+**Solusi**: tabel `shift_time_overrides` (shift_id, effective_from, effective_to
+nullable, start_time, end_time). `Shift::jamPada($tanggal)` mengembalikan jam
+yang berlaku pada tanggal itu; `WorkWindow::for()` dan `Shift::startsOn()/
+endsOn()` (dipakai resolver lembur) memakainya. Urutan prioritas: jam khusus
+per-orang di baris roster → jam periode → jam master.
+
+**Semua perhitungan yang butuh jam shift harus lewat `jamPada()`**, jangan
+membaca `start_time`/`end_time` langsung — yang membaca kolom mentah akan
+diam-diam memakai jam yang salah untuk tanggal lama.
+
+Perubahan berikutnya menutup periode sebelumnya sehari sebelum mulainya;
+tumpang tindih lain ditolak, bukan ditebak. Dikunci tes: 20 September tetap
+memakai 01:00, 21 September memakai 23:30, jam master tidak tersentuh.
+
 ## 5. Data & keputusan bisnis yang sudah diambil (bukan cuma kode)
 
 - **Roster Agustus** (mulai 15 Agustus) & **September penuh** sudah diisi
@@ -728,9 +751,12 @@ menganggap sebuah perintah selesai, **lihat outputnya**.
    itu benar-benar final. Perintahnya aman diulang, jadi kalau roster
    terlanjur berubah, tinggal jalankan lagi.
 
-   Perbaikan yang lebih benar (belum dikerjakan): pindahkan override ke
-   tabel sendiri berkunci (work_date, shift_id), supaya berlaku untuk
-   siapa pun yang terjadwal di situ tanpa peduli urutan.
+   **Sudah ada perbaikannya sejak 20 September**: `shift:jam` menyimpan jam
+   per RENTANG TANGGAL di tabel `shift_time_overrides`, menempel ke shift-nya
+   (bukan ke orang), jadi berlaku untuk siapa pun yang dijadwalkan di situ
+   tanpa peduli urutan. Untuk perubahan jam operasional yang permanen atau
+   berlaku lebih dari sehari, pakai itu. `roster:jam-khusus` tetap ada untuk
+   pengecualian satu hari satu orang.
 
 9. **"Hari" untuk scan = HARI OPERASIONAL (06:00–06:00), bukan tanggal
    kalender.** Shift malam berakhir 01:00, jadi scan pulangnya jatuh di
@@ -793,6 +819,11 @@ php artisan roster:hapus <pin> <tanggal> <shift> --batalkan  # dirujuk pengajuan
 # Ubah jadwal satu orang, boleh beberapa tanggal sekaligus
 php artisan roster:set <pin> 2026-08-21=malam 2026-08-22=pagi 2026-08-23=libur \
     --divisi=kasir --recompute
+
+# Ubah jam shift MULAI tanggal tertentu, tanggal lama tidak tersentuh. Ini yang
+# dipakai untuk perubahan jam operasional. Periode sebelumnya ditutup otomatis.
+php artisan shift:jam malam --dari=2026-09-21 --mulai=14:00 --selesai=23:30 --catatan="jam operasional baru"
+php artisan shift:jam malam --dari=2026-09-21 --hapus
 
 # Ubah jam MASTER shift — berlaku untuk SEMUA tanggal, termasuk yang lewat.
 # Wajib konfirmasi. Setelahnya hitung ulang dari tanggal shift itu mulai dipakai.

@@ -50,10 +50,38 @@ class Shift extends Model
         return $this->hasMany(RosterAssignment::class);
     }
 
+    public function timeOverrides(): HasMany
+    {
+        return $this->hasMany(ShiftTimeOverride::class);
+    }
+
+    /**
+     * Jam yang BERLAKU pada satu tanggal — bukan sekadar jam master.
+     *
+     * Jam shift bisa berubah di tengah jalan ("mulai 21 September Shift 2
+     * tutup 23:30"), dan perubahan seperti itu tidak boleh menyentuh tanggal
+     * yang sudah lewat. Semua perhitungan yang butuh jam shift harus lewat
+     * sini, bukan membaca start_time/end_time langsung — yang membaca kolom
+     * mentah akan diam-diam memakai jam yang salah untuk tanggal lama.
+     *
+     * @return array{start_time: string, end_time: string, override: ?ShiftTimeOverride}
+     */
+    public function jamPada(Carbon $workDate): array
+    {
+        $override = $this->timeOverrides
+            ->first(fn (ShiftTimeOverride $o) => $o->mencakup($workDate));
+
+        return [
+            'start_time' => (string) ($override?->start_time ?? $this->start_time),
+            'end_time' => (string) ($override?->end_time ?? $this->end_time),
+            'override' => $override,
+        ];
+    }
+
     /** Jam masuk sesungguhnya untuk satu tanggal kerja. */
     public function startsOn(Carbon $workDate): Carbon
     {
-        return $this->applyTime($workDate, $this->start_time);
+        return $this->applyTime($workDate, $this->jamPada($workDate)['start_time']);
     }
 
     /**
@@ -64,7 +92,7 @@ class Shift extends Model
     public function endsOn(Carbon $workDate): Carbon
     {
         $start = $this->startsOn($workDate);
-        $end = $this->applyTime($workDate, $this->end_time);
+        $end = $this->applyTime($workDate, $this->jamPada($workDate)['end_time']);
 
         return $end->lessThanOrEqualTo($start) ? $end->addDay() : $end;
     }
