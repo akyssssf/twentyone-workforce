@@ -49,8 +49,15 @@ class ApplyWaiterRoster extends Command
 
         $this->info("Menerapkan rotasi Waiters: {$from->toDateString()} s/d {$to->toDateString()}");
 
-        // 1. Pastikan Shift Middle tersedia
-        $middleShift = Shift::updateOrCreate(
+        // 1. Pastikan Shift Middle tersedia.
+        //
+        // firstOrCreate, BUKAN updateOrCreate: yang kedua menulis ulang jam
+        // master Middle ke 11:30 setiap kali rotasi dijalankan — menimpa
+        // perubahan jam yang sudah dilakukan lewat shift:edit, tanpa pesan apa
+        // pun. Jam Middle sudah pernah diubah jadi 12:00 dengan sengaja, dan
+        // rotasi ini tidak berhak mengembalikannya. Nilai di bawah cuma
+        // dipakai kalau shift-nya belum ada sama sekali.
+        $middleShift = Shift::firstOrCreate(
             ['code' => 'middle'],
             [
                 'name' => 'Shift Middle',

@@ -790,6 +790,13 @@ menganggap sebuah perintah selesai, **lihat outputnya**.
    resmi memakai `"trans_id": "1"`, dan itu petunjuk yang baru masuk akal
    setelah tahu batasnya.
 
+12. **`roster:apply-waiters` dulu MENULIS ULANG jam master Middle** setiap kali
+   dijalankan (`updateOrCreate` dengan 11:30–01:00 yang ditanam di kode), jadi
+   `shift:edit middle --mulai=12:00` diam-diam tertimpa oleh rotasi berikutnya.
+   Sudah diganti `firstOrCreate` dan dikunci tes. Pelajaran umumnya: perintah
+   yang "memastikan data master ada" tidak boleh memakai `updateOrCreate` —
+   itu bukan memastikan, itu menimpa.
+
 ## 8. Perintah yang sering dipakai (jalankan di server, folder live)
 
 Semua ini artisan command — **jangan lagi pakai skrip PHP tempelan lewat
@@ -842,6 +849,10 @@ php artisan roster:lihat 2026-08 --pin=20
 # Periksa kewajaran roster sebulan: bentrok shift, kurang tenaga, dan siapa
 # yang belum dijadwalkan sama sekali
 php artisan roster:periksa 2026-09
+
+# Salin roster ke rentang lain, digeser per hari — "bulan depan ulangi pola
+# bulan ini". Cuti & batal tidak ikut. Pakai geseran kelipatan 7 (28 = 4 minggu).
+php artisan roster:salin --dari=2026-09-03..2026-09-23 --ke=2026-10-01 --divisi=kasir
 
 # Rotasi 4-mingguan waiters (17 Agt = Minggu 1)
 php artisan roster:apply-waiters --recompute

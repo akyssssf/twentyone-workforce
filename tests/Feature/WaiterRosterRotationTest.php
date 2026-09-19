@@ -201,4 +201,29 @@ class WaiterRosterRotationTest extends TestCase
         $this->assertSame($shiftId, $assignment->shift_id);
         $this->assertSame($status, $assignment->status);
     }
+
+    /**
+     * Regresi: rotasi ini dulu memakai updateOrCreate untuk Shift Middle, jadi
+     * setiap kali dijalankan jam master Middle dikembalikan ke 11:30 dan jamnya
+     * disembunyikan lagi — menimpa perubahan yang sudah dilakukan lewat
+     * shift:edit, tanpa pesan apa pun. Jam Middle diubah jadi 12:00 dengan
+     * sengaja, dan rotasi tidak berhak mengembalikannya.
+     */
+    public function test_rotasi_tidak_menulis_ulang_jam_master_middle(): void
+    {
+        Shift::firstOrCreate(['code' => 'middle'], [
+            'name' => 'Shift Middle', 'start_time' => '11:30:00', 'end_time' => '01:00:00',
+            'crosses_midnight' => true, 'break_minutes' => 60, 'is_break_paid' => true,
+            'window_before_hours' => 4, 'window_after_hours' => 4, 'is_active' => true,
+        ]);
+
+        Shift::where('code', 'middle')->update(['start_time' => '12:00:00', 'show_hours' => true]);
+
+        $this->artisan('roster:apply-waiters --from=2026-08-17 --to=2026-08-23')->assertSuccessful();
+
+        $middle = Shift::where('code', 'middle')->firstOrFail();
+
+        $this->assertSame('12:00:00', $middle->start_time);
+        $this->assertTrue((bool) $middle->show_hours);
+    }
 }
