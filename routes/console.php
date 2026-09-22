@@ -57,6 +57,16 @@ Schedule::command('attendance:sync --days=1')
     ->withoutOverlapping()
     ->runInBackground();
 
+// Estimasi payroll periode berjalan, tiap pagi setelah rekap semalam lengkap.
+//
+// Hasilnya draf: karyawan tidak melihatnya sampai periode disetujui. Gunanya
+// manajer bisa memantau potongan, lembur, dan THP tiap orang sampai hari ini
+// tanpa menunggu tanggal 20. Periode yang sudah disetujui/dikunci dilewati.
+Schedule::command('payroll:hitung --otomatis')
+    ->dailyAt('06:30')
+    ->withoutOverlapping()
+    ->runInBackground();
+
 // Salinan database tiap hari jam 03:00.
 //
 // Jam 03:00 dipilih karena shift malam sudah bubar (pulang 01:00) dan sinkron

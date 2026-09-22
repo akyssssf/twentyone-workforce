@@ -62,6 +62,17 @@
     </div>
 @endif
 
+@if ($period->end_date->isFuture() && ! $period->isLocked())
+    <div class="pemberitahuan mb-5 border-sky-200 bg-sky-50 text-sky-900">
+        <p class="font-semibold">Estimasi berjalan — periode ini baru selesai {{ $period->end_date->translatedFormat('d M Y') }}.</p>
+        <p class="mt-1">
+            Angka di bawah memakai absensi sampai hari ini dan diperbarui otomatis tiap pagi 06:30
+            (terakhir {{ $run?->finished_at?->translatedFormat('d M H:i') ?? 'belum pernah' }}).
+            Tekan Hitung ulang untuk angka saat ini. Karyawan belum melihat apa pun sampai periode disetujui.
+        </p>
+    </div>
+@endif
+
 @if ($run)
     <div class="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
         <x-kartu label="Karyawan" :nilai="$run->employee_count" />

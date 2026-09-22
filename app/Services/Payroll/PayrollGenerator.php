@@ -43,7 +43,10 @@ class PayrollGenerator
         protected RuleResolver $rules,
     ) {}
 
-    public function generate(PayrollPeriod $period): PayrollRun
+    /**
+     * @param  string  $trigger  'manual' (ditekan manusia) atau 'otomatis' (estimasi harian cron)
+     */
+    public function generate(PayrollPeriod $period, string $trigger = 'manual'): PayrollRun
     {
         if (! $period->status->canGenerate()) {
             throw new RuntimeException(
@@ -62,6 +65,7 @@ class PayrollGenerator
             'payroll_period_id' => $period->id,
             'version' => $version,
             'status' => 'running',
+            'trigger' => $trigger,
             'generated_by' => auth()->id(),
             'started_at' => now(),
             'rule_snapshot' => $this->ruleSnapshot($period),
@@ -103,8 +107,21 @@ class PayrollGenerator
 
             $period->update(['status' => PayrollStatus::Generated]);
 
+            // Estimasi harian yang sudah digantikan tidak punya nilai bukti —
+            // isinya cuma tangkapan absensi sampai hari itu. Dibersihkan
+            // supaya tabel slip tidak menumpuk 30 versi sebulan. Run manual
+            // tidak disentuh.
+            if ($trigger === 'otomatis') {
+                $period->runs()
+                    ->where('trigger', 'otomatis')
+                    ->where('status', 'superseded')
+                    ->where('id', '!=', $run->id)
+                    ->each(fn (PayrollRun $lama) => $lama->delete());
+            }
+
             AuditLogger::record('payroll.generated', $period, [], [
                 'version' => $version,
+                'trigger' => $trigger,
                 'employees' => $employees->count(),
                 'total' => $total,
             ]);

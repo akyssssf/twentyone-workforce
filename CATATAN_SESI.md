@@ -997,8 +997,11 @@ php artisan gaji:atur --pin=17 --pin=14 --jumlah=2500000 --dari=2026-08-21   # P
 php artisan kasbon:catat --data=<pin>:500000 --bulan=2026-10 --cicilan=2 --keterangan="..."
 php artisan kasbon:daftar            # yang masih berjalan; --semua, --bulan=, --pin=
 php artisan kasbon:batal <id>        # cicilan yang belum terpotong saja
-# Payroll dihitung dari web (Payroll → periode → Hitung). Setelah gaji/kasbon/
-# toleransi berubah: attendance:compute rentang periode, lalu Hitung ulang.
+php artisan payroll:hitung                 # periode berjalan (estimasi sampai hari ini)
+php artisan payroll:hitung 2026-09         # periode tertentu; sama dengan tombol Hitung di web
+# Cron menjalankan `payroll:hitung --otomatis` tiap 06:30 untuk periode berjalan;
+# run otomatis lama dibersihkan, run manual dijaga (kolom payroll_runs.trigger).
+# Setelah gaji/kasbon/toleransi berubah: attendance:compute rentang periode, lalu hitung ulang.
 
 # Karyawan
 php artisan employee:akun <pin> --username=umin   # akun login + sandi acak

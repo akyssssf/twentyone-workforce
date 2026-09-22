@@ -16,7 +16,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 class PayrollRun extends Model
 {
     protected $fillable = [
-        'payroll_period_id', 'version', 'status', 'rule_snapshot',
+        'payroll_period_id', 'version', 'status', 'trigger', 'rule_snapshot',
         'employee_count', 'total_take_home_pay', 'generated_by',
         'started_at', 'finished_at', 'error_message',
     ];

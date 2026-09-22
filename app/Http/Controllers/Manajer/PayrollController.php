@@ -27,6 +27,10 @@ class PayrollController extends Controller
 
     public function index()
     {
+        // Periode berjalan selalu ada di daftar, supaya estimasi hariannya
+        // bisa dibuka tanpa harus "membuat periode" dulu.
+        $this->factory->covering(now());
+
         return view('manajer.payroll.index', [
             'periods' => PayrollPeriod::query()->with('runs')->orderByDesc('start_date')->get(),
             'bulanIni' => now(),
