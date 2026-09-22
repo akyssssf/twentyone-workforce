@@ -720,6 +720,9 @@ tabel dan perintahnya ada di jawaban ke user 22 September.
   berlaku aturan (migrasi `aturan_baru_berlaku_21_september`: absent,
   early_leave, overtime mulai 2026-09-21), bukan kode khusus. Lembur tanpa
   tarif berlaku tampil sebagai baris info "dibayar terpisah".
+- **Periode 2026-09 = 21 Agt–21 Sep, 2026-10 = 22 Sep–20 Okt** (migrasi
+  `periode_september_sampai_21`): slip luar menghitung sampai 21 Sep. Satu
+  kali saja; periode berikutnya kembali 21–20.
 - **Kasbon sebelum 21 September sudah dipotong manual** di gajian 21 Sep —
   jangan dicatat ulang ke sistem. Yang dicatat hanya kasbon baru.
 - **Siklus rotasi 4-mingguan waiters**: patokan "Minggu 1" = **Senin 17 Agustus
