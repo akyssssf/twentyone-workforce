@@ -35,18 +35,18 @@ class KasbonBatal extends Command
             return self::FAILURE;
         }
 
-        $belum = $kasbon->installments->where('status', 'scheduled');
-        $sudah = $kasbon->installments->where('status', 'deducted');
+        $terkunci = $service->cicilanTerkunci($kasbon);
+        $bisa = $kasbon->installments->whereNotIn('id', $terkunci->pluck('id'));
 
         $this->line(sprintf('%s (PIN %s) · kasbon Rp %s', $kasbon->employee?->name, $kasbon->employee?->pin_device, number_format($kasbon->amount, 0, ',', '.')));
-        $this->line(sprintf('  belum terpotong : %d cicilan, Rp %s — akan dibatalkan', $belum->count(), number_format($belum->sum('amount'), 0, ',', '.')));
+        $this->line(sprintf('  dibatalkan      : %d cicilan, Rp %s (belum terpotong, atau di slip draf yang belum disetujui)', $bisa->count(), number_format($bisa->sum('amount'), 0, ',', '.')));
 
-        if ($sudah->isNotEmpty()) {
-            $this->warn(sprintf('  sudah terpotong : %d cicilan, Rp %s — TIDAK ditarik kembali', $sudah->count(), number_format($sudah->sum('amount'), 0, ',', '.')));
+        if ($terkunci->isNotEmpty()) {
+            $this->warn(sprintf('  sudah dibayar   : %d cicilan, Rp %s di periode yang disetujui/dikunci — TIDAK ditarik kembali', $terkunci->count(), number_format($terkunci->sum('amount'), 0, ',', '.')));
         }
 
-        if ($belum->isEmpty()) {
-            $this->error('Semua cicilan sudah terpotong; tidak ada yang bisa dibatalkan.');
+        if ($bisa->isEmpty()) {
+            $this->error('Semua cicilan sudah dibayar di periode yang disetujui; tidak ada yang bisa dibatalkan.');
 
             return self::FAILURE;
         }
@@ -59,7 +59,7 @@ class KasbonBatal extends Command
 
         $service->batalkan($kasbon, $this->option('alasan'));
 
-        $this->info("Kasbon #{$kasbon->id} dibatalkan. Kalau payroll bulan ini sudah dihitung, hitung ulang supaya potongannya hilang dari slip.");
+        $this->info("Kasbon #{$kasbon->id} dibatalkan. Kalau payroll periodenya sudah dihitung, hitung ulang supaya potongannya hilang dari slip.");
 
         return self::SUCCESS;
     }

@@ -320,6 +320,20 @@ class SlipGajiTest extends TestCase
         $this->assertSame(250_000, (int) $kedua->total_deduction);
     }
 
+    /** Cicilan di periode yang sudah disetujui benar-benar sudah dibayar: tidak bisa ditarik. */
+    public function test_cicilan_di_periode_disetujui_tidak_bisa_dibatalkan(): void
+    {
+        $kasbon = app(KasbonService::class)->catat($this->budi, 400_000, '2026-09', 2, null, Carbon::parse('2026-09-01'));
+        $this->hitung();
+        app(PayrollPeriodFactory::class)->approve($this->periode->fresh());
+
+        app(KasbonService::class)->batalkan($kasbon);
+
+        $kasbon->refresh();
+        $this->assertSame('paid_off', $kasbon->status);
+        $this->assertSame(['deducted', 'skipped'], $kasbon->installments->pluck('status')->all());
+    }
+
     /** Akun yang tidak diabsen dan tidak bergaji (akun test) tidak diberi slip. */
     public function test_akun_test_tanpa_gaji_tidak_diberi_slip(): void
     {
@@ -363,13 +377,17 @@ class SlipGajiTest extends TestCase
             ->assertOk()
             ->assertSee('Sudah di slip');
 
-        // Batalkan: cicilan Oktober yang belum terpotong dilepas, yang sudah
-        // masuk slip September tidak ditarik kembali.
+        // Batalkan: slip September masih draf (belum disetujui), jadi cicilan
+        // yang sudah masuk slip pun ikut dilepas — hitung ulang akan
+        // menghapusnya dari slip.
         $this->post(route('manajer.payroll.kasbon.batal', [$this->periode, $kasbon]))->assertRedirect();
 
         $kasbon->refresh();
-        $this->assertSame('paid_off', $kasbon->status);
-        $this->assertSame(['deducted', 'skipped'], $kasbon->installments->pluck('status')->all());
+        $this->assertSame('cancelled', $kasbon->status);
+        $this->assertSame(['skipped', 'skipped'], $kasbon->installments->pluck('status')->all());
+
+        $slip = $this->hitung();
+        $this->assertNull($this->item($slip, 'cash_advance'), 'hitung ulang tidak lagi memotong');
     }
 
     /** Halaman slip merender rincian tanpa error. */

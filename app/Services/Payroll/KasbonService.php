@@ -102,16 +102,25 @@ class KasbonService
     }
 
     /**
-     * Batalkan kasbon: cicilan yang belum terpotong dibatalkan. Cicilan yang
-     * sudah masuk slip tidak disentuh — uang yang sudah dipotong tidak bisa
-     * ditarik kembali dari sini, itu urusan penyesuaian periode berikutnya.
+     * Batalkan kasbon.
+     *
+     * Yang dibatalkan: cicilan yang belum terpotong, DAN cicilan yang sudah
+     * masuk slip tapi periodenya belum disetujui — slip draf boleh berubah,
+     * dan hitung ulang berikutnya akan menghapus potongannya. Cicilan di
+     * periode yang sudah disetujui/dikunci tidak disentuh: uang itu sudah
+     * dibayar, koreksinya lewat penyesuaian periode berikutnya.
      */
     public function batalkan(CashAdvance $kasbon, ?string $alasan = null): CashAdvance
     {
-        $sudah = $kasbon->installments()->where('status', 'deducted')->count();
+        $sudah = $this->cicilanTerkunci($kasbon)->count();
 
         DB::transaction(function () use ($kasbon, $sudah, $alasan) {
             $kasbon->installments()->where('status', 'scheduled')->update(['status' => 'skipped']);
+
+            $kasbon->installments()
+                ->where('status', 'deducted')
+                ->whereNotIn('id', $this->cicilanTerkunci($kasbon)->pluck('id'))
+                ->update(['status' => 'skipped', 'payslip_item_id' => null]);
 
             // Kalau belum ada yang terpotong sama sekali, kasbonnya memang
             // batal. Kalau sebagian sudah terpotong, sisanya dianggap dihapus
@@ -122,6 +131,15 @@ class KasbonService
         });
 
         return $kasbon->fresh('installments');
+    }
+
+    /** Cicilan yang sudah terpotong di periode yang disetujui/dikunci: benar-benar sudah dibayar. */
+    public function cicilanTerkunci(CashAdvance $kasbon)
+    {
+        return $kasbon->installments()
+            ->where('status', 'deducted')
+            ->whereHas('period', fn ($q) => $q->whereIn('status', ['approved', 'locked']))
+            ->get();
     }
 
     /** Sisa yang belum terpotong dari seluruh kasbon aktif seorang karyawan. */
