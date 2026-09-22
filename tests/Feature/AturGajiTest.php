@@ -118,6 +118,21 @@ class AturGajiTest extends TestCase
         $this->assertSame(4_000_000, $this->zahra->baseSalaryOn(Carbon::parse('2026-09-20')), 'tidak ada yang berubah');
     }
 
+    /** Baris Rp 0 dari pendaftaran (employee:add tanpa gaji) bukan riwayat: dibersihkan, bukan ditolak. */
+    public function test_placeholder_nol_di_masa_depan_dibersihkan(): void
+    {
+        $this->dea->salaries()->create([
+            'salary_component_id' => SalaryComponent::where('code', 'gaji_pokok')->value('id'),
+            'amount' => 0,
+            'effective_from' => '2026-08-22',
+        ]);
+
+        $this->artisan('gaji:atur --pin=20 --jumlah=1500000 --dari=2026-08-21 --ya')->assertSuccessful();
+
+        $this->assertSame(1_500_000, $this->dea->baseSalaryOn(Carbon::parse('2026-09-20')));
+        $this->assertSame(1, $this->dea->salaries()->count(), 'placeholder terhapus');
+    }
+
     public function test_divisi_tidak_dikenal_berhenti_dengan_pilihan(): void
     {
         $this->assertSame(1, Artisan::call('gaji:atur --divisi=kitchen --jumlah=3000000 --ya'));

@@ -76,9 +76,13 @@ class SetSalary extends Command
         foreach ($sasaran as $employee) {
             $sekarang = $employee->baseSalaryOn($dari);
 
+            // Baris Rp 0 di masa depan adalah placeholder dari pendaftaran
+            // (employee:add tanpa gaji), bukan riwayat — dibersihkan, bukan
+            // dijadikan alasan berhenti.
             $masaDepan = $employee->salaries()
                 ->where('salary_component_id', $komponen->id)
                 ->whereDate('effective_from', '>', $dari)
+                ->where('amount', '>', 0)
                 ->exists();
 
             if ($masaDepan) {
@@ -112,6 +116,12 @@ class SetSalary extends Command
 
         DB::transaction(function () use ($sasaran, $komponen, $jumlah, $dari) {
             foreach ($sasaran as $employee) {
+                $employee->salaries()
+                    ->where('salary_component_id', $komponen->id)
+                    ->whereDate('effective_from', '>', $dari)
+                    ->where('amount', '<=', 0)
+                    ->delete();
+
                 // Baris yang mulainya persis di --dari: koreksi, ditimpa.
                 $sama = $employee->salaries()
                     ->where('salary_component_id', $komponen->id)
