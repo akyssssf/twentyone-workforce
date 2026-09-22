@@ -718,7 +718,7 @@ tabel dan perintahnya ada di jawaban ke user 22 September.
   potongan hanya kasbon + telat Rp1.000/menit; alpha & pulang cepat TIDAK
   dipotong; lembur dibayar terpisah di luar THP. Dicapai lewat tanggal
   berlaku aturan (migrasi `aturan_baru_berlaku_21_september`: absent,
-  early_leave, overtime mulai 2026-09-21), bukan kode khusus. Lembur tanpa
+  early_leave, overtime mulai 2026-09-22 = awal periode 2026-10), bukan kode khusus. Lembur tanpa
   tarif berlaku tampil sebagai baris info "dibayar terpisah".
 - **Periode 2026-09 = 21 Agt–21 Sep, 2026-10 = 22 Sep–20 Okt** (migrasi
   `periode_september_sampai_21`): slip luar menghitung sampai 21 Sep. Satu
