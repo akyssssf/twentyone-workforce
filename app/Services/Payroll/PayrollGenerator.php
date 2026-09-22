@@ -303,6 +303,25 @@ class PayrollGenerator
             ];
         }
 
+        // Tidak ada tarif lembur yang berlaku di tanggal-tanggal itu (periode
+        // sebelum aturan lembur dipasang): jamnya tetap tercatat di slip
+        // sebagai keterangan, tapi bukan uang — dibayar di luar payroll.
+        if ($total <= 0) {
+            $this->addItem(
+                $payslip,
+                'info',
+                'Lembur ' . $this->jam($minutes) . ': dibayar terpisah, tidak termasuk take home pay',
+                round($minutes / 60, 2),
+                0,
+                0,
+                $sort,
+                ['rincian' => $rincian],
+                'overtime',
+            );
+
+            return $minutes;
+        }
+
         $this->addItem(
             $payslip,
             'earning',

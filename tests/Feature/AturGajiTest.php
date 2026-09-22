@@ -114,8 +114,15 @@ class AturGajiTest extends TestCase
 
         $this->assertSame(1, Artisan::call('gaji:atur --divisi=barista --jumlah=3000000 --dari=2026-08-21 --ya'));
 
-        $this->assertStringContainsString('Sigit Uji', Artisan::output());
+        $keluaran = Artisan::output();
+        $this->assertStringContainsString('Sigit Uji', $keluaran);
+        $this->assertStringContainsString('Rp 3.500.000 mulai 2026-10-01', $keluaran, 'baris yang menghalangi ditampilkan');
         $this->assertSame(4_000_000, $this->zahra->baseSalaryOn(Carbon::parse('2026-09-20')), 'tidak ada yang berubah');
+
+        // --timpa: baris masa depan dihapus, gaji baru berlaku terus.
+        $this->artisan('gaji:atur --divisi=barista --jumlah=3000000 --dari=2026-08-21 --timpa --ya')->assertSuccessful();
+        $this->assertSame(3_000_000, $this->sigit->baseSalaryOn(Carbon::parse('2026-10-15')));
+        $this->assertSame(1, $this->sigit->salaries()->whereNull('effective_to')->count());
     }
 
     /** Baris Rp 0 dari pendaftaran (employee:add tanpa gaji) bukan riwayat: dibersihkan, bukan ditolak. */

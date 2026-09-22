@@ -240,6 +240,35 @@ class SlipGajiTest extends TestCase
         $this->assertSame(15_000, (int) $this->item($slip, 'late')->amount);
     }
 
+    /**
+     * Periode 2026-09 sudah dibayar dengan slip luar: alpha tidak dipotong,
+     * lembur di luar THP. Di sistem itu dicapai lewat tanggal berlaku aturan
+     * (mulai 21 Sep), bukan kode khusus — aturan yang belum berlaku berarti
+     * tidak ada potongan/bonus, dan lembur tetap tercatat sebagai keterangan.
+     */
+    public function test_aturan_yang_belum_berlaku_tidak_memotong_dan_lembur_jadi_keterangan(): void
+    {
+        RuleSet::whereIn('type', ['absent', 'overtime'])->update(['effective_from' => '2026-09-21']);
+
+        $this->hadir('2026-08-27', status: AttendanceStatus::Alpha);
+        $this->hadir('2026-09-05');
+        OvertimeRecord::create([
+            'employee_id' => $this->budi->id, 'work_date' => Carbon::parse('2026-09-05'),
+            'actual_minutes' => 212, 'approved_minutes' => 212, 'payable_minutes' => 212,
+            'status' => 'confirmed', 'activated_at' => now(), 'confirmed_at' => now(),
+        ]);
+
+        $slip = $this->hitung();
+
+        $this->assertNull($this->item($slip, 'absent'), 'alpha tidak dipotong sebelum aturannya berlaku');
+
+        $lembur = $this->item($slip, 'overtime');
+        $this->assertSame('info', $lembur->category);
+        $this->assertStringContainsString('Lembur 3 jam 32 menit: dibayar terpisah', $lembur->label);
+        $this->assertSame(212, (int) $slip->overtime_minutes);
+        $this->assertSame(3_000_000, (int) $slip->take_home_pay);
+    }
+
     /** Potongan pulang cepat dan alpha punya rincian per tanggal. */
     public function test_potongan_pulang_cepat_dan_alpha_dirinci_per_tanggal(): void
     {

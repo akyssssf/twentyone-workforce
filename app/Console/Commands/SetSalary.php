@@ -32,6 +32,7 @@ class SetSalary extends Command
                             {--pin=* : PIN karyawan tertentu — boleh diulang; menang atas --divisi}
                             {--jumlah= : Gaji pokok per bulan, mis. 3000000}
                             {--dari= : Berlaku mulai tanggal (YYYY-MM-DD), bawaan hari ini}
+                            {--timpa : Hapus baris gaji yang mulainya SETELAH --dari (ditampilkan dulu)}
                             {--ya : Jangan tanya konfirmasi}';
 
     protected $description = 'Atur gaji pokok per divisi atau per orang, berlaku mulai tanggal tertentu';
@@ -83,10 +84,16 @@ class SetSalary extends Command
                 ->where('salary_component_id', $komponen->id)
                 ->whereDate('effective_from', '>', $dari)
                 ->where('amount', '>', 0)
-                ->exists();
+                ->orderBy('effective_from')
+                ->get();
 
-            if ($masaDepan) {
-                $konflik[] = $employee->name;
+            if ($masaDepan->isNotEmpty()) {
+                $konflik[$employee->name] = $masaDepan->map(fn ($b) => sprintf(
+                    'Rp %s mulai %s%s',
+                    number_format($b->amount, 0, ',', '.'),
+                    $b->effective_from->toDateString(),
+                    $b->effective_to ? ' s/d '.$b->effective_to->toDateString() : '',
+                ))->implode('; ');
             }
 
             $rows[] = [
@@ -102,10 +109,18 @@ class SetSalary extends Command
         $this->table(['PIN', 'Nama', 'Divisi utama', 'Gaji saat itu', 'Gaji baru'], $rows);
 
         if ($konflik !== []) {
-            $this->error('Berhenti: ada baris gaji yang mulainya SETELAH '.$dari->toDateString().' untuk '.implode(', ', $konflik).'.');
-            $this->line('Pilih --dari yang lebih baru, atau rapikan riwayat gajinya dulu. Tidak ada yang diubah.');
+            foreach ($konflik as $nama => $baris) {
+                $this->line("  {$nama}: {$baris}");
+            }
 
-            return self::FAILURE;
+            if (! $this->option('timpa')) {
+                $this->error('Berhenti: ada baris gaji yang mulainya SETELAH '.$dari->toDateString().' untuk '.implode(', ', array_keys($konflik)).' (lihat di atas).');
+                $this->line('Pilih --dari yang lebih baru, atau ulangi dengan --timpa untuk menghapus baris itu. Tidak ada yang diubah.');
+
+                return self::FAILURE;
+            }
+
+            $this->warn('--timpa: baris di atas akan DIHAPUS dan diganti gaji baru.');
         }
 
         if (! $this->option('ya') && ! $this->confirm('Simpan?', false)) {
@@ -119,7 +134,7 @@ class SetSalary extends Command
                 $employee->salaries()
                     ->where('salary_component_id', $komponen->id)
                     ->whereDate('effective_from', '>', $dari)
-                    ->where('amount', '<=', 0)
+                    ->when(! $this->option('timpa'), fn ($q) => $q->where('amount', '<=', 0))
                     ->delete();
 
                 // Baris yang mulainya persis di --dari: koreksi, ditimpa.

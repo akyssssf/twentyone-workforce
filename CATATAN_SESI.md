@@ -714,6 +714,12 @@ tabel dan perintahnya ada di jawaban ke user 22 September.
   diedit langsung tanpa git.
 - **BPJS tidak dipotong** (pemilik, 22 September). Rule set BPJS dinonaktifkan
   lewat migrasi `nonaktifkan_bpjs`; seeder pun memasangnya nonaktif.
+- **Periode 2026-09 = arsip slip luar** (zip "Slip_Gaji_21KAFE_Agt_Sep_2026"):
+  potongan hanya kasbon + telat Rp1.000/menit; alpha & pulang cepat TIDAK
+  dipotong; lembur dibayar terpisah di luar THP. Dicapai lewat tanggal
+  berlaku aturan (migrasi `aturan_baru_berlaku_21_september`: absent,
+  early_leave, overtime mulai 2026-09-21), bukan kode khusus. Lembur tanpa
+  tarif berlaku tampil sebagai baris info "dibayar terpisah".
 - **Kasbon sebelum 21 September sudah dipotong manual** di gajian 21 Sep —
   jangan dicatat ulang ke sistem. Yang dicatat hanya kasbon baru.
 - **Siklus rotasi 4-mingguan waiters**: patokan "Minggu 1" = **Senin 17 Agustus
