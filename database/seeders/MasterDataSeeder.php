@@ -301,10 +301,11 @@ class MasterDataSeeder extends Seeder
         ]);
 
         // Porsi karyawan: JHT 2%, JP 1%, Kesehatan 1%. Porsi perusahaan tidak
-        // dipotong dari gaji jadi tidak muncul di sini.
+        // dipotong dari gaji jadi tidak muncul di sini. NONAKTIF: kafe tidak
+        // memotong BPJS (keputusan pemilik); tiernya disimpan sebagai acuan.
         $bpjs = RuleSet::updateOrCreate(
             ['branch_id' => $branch->id, 'type' => 'bpjs', 'effective_from' => $awalTahun],
-            ['name' => 'BPJS '.now()->year, 'is_active' => true],
+            ['name' => 'BPJS '.now()->year, 'is_active' => false],
         );
         $bpjs->tiers()->delete();
         $bpjs->tiers()->createMany([

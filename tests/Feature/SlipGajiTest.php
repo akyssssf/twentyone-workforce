@@ -169,9 +169,11 @@ class SlipGajiTest extends TestCase
         $this->assertStringContainsString('2x datang lewat masih dalam toleransi', $info->label);
         $this->assertSame(['2026-08-21', '2026-08-22'], array_column($info->rule_snapshot['rincian'], 'date'));
 
-        // Baris info tidak ikut mengurangi gaji.
+        // Baris info tidak ikut mengurangi gaji, dan tidak ada BPJS.
         $this->assertSame(3_000_000, (int) $slip->total_earning);
         $this->assertSame(15_000, (int) $slip->total_deduction);
+        $this->assertSame(0, (int) $slip->total_statutory, 'kafe tidak memotong BPJS');
+        $this->assertSame(2_985_000, (int) $slip->take_home_pay);
     }
 
     /**

@@ -708,9 +708,10 @@ tabel dan perintahnya ada di jawaban ke user 22 September.
   **lembur 1× tarif per jam** (bukan 1,5×/2×). Lihat 4.26–4.27.
 - **Jam operasional baru berlaku 1 Oktober** (bukan 21 September seperti
   rencana sebelumnya): Shift 1 08:00–18:00, Shift 2 14:00–23:30.
-- **BPJS**: seeder memasang potongan 4% (Kesehatan 1%, JHT 2%, JP 1%). Belum
-  pernah dikonfirmasi pemilik apakah kafe memotong BPJS — kalau tidak, nolkan
-  ketiga nilainya di menu Aturan sebelum slip diterbitkan.
+- **BPJS tidak dipotong** (pemilik, 22 September). Rule set BPJS dinonaktifkan
+  lewat migrasi `nonaktifkan_bpjs`; seeder pun memasangnya nonaktif.
+- **Kasbon sebelum 21 September sudah dipotong manual** di gajian 21 Sep —
+  jangan dicatat ulang ke sistem. Yang dicatat hanya kasbon baru.
 - **Siklus rotasi 4-mingguan waiters**: patokan "Minggu 1" = **Senin 17 Agustus
   2026** (jadwal BARU per 18 Agustus 2026 — menggantikan jadwal lama yang
   patokannya 27 Juli; jangan pakai patokan lama lagi). Berlaku 17 Agt–30 Sep,
