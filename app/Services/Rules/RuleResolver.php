@@ -98,6 +98,9 @@ class RuleResolver
             // git — dipertahankan supaya tier yang memakainya tidak diam-diam
             // jatuh ke nol.
             'per_block' => (int) ceil($value / 10) * (int) round((float) $tier->value),
+
+            // Rupiah per menit: telat 33 menit × Rp 1.000 = Rp 33.000.
+            'per_minute' => $value * (int) round((float) $tier->value),
             'daily_rate' => (int) round($dailyRate * (float) $tier->value * $hari),
             'hourly_multiplier' => (int) round($hourlyRate * (float) $tier->value * $value),
             'percent_of_base' => (int) round($baseSalary * (float) $tier->value / 100),

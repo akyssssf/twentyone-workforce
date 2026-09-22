@@ -708,6 +708,10 @@ tabel dan perintahnya ada di jawaban ke user 22 September.
   **lembur 1× tarif per jam** (bukan 1,5×/2×). Lihat 4.26–4.27.
 - **Jam operasional baru berlaku 1 Oktober** (bukan 21 September seperti
   rencana sebelumnya): Shift 1 08:00–18:00, Shift 2 14:00–23:30.
+- **Potongan telat Rp 1.000 per menit** setelah toleransi 10 menit (pemilik,
+  22 September; migrasi `potongan_telat_per_menit`, calc_type `per_minute`).
+  Sebelumnya di server sempat ada tier `per_block` Rp 10.000/10 menit yang
+  diedit langsung tanpa git.
 - **BPJS tidak dipotong** (pemilik, 22 September). Rule set BPJS dinonaktifkan
   lewat migrasi `nonaktifkan_bpjs`; seeder pun memasangnya nonaktif.
 - **Kasbon sebelum 21 September sudah dipotong manual** di gajian 21 Sep —

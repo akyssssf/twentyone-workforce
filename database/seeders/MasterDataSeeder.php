@@ -260,12 +260,11 @@ class MasterDataSeeder extends Seeder
             ['branch_id' => $branch->id, 'type' => 'late', 'effective_from' => $awalTahun],
             ['name' => 'Potongan Terlambat '.now()->year, 'is_active' => true],
         );
+        // Keputusan pemilik (22 Sep 2026): Rp 1.000 per menit, setelah
+        // toleransi 10 menit (setelan attendance.late_tolerance_minutes).
         $late->tiers()->delete();
         $late->tiers()->createMany([
-            ['min_value' => 1, 'max_value' => 10, 'unit' => 'minute', 'calc_type' => 'flat', 'value' => 5000, 'label' => 'Telat 1–10 menit', 'sort_order' => 1],
-            ['min_value' => 11, 'max_value' => 30, 'unit' => 'minute', 'calc_type' => 'flat', 'value' => 15000, 'label' => 'Telat 11–30 menit', 'sort_order' => 2],
-            ['min_value' => 31, 'max_value' => 60, 'unit' => 'minute', 'calc_type' => 'flat', 'value' => 30000, 'label' => 'Telat 31–60 menit', 'sort_order' => 3],
-            ['min_value' => 61, 'max_value' => null, 'unit' => 'minute', 'calc_type' => 'flat', 'value' => 50000, 'label' => 'Telat di atas 1 jam', 'sort_order' => 4],
+            ['min_value' => 1, 'max_value' => null, 'unit' => 'minute', 'calc_type' => 'per_minute', 'value' => 1000, 'label' => 'Rp1.000 per menit keterlambatan', 'sort_order' => 1],
         ]);
 
         $early = RuleSet::updateOrCreate(

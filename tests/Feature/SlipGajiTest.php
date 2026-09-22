@@ -160,9 +160,9 @@ class SlipGajiTest extends TestCase
         $potongan = $this->item($slip, 'late');
         $this->assertNotNull($potongan);
         $this->assertSame('Potongan Terlambat (1x)', $potongan->label);
-        // Tier seeder: 11–30 menit = Rp 15.000.
-        $this->assertSame(15_000, (int) $potongan->amount);
-        $this->assertSame([['date' => '2026-08-24', 'minutes' => 11, 'amount' => 15_000, 'rule' => 'Telat 11–30 menit']], $potongan->rule_snapshot['rincian']);
+        // Rp 1.000 per menit, SELURUH 11 menit dihitung (bukan cuma 1 lewat toleransi).
+        $this->assertSame(11_000, (int) $potongan->amount);
+        $this->assertSame([['date' => '2026-08-24', 'minutes' => 11, 'amount' => 11_000, 'rule' => 'Rp1.000 per menit keterlambatan']], $potongan->rule_snapshot['rincian']);
 
         $info = $slip->items->where('category', 'info')->first(fn ($i) => str_contains($i->label, 'Toleransi telat 10 menit'));
         $this->assertNotNull($info);
@@ -171,9 +171,9 @@ class SlipGajiTest extends TestCase
 
         // Baris info tidak ikut mengurangi gaji, dan tidak ada BPJS.
         $this->assertSame(3_000_000, (int) $slip->total_earning);
-        $this->assertSame(15_000, (int) $slip->total_deduction);
+        $this->assertSame(11_000, (int) $slip->total_deduction);
         $this->assertSame(0, (int) $slip->total_statutory, 'kafe tidak memotong BPJS');
-        $this->assertSame(2_985_000, (int) $slip->take_home_pay);
+        $this->assertSame(2_989_000, (int) $slip->take_home_pay);
     }
 
     /**
@@ -355,7 +355,7 @@ class SlipGajiTest extends TestCase
         $this->get(route('manajer.payroll.payslip', $slip))
             ->assertOk()
             ->assertSee('Potongan Terlambat (1x)')
-            ->assertSee('Telat 11–30 menit')
+            ->assertSee('Rp1.000 per menit keterlambatan')
             ->assertSee('Toleransi telat 10 menit')
             ->assertSee('Kasbon')
             ->assertSee('Dasar perhitungan')

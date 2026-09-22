@@ -39,6 +39,7 @@
                                     @switch($tier->calc_type)
                                         @case('flat') Rupiah tetap @break
                                         @case('per_block') Rupiah per blok 10 menit @break
+                                        @case('per_minute') Rupiah per menit @break
                                         @case('daily_rate') × tarif harian @break
                                         @case('hourly_multiplier') × tarif per jam @break
                                         @case('percent_of_base') % dari gaji pokok @break
