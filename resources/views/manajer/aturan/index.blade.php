@@ -38,6 +38,7 @@
                                 <td class="py-2 text-slate-500">
                                     @switch($tier->calc_type)
                                         @case('flat') Rupiah tetap @break
+                                        @case('per_block') Rupiah per blok 10 menit @break
                                         @case('daily_rate') × tarif harian @break
                                         @case('hourly_multiplier') × tarif per jam @break
                                         @case('percent_of_base') % dari gaji pokok @break

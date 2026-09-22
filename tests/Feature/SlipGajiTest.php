@@ -11,6 +11,7 @@ use App\Models\Employee;
 use App\Models\OvertimeRecord;
 use App\Models\PayrollPeriod;
 use App\Models\Payslip;
+use App\Models\RuleSet;
 use App\Models\SalaryComponent;
 use App\Models\Shift;
 use App\Models\User;
@@ -217,6 +218,24 @@ class SlipGajiTest extends TestCase
         $basis = $slip->items->where('category', 'info')->pluck('rate', 'label');
         $this->assertSame(115_384, (int) $basis['Tarif harian: gaji pokok ÷ 26 hari']);
         $this->assertSame($tarifJam, (int) $basis['Tarif per jam: tarif harian ÷ 10 jam']);
+    }
+
+    /**
+     * calc_type per_block (ditambahkan langsung di server): rupiah per blok
+     * 10 menit, dibulatkan ke atas. Harus dikenali, bukan jatuh ke nol.
+     */
+    public function test_tier_per_blok_sepuluh_menit_dikenali(): void
+    {
+        $late = RuleSet::where('type', 'late')->firstOrFail();
+        $late->tiers()->delete();
+        $late->tiers()->create(['min_value' => 1, 'max_value' => null, 'unit' => 'minute', 'calc_type' => 'per_block', 'value' => 5000, 'label' => 'Per 10 menit', 'sort_order' => 1]);
+
+        $this->hadir('2026-08-24', telatDetik: 25 * 60);
+
+        $slip = $this->hitung();
+
+        // 25 menit = 3 blok × Rp 5.000.
+        $this->assertSame(15_000, (int) $this->item($slip, 'late')->amount);
     }
 
     /** Potongan pulang cepat dan alpha punya rincian per tanggal. */

@@ -109,6 +109,10 @@ class PayrollGenerator
                 'total' => $total,
             ]);
         } catch (\Throwable $e) {
+            // Run yang gagal di tengah tidak boleh meninggalkan separuh slip;
+            // yang tersisa cuma catatan run-nya beserta pesan errornya.
+            $run->payslips()->delete();
+
             $run->update([
                 'status' => 'failed',
                 'finished_at' => now(),

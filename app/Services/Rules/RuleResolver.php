@@ -92,6 +92,12 @@ class RuleResolver
 
         $amount = match ($tier->calc_type) {
             'flat' => (int) round((float) $tier->value),
+
+            // Rupiah per blok 10 menit, dibulatkan ke atas: telat 11 menit =
+            // 2 blok. Ditambahkan langsung di server sebelum sempat masuk
+            // git — dipertahankan supaya tier yang memakainya tidak diam-diam
+            // jatuh ke nol.
+            'per_block' => (int) ceil($value / 10) * (int) round((float) $tier->value),
             'daily_rate' => (int) round($dailyRate * (float) $tier->value * $hari),
             'hourly_multiplier' => (int) round($hourlyRate * (float) $tier->value * $value),
             'percent_of_base' => (int) round($baseSalary * (float) $tier->value / 100),
