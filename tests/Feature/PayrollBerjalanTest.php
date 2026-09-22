@@ -107,4 +107,14 @@ class PayrollBerjalanTest extends TestCase
             ->assertOk()
             ->assertSee('Estimasi berjalan');
     }
+
+    /** Label periode selalu pola 21–20 walau batas hitungnya digeser. */
+    public function test_label_tetap_pola_baku_walau_batas_hitung_bergeser(): void
+    {
+        $periode = app(PayrollPeriodFactory::class)->forMonth(2026, 10);
+        $periode->update(['start_date' => '2026-09-22']);
+
+        $this->assertSame('21 Sep – 20 Okt 2026', $periode->fresh()->label());
+        $this->assertSame('22 Sep – 20 Okt 2026', $periode->fresh()->rentangHitung());
+    }
 }

@@ -9,7 +9,11 @@
         <h1 class="mt-1 text-2xl font-semibold tracking-tight">Payroll {{ $period->code }}</h1>
         <p class="mt-1 flex flex-wrap items-center gap-2 text-sm text-slate-500">
             <x-status-badge :warna="$period->status->color()" :label="$period->status->label()" />
-            Kerja {{ $period->label() }} &middot; dibayar {{ $period->pay_date->translatedFormat('d M Y') }}
+            Kerja {{ $period->label() }}
+            @if ($period->rentangHitung() !== $period->label())
+                <span class="text-xs text-slate-400">(dihitung {{ $period->rentangHitung() }})</span>
+            @endif
+            &middot; dibayar {{ $period->pay_date->translatedFormat('d M Y') }}
         </p>
     </div>
 

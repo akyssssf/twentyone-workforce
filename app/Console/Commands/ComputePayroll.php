@@ -66,7 +66,7 @@ class ComputePayroll extends Command
         $this->info(sprintf(
             'Payroll %s (%s) versi %d: %d karyawan, total THP Rp %s%s',
             $period->code,
-            $period->label(),
+            $period->rentangHitung(),
             $run->version,
             $run->employee_count,
             number_format($run->total_take_home_pay, 0, ',', '.'),
