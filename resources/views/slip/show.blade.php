@@ -2,7 +2,13 @@
 @section('title', 'Slip Gaji')
 
 @section('content')
-@php $snap = $payslip->employee_snapshot ?? []; @endphp
+@php
+    $snap = $payslip->employee_snapshot ?? [];
+    $rp = fn ($n) => number_format((int) $n, 0, ',', '.');
+    $tgl = fn ($ymd) => \Illuminate\Support\Carbon::parse($ymd)->translatedFormat('D, d M');
+    $durasi = fn ($menit) => \App\Support\Durasi::menit((int) $menit);
+    $info = $payslip->items->where('category', 'info');
+@endphp
 
 <div class="mx-auto max-w-3xl">
     <div class="mb-3 flex items-center justify-between print:hidden">
@@ -42,7 +48,7 @@
                 'Alpha' => $payslip->absent_days,
                 'Cuti/Izin' => $payslip->leave_days,
                 'Telat' => $payslip->late_count . 'x',
-                'Lembur' => round($payslip->overtime_minutes / 60, 1) . ' j',
+                'Lembur' => $durasi($payslip->overtime_minutes),
             ] as $label => $nilai)
                 <div>
                     <div class="text-xs text-slate-500">{{ $label }}</div>
@@ -63,19 +69,51 @@
                     <table class="w-full text-sm">
                         <tbody>
                             @foreach ($items as $item)
+                                @php
+                                    $snapshot = $item->rule_snapshot ?? [];
+                                    $rincian = $snapshot['rincian'] ?? [];
+                                    $kasbon = $snapshot['kasbon'] ?? null;
+                                @endphp
                                 <tr>
-                                    <td class="py-1.5">
+                                    <td class="py-1.5 align-top">
                                         {{ $item->label }}
-                                        @if ($item->qty > 1)
-                                            <span class="text-xs text-slate-400">({{ rtrim(rtrim(number_format($item->qty, 2), '0'), ',.') }} × {{ number_format($item->rate, 0, ',', '.') }})</span>
+                                        @if ($item->rate > 0 && $item->qty != 1)
+                                            <span class="text-xs text-slate-400">({{ rtrim(rtrim(number_format($item->qty, 2, ',', '.'), '0'), ',') }} × Rp {{ $rp($item->rate) }})</span>
+                                        @endif
+
+                                        {{-- Rincian per tanggal: karyawan bisa mencocokkan tiap
+                                             baris dengan hari yang dia ingat, bukan cuma menerima
+                                             satu angka total. --}}
+                                        @if ($rincian)
+                                            <ul class="mt-1 space-y-0.5 text-xs text-slate-500">
+                                                @foreach ($rincian as $r)
+                                                    <li class="flex justify-between gap-3 pr-2">
+                                                        <span>
+                                                            {{ $tgl($r['date']) }}
+                                                            @isset($r['minutes']) &middot; {{ $durasi($r['minutes']) }} @endisset
+                                                            @if (! empty($r['rule'])) &middot; {{ $r['rule'] }} @endif
+                                                            @if (! empty($r['note'])) &middot; {{ $r['note'] }} @endif
+                                                        </span>
+                                                        <span class="tabular-nums">{{ $rp($r['amount'] ?? 0) }}</span>
+                                                    </li>
+                                                @endforeach
+                                            </ul>
+                                        @endif
+
+                                        @if ($kasbon)
+                                            <div class="mt-1 text-xs text-slate-500">
+                                                Kasbon Rp {{ $rp($kasbon['total']) }}
+                                                @if (! empty($kasbon['tanggal'])) diterima {{ $tgl($kasbon['tanggal']) }} @endif
+                                                @if (! empty($kasbon['alasan']) && $kasbon['alasan'] !== 'Kasbon') &middot; {{ $kasbon['alasan'] }} @endif
+                                            </div>
                                         @endif
                                     </td>
-                                    <td class="py-1.5 text-right tabular-nums">{{ number_format($item->amount, 0, ',', '.') }}</td>
+                                    <td class="py-1.5 text-right align-top tabular-nums">{{ $rp($item->amount) }}</td>
                                 </tr>
                             @endforeach
                             <tr class="font-medium">
                                 <td class="py-1.5">Subtotal</td>
-                                <td class="py-1.5 text-right tabular-nums">{{ number_format($items->sum('amount'), 0, ',', '.') }}</td>
+                                <td class="py-1.5 text-right tabular-nums">{{ $rp($items->sum('amount')) }}</td>
                             </tr>
                         </tbody>
                     </table>
@@ -85,8 +123,34 @@
 
         <div class="mt-2 flex items-center justify-between rounded-lg bg-slate-900 px-4 py-3 text-white">
             <span class="font-medium">Take Home Pay</span>
-            <span class="text-xl font-semibold tabular-nums">Rp {{ number_format($payslip->take_home_pay, 0, ',', '.') }}</span>
+            <span class="text-xl font-semibold tabular-nums">Rp {{ $rp($payslip->take_home_pay) }}</span>
         </div>
+
+        {{-- Dasar perhitungan: angka yang dipakai, supaya slip bisa dicek
+             ulang dengan kalkulator. Bukan uang, jadi tidak ikut subtotal. --}}
+        @if ($info->isNotEmpty())
+            <div class="mt-4 rounded-lg bg-slate-50 px-4 py-3 text-xs text-slate-600">
+                <h2 class="mb-1 font-semibold text-slate-700">Dasar perhitungan</h2>
+                <ul class="space-y-0.5">
+                    @foreach ($info as $item)
+                        @php $rincian = $item->rule_snapshot['rincian'] ?? []; @endphp
+                        <li class="flex justify-between gap-3">
+                            <span>{{ $item->label }}</span>
+                            @if ($item->rate > 0)
+                                <span class="tabular-nums">Rp {{ $rp($item->rate) }}</span>
+                            @endif
+                        </li>
+                        @if ($rincian)
+                            <li class="pl-3 text-slate-400">
+                                @foreach ($rincian as $r)
+                                    {{ $tgl($r['date']) }}@isset($r['seconds']) ({{ \App\Support\Durasi::detik((int) $r['seconds']) }})@endisset{{ $loop->last ? '' : ', ' }}
+                                @endforeach
+                            </li>
+                        @endif
+                    @endforeach
+                </ul>
+            </div>
+        @endif
 
         <p class="mt-4 text-xs text-slate-400">
             Slip ini dihasilkan sistem pada {{ $payslip->created_at?->translatedFormat('d M Y H:i') }}.

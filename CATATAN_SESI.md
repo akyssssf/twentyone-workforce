@@ -597,6 +597,87 @@ Perubahan berikutnya menutup periode sebelumnya sehari sebelum mulainya;
 tumpang tindih lain ditolak, bukan ditebak. Dikunci tes: 20 September tetap
 memakai 01:00, 21 September memakai 23:30, jam master tidak tersentuh.
 
+### 4.25 Payroll pertama kali dijalankan: "Hitung ulang" selalu gagal
+
+Pemicu: setiap kali payroll 2026-09 dihitung ulang di web, muncul
+`UNIQUE constraint failed: payslips.code`, run tercatat `failed`, periode
+kembali `open`. 24 run gagal menumpuk di produksi.
+
+**Akar masalah**: nomor slip `SLIP-2026-09-013` = periode + karyawan, sengaja
+tanpa versi (hitung ulang = versi baru dari slip yang sama). Tapi unique-nya
+dipasang di kolom `code` saja, jadi run kedua menabrak run pertama pada
+karyawan pertama (urut nama: "21 Bryan"). Payroll hanya pernah bisa dihitung
+SEKALI per periode. Migrasi `payslip_code_unique_per_run`: unique jadi
+`(payroll_run_id, code)`.
+
+Sekalian ketahuan tiga hal lain di modul payroll yang belum pernah dijalankan:
+- **Potongan alpha selalu satu hari** berapa pun harinya — `daily_rate` di
+  `RuleResolver::calculate()` tidak dikalikan jumlah hari. Diperbaiki (dikali
+  `$value` kalau satuan tier = hari).
+- **Kasbon hilang saat hitung ulang**: cicilan yang sudah ditandai `deducted`
+  oleh run lama tidak ditarik lagi run baru. Sekarang `scheduled` DAN
+  `deducted` periode itu ditarik, penandanya dipindah ke baris slip terbaru.
+- Akun test / admin tanpa gaji (`tracks_attendance=false` dan gaji 0) tidak
+  lagi diberi slip. Yang diabsen tapi gajinya belum diatur TETAP diberi slip
+  Rp 0 dan ditandai merah di halaman payroll.
+
+### 4.26 Toleransi telat 10 menit
+
+Keputusan pemilik: datang ≤10 menit setelah jam masuk tidak dihitung telat.
+Setelan `attendance.late_tolerance_minutes` (baris setelan = 10; bawaan di
+kode = 0, memaafkan telat diam-diam bukan bawaan yang aman).
+
+Diterapkan di `AttendanceComputer::lateness()` dengan **dua angka bermakna
+beda**: `late_seconds` = selisih sebenarnya (fakta), `late_minutes` = menit
+yang dihitung telat. Di dalam toleransi detiknya tersimpan, menitnya nol —
+jadi rekap/dashboard tidak menandai telat, tapi slip gaji dan
+`attendance:jelaskan` tetap bisa bilang "datang 08:07, dalam toleransi".
+Lewat toleransi, SELURUH keterlambatan dihitung (11 menit = 11, bukan 1):
+toleransi itu ambang, bukan potongan gratis.
+
+Payroll membaca toleransi dari DETIK (bukan `late_minutes`), supaya baris rekap
+yang dihitung sebelum toleransi ada pun benar tanpa harus dihitung ulang —
+tapi rekap/dashboard baru ikut berubah setelah `attendance:compute` ulang.
+
+### 4.27 Slip gaji rinci, rumus lembur, kasbon, gaji per divisi
+
+- **Rumus tarif per jam** (keputusan pemilik): gaji pokok ÷ hari kerja
+  terjadwal ÷ `payroll.hours_per_day` (10), dibulatkan ke bawah dua kali.
+  Ada di satu tempat: `RuleResolver::hourlyRate()`. Tier lembur lama
+  (1,5×/2×, asumsi seeder) diganti satu tier 1× lewat migrasi
+  `overtime_flat_hourly_rate`. Bonus lembur dihitung PER HARI lalu dijumlah,
+  rinciannya (tanggal, durasi, rupiah) masuk `rule_snapshot.rincian`.
+- **Slip** (`slip/show.blade.php`) menampilkan rincian per tanggal untuk
+  telat, pulang cepat, alpha, lembur; sumber kasbon; dan blok "Dasar
+  perhitungan" (hari kerja, tarif harian, tarif per jam, toleransi telat +
+  daftar tanggalnya) sebagai baris kategori `info` — tidak ikut dijumlah.
+- **Kasbon**: memakai tabel lama `cash_advances` + `cash_advance_installments`
+  (sudah ditarik payroll otomatis), lewat `KasbonService`. Draf model/tabel
+  `kasbon` yang sempat ada di working tree dihapus — dua konsep kasbon
+  paralel cuma bikin bingung. Perintah `kasbon:catat/daftar/batal` + kartu
+  Kasbon di halaman periode payroll. Cicilan N bulan = N periode berturut,
+  periode ke depan dibuat otomatis, periode terkunci ditolak.
+- **`gaji:atur`**: gaji pokok per divisi UTAMA atau per PIN, berlaku mulai
+  `--dari` (boleh mundur — payroll membaca gaji pada tanggal AKHIR periode,
+  jadi `employee:edit --salary` yang selalu "mulai hari ini" tidak bisa
+  dipakai untuk periode yang sedang dihitung). Baris lama ditutup sehari
+  sebelumnya, tanggal mulai sama = ditimpa, baris masa depan = berhenti.
+
+### 4.28 Roster barista Oktober 2026 (pola pasangan)
+
+Permintaan: Zahra jangan sering satu shift dengan Faza, Jihan jangan dengan
+Sigit, libur tepat 1×/minggu, jangan bertabrakan, jam baru per 1 Oktober.
+Enam barista dibagi tiga pasangan berlawanan shift: (Zahra, Faza),
+(Jihan, Sigit), (Abdila, Fikri). Tiap pasangan libur di dua hari kerja
+berurutan (Y hari d, X hari d+1), blok 6 hari bergantian pagi/malam, dan
+pasangan selalu berlawanan di hari yang sama-sama kerja. Akibatnya:
+Malam→Pagi tidak pernah terjadi tanpa libur di antaranya (jeda 23:30→08:00
+cuma 8,5 jam, kurang dari `roster.min_rest_hours` 10), beruntun maksimal 6
+hari, libur Senin–Kamis saja (akhir pekan penuh 3+3). Konsekuensi yang
+dipilih sadar: Sigit selalu satu shift dengan Faza, Jihan dengan Fikri.
+Skrip pembangkit + verifikasinya ada di scratchpad sesi (`roster_okt.py`);
+tabel dan perintahnya ada di jawaban ke user 22 September.
+
 ## 5. Data & keputusan bisnis yang sudah diambil (bukan cuma kode)
 
 - **Roster Agustus** (mulai 15 Agustus) & **September penuh** sudah diisi
@@ -620,6 +701,16 @@ memakai 01:00, 21 September memakai 23:30, jam master tidak tersentuh.
 - **Kebutuhan tenaga (`staffing_requirements`) shift Malam Waiters diturunkan
   dari 3 ke 2** — polanya memang selalu 2 orang malam + 1 middle, angka "3"
   bikin warning "kurang tenaga" muncul terus padahal sudah pas.
+- **Gaji pokok (per 22 September 2026, berlaku surut 21 Agustus)**: Barista &
+  Chef/Kitchen Rp 3.000.000; Zahra (17) & Jihan (14) Rp 2.500.000; Waiters &
+  Kasir Rp 2.200.000. Admin dan Logistik (Indra, 23) belum disebut pemilik.
+- **Toleransi telat 10 menit**, **tarif per jam = gaji ÷ hari kerja ÷ 10**,
+  **lembur 1× tarif per jam** (bukan 1,5×/2×). Lihat 4.26–4.27.
+- **Jam operasional baru berlaku 1 Oktober** (bukan 21 September seperti
+  rencana sebelumnya): Shift 1 08:00–18:00, Shift 2 14:00–23:30.
+- **BPJS**: seeder memasang potongan 4% (Kesehatan 1%, JHT 2%, JP 1%). Belum
+  pernah dikonfirmasi pemilik apakah kafe memotong BPJS — kalau tidak, nolkan
+  ketiga nilainya di menu Aturan sebelum slip diterbitkan.
 - **Siklus rotasi 4-mingguan waiters**: patokan "Minggu 1" = **Senin 17 Agustus
   2026** (jadwal BARU per 18 Agustus 2026 — menggantikan jadwal lama yang
   patokannya 27 Juli; jangan pakai patokan lama lagi). Berlaku 17 Agt–30 Sep,
@@ -668,8 +759,11 @@ menganggap sebuah perintah selesai, **lihat outputnya**.
       terbuang diberi tanda sendiri, supaya kegagalannya berteriak, bukan
       menunggu ditanya.
 
-- [ ] Payroll belum pernah digenerate sama sekali. Begitu dijalankan pertama
-      kali, cek dulu apakah ada slip lama yang perlu diabaikan.
+- [x] Payroll pertama kali dijalankan 22 September (periode 2026-09) — bug
+      hitung ulang, potongan alpha, dan kasbon hilang ketemu & diperbaiki
+      (4.25). Yang belum: konfirmasi BPJS (bagian 5), gaji Admin & Logistik.
+- [ ] Toleransi telat berlaku di rekap baru setelah `attendance:compute` ulang
+      rentang 21 Agt–20 Sep; payroll sudah benar tanpa itu (baca detik).
 - [ ] Auto-deploy Hostinger masih nyasar ke folder `kafe/` — perlu dibenerin
       dari pengaturan Git di hPanel biar `git pull` manual tidak perlu terus.
 - [ ] Roster **Kasir September** belum ada (Agustus sudah). Selama kosong,
@@ -796,6 +890,11 @@ menganggap sebuah perintah selesai, **lihat outputnya**.
    Sudah diganti `firstOrCreate` dan dikunci tes. Pelajaran umumnya: perintah
    yang "memastikan data master ada" tidak boleh memakai `updateOrCreate` —
    itu bukan memastikan, itu menimpa.
+13. **Setelan (`Settings::all()`) di-cache satu jam.** Migrasi yang menulis
+    `settings` lewat `DB::table` HARUS memanggil `Settings::flush($branchId)`,
+    kalau tidak nilai barunya tidak terbaca sampai cache kedaluwarsa — payroll
+    pertama setelah deploy diam-diam memakai toleransi 0. Sudah kejadian di
+    lokal saat menguji 4.26. Kalau ragu di server: `php artisan cache:clear`.
 
 ## 8. Perintah yang sering dipakai (jalankan di server, folder live)
 
@@ -886,6 +985,15 @@ php artisan fingerspot:ping
 
 # Lihat aliran data absensi hari ini, dari callback sampai rekap
 php artisan attendance:status
+
+# Gaji & payroll
+php artisan gaji:atur --divisi=barista --divisi=chef --jumlah=3000000 --dari=2026-08-21
+php artisan gaji:atur --pin=17 --pin=14 --jumlah=2500000 --dari=2026-08-21   # PIN menang atas divisi
+php artisan kasbon:catat --data=<pin>:500000 --bulan=2026-10 --cicilan=2 --keterangan="..."
+php artisan kasbon:daftar            # yang masih berjalan; --semua, --bulan=, --pin=
+php artisan kasbon:batal <id>        # cicilan yang belum terpotong saja
+# Payroll dihitung dari web (Payroll → periode → Hitung). Setelah gaji/kasbon/
+# toleransi berubah: attendance:compute rentang periode, lalu Hitung ulang.
 
 # Karyawan
 php artisan employee:akun <pin> --username=umin   # akun login + sandi acak

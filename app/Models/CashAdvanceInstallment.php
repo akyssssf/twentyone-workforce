@@ -21,4 +21,9 @@ class CashAdvanceInstallment extends Model
     {
         return $this->belongsTo(CashAdvance::class);
     }
+
+    public function period(): BelongsTo
+    {
+        return $this->belongsTo(PayrollPeriod::class, 'payroll_period_id');
+    }
 }

@@ -3,11 +3,12 @@
 namespace Tests\Feature;
 
 use App\Enums\UserRole;
-use App\Models\Attendance;
 use App\Models\AttendanceLog;
 use App\Models\Employee;
 use App\Models\Shift;
 use App\Models\User;
+use App\Services\Attendance\AttendanceComputer;
+use App\Support\Settings;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
 use Tests\TestCase;
@@ -21,6 +22,10 @@ class DashboardTest extends TestCase
         parent::setUp();
 
         Carbon::setTestNow(Carbon::parse('2026-08-10 12:00:00', 'Asia/Jakarta'));
+
+        // Toleransi telat dinolkan: yang diuji di sini aritmetika menitnya,
+        // bukan kebijakan kafe (10 menit, dipasang migrasi setelan).
+        Settings::put('attendance.late_tolerance_minutes', 0);
     }
 
     protected function tearDown(): void
@@ -35,7 +40,7 @@ class DashboardTest extends TestCase
     public function test_tamu_diarahkan_ke_halaman_masuk(): void
     {
         $this->get('/dashboard')->assertRedirect(route('login'));
-        
+
         // Akar diarahkan ke /beranda, yang membagi manajer ke dashboard dan
         // karyawan ke portalnya masing-masing.
         $this->get('/')->assertRedirect('/beranda');
@@ -175,7 +180,7 @@ class DashboardTest extends TestCase
         $this->scan('2', '2026-08-06 17:00:00');
         $this->scan('2', '2026-08-07 00:30:00');
 
-        app(\App\Services\Attendance\AttendanceComputer::class)
+        app(AttendanceComputer::class)
             ->computeDate(Carbon::parse('2026-08-06', 'Asia/Jakarta'));
 
         return [$budi, $sari];
@@ -229,7 +234,7 @@ class DashboardTest extends TestCase
     {
         $this->siapkanData();
 
-        $malam = \App\Models\Shift::where('name', 'Shift 2')->first();
+        $malam = Shift::where('name', 'Shift 2')->first();
 
         // Budi TETAP muncul di halaman ini (mis. bagian Aktivitas Scan
         // mentah, yang tidak ikut kena filter tabel) — jadi yang dijaga di
@@ -349,7 +354,7 @@ class DashboardTest extends TestCase
             'default_shift_id' => Shift::where('name', 'Shift 1')->first()->id,
         ]);
 
-        app(\App\Services\Attendance\AttendanceComputer::class)
+        app(AttendanceComputer::class)
             ->computeDate(Carbon::parse('2026-08-06', 'Asia/Jakarta'));
 
         $response = $this->actingAs(User::factory()->create())->get('/dashboard?tanggal=2026-08-06');

@@ -11,6 +11,7 @@ use App\Models\Employee;
 use App\Models\RosterAssignment;
 use App\Models\Shift;
 use App\Services\Roster\RosterService;
+use App\Support\Settings;
 use Database\Seeders\MasterDataSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
@@ -59,6 +60,10 @@ class SatuScanSatuShiftTest extends TestCase
         // sudah mulai 14:00, jadi jam 14:06 berada di dalam rentang KEDUANYA.
         Shift::where('code', 'pagi')->update(['start_time' => '08:00:00', 'end_time' => '18:00:00']);
         Shift::where('code', 'malam')->update(['start_time' => '14:00:00', 'end_time' => '01:00:00']);
+
+        // Toleransi telat dinolkan: yang diuji di sini aritmetika menitnya,
+        // bukan kebijakan kafe (10 menit, dipasang migrasi setelan).
+        Settings::put('attendance.late_tolerance_minutes', 0);
 
         $this->karyawan = Employee::factory()->create([
             'branch_id' => Branch::current()->id,

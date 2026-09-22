@@ -9,6 +9,7 @@ use App\Models\User;
 use App\Services\Attendance\AttendanceComputer;
 use App\Services\Attendance\MonthlyReport;
 use App\Services\Attendance\MonthlyReportExcel;
+use App\Support\Settings;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
 use PhpOffice\PhpSpreadsheet\IOFactory;
@@ -29,6 +30,10 @@ class MonthlyReportTest extends TestCase
         Carbon::setTestNow(Carbon::parse('2026-09-05 10:00:00', 'Asia/Jakarta'));
 
         $this->shift = Shift::factory()->create(['name' => 'Shift 1']);
+
+        // Toleransi telat dinolkan: yang diuji di sini aritmetika menitnya,
+        // bukan kebijakan kafe (10 menit, dipasang migrasi setelan).
+        Settings::put('attendance.late_tolerance_minutes', 0);
     }
 
     protected function tearDown(): void

@@ -11,6 +11,7 @@ use App\Models\Employee;
 use App\Models\Holiday;
 use App\Models\RosterAssignment;
 use App\Models\Shift;
+use App\Support\Settings;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 
@@ -641,9 +642,21 @@ class AttendanceComputer
             return ['seconds' => 0, 'minutes' => 0];
         }
 
-        // Toleransi nol (BR-04): lewat satu detik pun sudah telat. Menitnya
-        // dibulatkan KE ATAS karena tier potongan berbicara dalam menit —
-        // telat 1 detik jatuh ke tier "1-10 menit", bukan ke nol.
+        // Dua angka dengan makna berbeda, sengaja:
+        //   late_seconds = selisih SEBENARNYA dari jam masuk terjadwal;
+        //   late_minutes = menit yang DIHITUNG telat (dipotong, ditandai).
+        // Di dalam toleransi (setelan attendance.late_tolerance_minutes)
+        // menitnya nol tapi detiknya tetap tersimpan, supaya slip gaji dan
+        // attendance:jelaskan bisa bilang "datang 08:07, dalam toleransi" —
+        // bukan seolah-olah orangnya tepat waktu.
+        //
+        // Lewat toleransi, SELURUH keterlambatan dihitung (bukan cuma
+        // sisanya): toleransi adalah ambang, bukan potongan gratis 10 menit.
+        // Menit dibulatkan KE ATAS karena tier potongan berbicara dalam menit.
+        if ($selisih <= Settings::int('attendance.late_tolerance_minutes') * 60) {
+            return ['seconds' => $selisih, 'minutes' => 0];
+        }
+
         return ['seconds' => $selisih, 'minutes' => (int) ceil($selisih / 60)];
     }
 

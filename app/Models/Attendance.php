@@ -83,6 +83,16 @@ class Attendance extends Model
         return $this->late_minutes > 0;
     }
 
+    /**
+     * Datang lewat jam masuk tapi masih di dalam toleransi: detiknya ada,
+     * menitnya nol. Tidak dipotong dan tidak ditandai telat, tapi faktanya
+     * tetap tersimpan supaya bisa ditampilkan apa adanya.
+     */
+    public function telatDalamToleransi(): bool
+    {
+        return $this->late_seconds > 0 && $this->late_minutes === 0;
+    }
+
     public function isEarlyLeave(): bool
     {
         return $this->early_leave_minutes > 0;

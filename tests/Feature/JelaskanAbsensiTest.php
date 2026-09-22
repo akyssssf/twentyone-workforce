@@ -149,6 +149,23 @@ class JelaskanAbsensiTest extends TestCase
         $this->assertStringNotContainsString('DIABAIKAN', $keluaran);
     }
 
+    /**
+     * Datang 17:04 pada shift 17:00 dengan toleransi 10 menit: rekap tidak
+     * menghitungnya telat, tapi diagnosis harus tetap bilang apa adanya —
+     * bukan "telat —" seolah-olah orangnya datang tepat waktu.
+     */
+    public function test_telat_dalam_toleransi_dikatakan_apa_adanya(): void
+    {
+        $this->jadwalkan('2026-08-21');
+
+        $this->scan('2026-08-21 17:04:00');
+        $this->scan('2026-08-22 01:02:00');
+
+        $keluaran = $this->jelaskan();
+
+        $this->assertStringContainsString('telat 4m (dalam toleransi 10 menit, tidak dihitung)', $keluaran);
+    }
+
     /** Tanpa roster, shift-nya cuma tebakan — dan itu harus dikatakan. */
     public function test_shift_tebakan_ditandai_sebagai_tebakan(): void
     {

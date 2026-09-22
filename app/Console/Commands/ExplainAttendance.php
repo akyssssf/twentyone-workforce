@@ -8,6 +8,7 @@ use App\Services\Attendance\WorkWindow;
 use App\Support\DateInput;
 use App\Support\Durasi;
 use App\Support\OperationalDate;
+use App\Support\Settings;
 use Illuminate\Console\Command;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
@@ -282,7 +283,11 @@ class ExplainAttendance extends Command
                 $a->check_out_at ? $this->jam($a->check_out_at->copy()->setTimezone(config('attendance.timezone', 'Asia/Jakarta')), $tanggal) : '—'));
 
             $this->line(sprintf('     telat %s · pulang cepat %s · kerja %s · lembur %s',
-                Durasi::menit((int) $a->late_minutes),
+                $a->telatDalamToleransi()
+                    ? sprintf('%s <fg=yellow>(dalam toleransi %d menit, tidak dihitung)</>',
+                        Durasi::detik((int) $a->late_seconds),
+                        Settings::int('attendance.late_tolerance_minutes'))
+                    : Durasi::menit((int) $a->late_minutes),
                 Durasi::menit((int) $a->early_leave_minutes),
                 Durasi::menit((int) $a->work_minutes),
                 Durasi::menit((int) $a->overtime_minutes)));

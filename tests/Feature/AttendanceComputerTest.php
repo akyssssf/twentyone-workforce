@@ -7,6 +7,7 @@ use App\Models\AttendanceLog;
 use App\Models\Employee;
 use App\Models\Shift;
 use App\Services\Attendance\AttendanceComputer;
+use App\Support\Settings;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
 use Tests\TestCase;
@@ -117,6 +118,9 @@ class AttendanceComputerTest extends TestCase
      */
     public function test_menit_telat_dibulatkan_ke_atas(): void
     {
+        // Toleransi dinolkan: yang diuji pembulatannya, bukan kebijakan kafe.
+        Settings::put('attendance.late_tolerance_minutes', 0);
+
         $shift = Shift::factory()->create();
 
         $kasus = [
@@ -458,5 +462,35 @@ class AttendanceComputerTest extends TestCase
         $this->assertSame(0, $hasil['alpha']);
         $this->assertSame(1, $hasil['libur']);
         $this->assertArrayNotHasKey('telat', $hasil);
+    }
+
+    /**
+     * Toleransi telat (setelan attendance.late_tolerance_minutes).
+     *
+     * Di dalam toleransi: DETIK tetap tersimpan (fakta), MENIT nol (tidak
+     * dihitung telat, tidak dipotong). Lewat toleransi: seluruh menitnya
+     * dihitung, bukan cuma sisanya — toleransi itu ambang, bukan diskon.
+     */
+    public function test_toleransi_telat_menolkan_menit_tapi_menyimpan_detik(): void
+    {
+        Settings::put('attendance.late_tolerance_minutes', 10);
+
+        $employee = $this->karyawan();
+        $this->scan('1', '2026-08-06 09:07:30');
+        $this->scan('1', '2026-08-07 09:10:00');
+        $this->scan('1', '2026-08-08 09:10:01');
+
+        $dalam = $this->hitung($employee, '2026-08-06');
+        $this->assertSame(450, $dalam->late_seconds);
+        $this->assertSame(0, $dalam->late_minutes);
+        $this->assertTrue($dalam->telatDalamToleransi());
+        $this->assertFalse($dalam->isLate());
+
+        $pas = $this->hitung($employee, '2026-08-07');
+        $this->assertSame(0, $pas->late_minutes, 'tepat 10 menit masih dalam toleransi');
+
+        $lewat = $this->hitung($employee, '2026-08-08');
+        $this->assertSame(11, $lewat->late_minutes, 'lewat satu detik: seluruh 10m 1d dihitung, dibulatkan ke atas');
+        $this->assertFalse($lewat->telatDalamToleransi());
     }
 }

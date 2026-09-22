@@ -155,10 +155,12 @@ class MasterDataSeeder extends Seeder
             ['roster.warn_double_shift', true, 'bool', 'Peringatkan kalau ada double shift'],
             ['attendance.check_in_out_strategy', 'earliest_latest', 'string', 'Cara menentukan jam masuk & pulang'],
             ['attendance.close_day_hour', 6, 'int', 'Jam proses tutup hari'],
+            ['attendance.late_tolerance_minutes', 10, 'int', 'Toleransi telat (menit), tidak dihitung telat sampai batas ini'],
             ['overtime.allow_backdated', true, 'bool', 'Izinkan approval lembur susulan'],
             ['payroll.period_start_day', 21, 'int', 'Tanggal mulai periode gaji'],
             ['payroll.pay_day', 21, 'int', 'Tanggal pembayaran gaji'],
             ['payroll.working_days_basis', 'scheduled', 'string', 'Dasar hari kerja'],
+            ['payroll.hours_per_day', 10, 'int', 'Jam kerja per hari, pembagi tarif per jam'],
 
             // Nomor yang dihubungi karyawan untuk mengonfirmasi pengajuan.
             // Ditaruh di setelan, bukan ditanam di tampilan, supaya ganti
@@ -277,15 +279,15 @@ class MasterDataSeeder extends Seeder
             ['min_value' => 61, 'max_value' => null, 'unit' => 'minute', 'calc_type' => 'flat', 'value' => 50000, 'label' => 'Pulang cepat di atas 1 jam', 'sort_order' => 3],
         ]);
 
-        // Mengikuti pola umum: jam pertama 1,5x upah sejam, jam berikutnya 2x.
+        // Keputusan pemilik: lembur = jam lembur × tarif per jam, semua jam
+        // sama. Tarif per jam = gaji pokok ÷ hari kerja ÷ payroll.hours_per_day.
         $overtime = RuleSet::updateOrCreate(
             ['branch_id' => $branch->id, 'type' => 'overtime', 'effective_from' => $awalTahun],
             ['name' => 'Tarif Lembur '.now()->year, 'is_active' => true],
         );
         $overtime->tiers()->delete();
         $overtime->tiers()->createMany([
-            ['min_value' => 1, 'max_value' => 1, 'unit' => 'hour', 'calc_type' => 'hourly_multiplier', 'value' => 1.5, 'label' => 'Lembur jam ke-1', 'sort_order' => 1],
-            ['min_value' => 2, 'max_value' => null, 'unit' => 'hour', 'calc_type' => 'hourly_multiplier', 'value' => 2.0, 'label' => 'Lembur jam ke-2 dst', 'sort_order' => 2],
+            ['min_value' => 1, 'max_value' => null, 'unit' => 'hour', 'calc_type' => 'hourly_multiplier', 'value' => 1.0, 'label' => 'Lembur per jam (1× tarif per jam)', 'sort_order' => 1],
         ]);
 
         // Alpha = satu hari gaji per hari alpha (D-05).

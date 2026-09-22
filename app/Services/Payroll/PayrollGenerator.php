@@ -19,6 +19,8 @@ use App\Models\RosterAssignment;
 use App\Models\SalaryComponent;
 use App\Services\Audit\AuditLogger;
 use App\Services\Rules\RuleResolver;
+use App\Support\Settings;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use RuntimeException;
 
@@ -72,7 +74,15 @@ class PayrollGenerator
                 ->active()
                 ->with(['divisions', 'salaries.component'])
                 ->orderBy('name')
-                ->get();
+                ->get()
+
+                // Akun yang tidak diabsen DAN tidak punya gaji (akun test,
+                // admin tanpa gaji di sistem) tidak diberi slip. Yang diabsen
+                // tapi gajinya belum diatur TETAP diberi slip — slip Rp 0
+                // adalah cara paling keras untuk memberi tahu bahwa ada yang
+                // terlewat, dan halaman payroll menandainya.
+                ->reject(fn (Employee $e) => ! $e->tracks_attendance && $e->baseSalaryOn($period->end_date) <= 0)
+                ->values();
 
             $total = 0;
 
@@ -128,6 +138,14 @@ class PayrollGenerator
         $baseSalary = $employee->baseSalaryOn($period->end_date);
         $workingDays = $this->workingDays($employee, $period, $scheduledDays);
 
+        // Toleransi dibaca dari DETIK, bukan dari late_minutes yang sudah
+        // dinolkan AttendanceComputer. Dua alasan: baris rekap yang dihitung
+        // sebelum toleransi ada masih menyimpan menitnya, dan slip harus bisa
+        // bilang "3 kali datang lewat, semuanya dalam toleransi".
+        $toleransi = Settings::int('attendance.late_tolerance_minutes');
+        $telatDipotong = $attendances->filter(fn ($a) => $a->late_seconds > $toleransi * 60);
+        $telatDimaafkan = $attendances->filter(fn ($a) => $a->late_seconds > 0 && $a->late_seconds <= $toleransi * 60);
+
         $payslip = Payslip::updateOrCreate(
             ['payroll_run_id' => $run->id, 'employee_id' => $employee->id],
             [
@@ -143,7 +161,7 @@ class PayrollGenerator
                 'present_days' => $presentDays,
                 'absent_days' => $absentDays,
                 'leave_days' => $leaveDays,
-                'late_count' => $attendances->filter(fn ($a) => $a->late_minutes > 0)->count(),
+                'late_count' => $telatDipotong->count(),
                 'early_leave_count' => $attendances->filter(fn ($a) => $a->early_leave_minutes > 0)->count(),
                 'status' => 'draft',
             ],
@@ -168,14 +186,17 @@ class PayrollGenerator
         $sort += 1;
 
         // --- Potongan ---
-        $this->addLateDeduction($payslip, $attendances, $period, $baseSalary, $workingDays, $sort++);
+        $this->addLateDeduction($payslip, $telatDipotong, $period, $baseSalary, $workingDays, $sort++);
         $this->addEarlyLeaveDeduction($payslip, $attendances, $period, $baseSalary, $workingDays, $sort++);
-        $this->addAbsentDeduction($payslip, $absentDays, $period, $baseSalary, $workingDays, $sort++);
+        $this->addAbsentDeduction($payslip, $attendances, $period, $baseSalary, $workingDays, $sort++);
         $this->addManualDeductions($payslip, $employee, $period, $sort++);
         $this->addCashAdvance($payslip, $employee, $period, $sort++);
 
         // --- Potongan wajib ---
         $this->addBpjs($payslip, $period, $baseSalary, $sort++);
+
+        // --- Dasar perhitungan (informasi, bukan uang) ---
+        $this->addBasis($payslip, $baseSalary, $workingDays, $toleransi, $telatDimaafkan, $sort);
 
         $items = $payslip->items()->get();
 
@@ -222,67 +243,87 @@ class PayrollGenerator
         return $scheduledDays > 0 ? $scheduledDays : 26;
     }
 
+    /**
+     * Bonus lembur: tiap hari lembur dihitung sendiri lalu dijumlahkan.
+     *
+     * Per hari, bukan dari total menit sebulan, supaya slip bisa menunjukkan
+     * "5 Sep: 2j 30m = Rp 28.845" dan karyawan bisa mencocokkannya dengan
+     * ingatannya sendiri. Rumus tarifnya ada di RuleResolver::hourlyRate().
+     */
     protected function addOvertime(Payslip $payslip, Employee $employee, PayrollPeriod $period, int $baseSalary, int $workingDays, int $sort): int
     {
-        $minutes = (int) OvertimeRecord::query()
+        $records = OvertimeRecord::query()
             ->where('employee_id', $employee->id)
             ->whereBetween('work_date', [$period->start_date, $period->end_date])
             ->confirmed()
-            ->sum('payable_minutes');
+            ->where('payable_minutes', '>', 0)
+            ->orderBy('work_date')
+            ->get();
 
-        if ($minutes <= 0) {
+        if ($records->isEmpty()) {
             return 0;
         }
 
-        $result = $this->rules->overtimePay($period->end_date, $minutes, $baseSalary, $workingDays);
+        $minutes = 0;
+        $total = 0;
+        $rincian = [];
+
+        foreach ($records as $record) {
+            $result = $this->rules->overtimePay($record->work_date, (int) $record->payable_minutes, $baseSalary, $workingDays);
+
+            $minutes += (int) $record->payable_minutes;
+            $total += $result['amount'];
+
+            $rincian[] = [
+                'date' => $record->work_date->toDateString(),
+                'minutes' => (int) $record->payable_minutes,
+                'amount' => $result['amount'],
+                'note' => $record->note,
+            ];
+        }
 
         $this->addItem(
             $payslip,
             'earning',
-            'Lembur ' . round($minutes / 60, 1) . ' jam',
+            'Bonus Lembur ' . $this->jam($minutes),
             round($minutes / 60, 2),
-            $result['amount'] > 0 && $minutes > 0 ? (int) round($result['amount'] / ($minutes / 60)) : 0,
-            $result['amount'],
+            $this->rules->hourlyRate($baseSalary, $workingDays),
+            $total,
             $sort,
-            ['breakdown' => $result['breakdown']],
+            ['rincian' => $rincian],
             'overtime',
         );
 
         return $minutes;
     }
 
-    protected function addLateDeduction(Payslip $payslip, $attendances, PayrollPeriod $period, int $baseSalary, int $workingDays, int $sort): void
+    /** @param  Collection<int, Attendance>  $late  baris yang telatnya SUDAH lewat toleransi */
+    protected function addLateDeduction(Payslip $payslip, Collection $late, PayrollPeriod $period, int $baseSalary, int $workingDays, int $sort): void
     {
-        $late = $attendances->filter(fn ($a) => $a->late_minutes > 0);
-
         if ($late->isEmpty()) {
             return;
         }
 
         $total = 0;
-        $breakdown = [];
+        $rincian = [];
 
-        // Dihitung per kejadian, bukan dari total menit sebulan. Telat 5 menit
-        // tiga kali tidak sama dengan telat 15 menit sekali — tiernya beda.
-        foreach ($late as $attendance) {
-            $result = $this->rules->calculate(
-                RuleType::Late,
-                $attendance->work_date,
-                (int) $attendance->late_minutes,
-                $baseSalary,
-                $workingDays,
-            );
+        // Dihitung per kejadian, bukan dari total menit sebulan. Telat 15
+        // menit tiga kali tidak sama dengan telat 45 menit sekali — tiernya
+        // beda. Menit diambil dari detik supaya baris rekap yang dihitung
+        // sebelum toleransi ada pun tetap benar.
+        foreach ($late->sortBy('work_date') as $attendance) {
+            $menit = (int) ceil($attendance->late_seconds / 60);
+
+            $result = $this->rules->calculate(RuleType::Late, $attendance->work_date, $menit, $baseSalary, $workingDays);
 
             $total += $result['amount'];
 
-            if ($result['amount'] > 0) {
-                $breakdown[] = [
-                    'date' => $attendance->work_date->toDateString(),
-                    'minutes' => $attendance->late_minutes,
-                    'amount' => $result['amount'],
-                    'rule' => $result['snapshot'],
-                ];
-            }
+            $rincian[] = [
+                'date' => $attendance->work_date->toDateString(),
+                'minutes' => $menit,
+                'amount' => $result['amount'],
+                'rule' => $result['label'],
+            ];
         }
 
         if ($total <= 0) {
@@ -297,51 +338,136 @@ class PayrollGenerator
             0,
             $total,
             $sort,
-            ['breakdown' => $breakdown],
+            ['rincian' => $rincian],
             'late',
         );
     }
 
-    protected function addEarlyLeaveDeduction(Payslip $payslip, $attendances, PayrollPeriod $period, int $baseSalary, int $workingDays, int $sort): void
+    protected function addEarlyLeaveDeduction(Payslip $payslip, Collection $attendances, PayrollPeriod $period, int $baseSalary, int $workingDays, int $sort): void
     {
-        $early = $attendances->filter(fn ($a) => $a->early_leave_minutes > 0);
+        $early = $attendances->filter(fn ($a) => $a->early_leave_minutes > 0)->sortBy('work_date');
 
         if ($early->isEmpty()) {
             return;
         }
 
         $total = 0;
+        $rincian = [];
 
         foreach ($early as $attendance) {
-            $total += $this->rules->calculate(
+            $result = $this->rules->calculate(
                 RuleType::EarlyLeave,
                 $attendance->work_date,
                 (int) $attendance->early_leave_minutes,
                 $baseSalary,
                 $workingDays,
-            )['amount'];
+            );
+
+            $total += $result['amount'];
+
+            $rincian[] = [
+                'date' => $attendance->work_date->toDateString(),
+                'minutes' => (int) $attendance->early_leave_minutes,
+                'amount' => $result['amount'],
+                'rule' => $result['label'],
+            ];
         }
 
         if ($total <= 0) {
             return;
         }
 
-        $this->addItem($payslip, 'deduction', 'Potongan Pulang Cepat (' . $early->count() . 'x)', $early->count(), 0, $total, $sort, [], 'early_leave');
+        $this->addItem(
+            $payslip,
+            'deduction',
+            'Potongan Pulang Cepat (' . $early->count() . 'x)',
+            $early->count(),
+            0,
+            $total,
+            $sort,
+            ['rincian' => $rincian],
+            'early_leave',
+        );
     }
 
-    protected function addAbsentDeduction(Payslip $payslip, int $absentDays, PayrollPeriod $period, int $baseSalary, int $workingDays, int $sort): void
+    protected function addAbsentDeduction(Payslip $payslip, Collection $attendances, PayrollPeriod $period, int $baseSalary, int $workingDays, int $sort): void
     {
-        if ($absentDays <= 0) {
+        $alpha = $attendances->where('status', AttendanceStatus::Alpha)->sortBy('work_date');
+
+        if ($alpha->isEmpty()) {
             return;
         }
 
-        $result = $this->rules->calculate(RuleType::Absent, $period->end_date, $absentDays, $baseSalary, $workingDays);
+        $result = $this->rules->calculate(RuleType::Absent, $period->end_date, $alpha->count(), $baseSalary, $workingDays);
 
         if ($result['amount'] <= 0) {
             return;
         }
 
-        $this->addItem($payslip, 'deduction', "Potongan Alpha ({$absentDays} hari)", $absentDays, 0, $result['amount'], $sort, ['rule' => $result['snapshot']], 'absent');
+        // Satu tarif untuk semua hari, jadi rinciannya cukup tanggalnya —
+        // nominal per hari = total ÷ jumlah hari.
+        $perHari = intdiv($result['amount'], $alpha->count());
+
+        $this->addItem(
+            $payslip,
+            'deduction',
+            'Potongan Alpha (' . $alpha->count() . ' hari)',
+            $alpha->count(),
+            $perHari,
+            $result['amount'],
+            $sort,
+            [
+                'rule' => $result['snapshot'],
+                'rincian' => $alpha->map(fn ($a) => [
+                    'date' => $a->work_date->toDateString(),
+                    'amount' => $perHari,
+                ])->values()->all(),
+            ],
+            'absent',
+        );
+    }
+
+    /**
+     * Baris informasi: angka yang dipakai menghitung, supaya slip bisa
+     * dicek ulang dengan kalkulator, bukan dipercaya begitu saja.
+     *
+     * Kategori 'info' tidak ikut dijumlahkan ke pendapatan/potongan.
+     */
+    protected function addBasis(Payslip $payslip, int $baseSalary, int $workingDays, int $toleransi, Collection $telatDimaafkan, int $sort): void
+    {
+        $tarifHarian = $workingDays > 0 ? intdiv($baseSalary, $workingDays) : 0;
+        $jamPerHari = max(1, Settings::int('payroll.hours_per_day', 10));
+
+        $this->addItem($payslip, 'info', "Hari kerja terjadwal: {$workingDays} hari", $workingDays, 0, 0, $sort++, [], 'basis');
+        $this->addItem($payslip, 'info', 'Tarif harian: gaji pokok ÷ ' . $workingDays . ' hari', 1, $tarifHarian, 0, $sort++, [], 'basis');
+        $this->addItem($payslip, 'info', "Tarif per jam: tarif harian ÷ {$jamPerHari} jam", 1, $this->rules->hourlyRate($baseSalary, $workingDays), 0, $sort++, [], 'basis');
+
+        if ($toleransi > 0) {
+            $this->addItem(
+                $payslip,
+                'info',
+                "Toleransi telat {$toleransi} menit: " . $telatDimaafkan->count() . 'x datang lewat masih dalam toleransi, tidak dipotong',
+                $telatDimaafkan->count(),
+                0,
+                0,
+                $sort++,
+                [
+                    'rincian' => $telatDimaafkan->sortBy('work_date')->map(fn ($a) => [
+                        'date' => $a->work_date->toDateString(),
+                        'seconds' => (int) $a->late_seconds,
+                    ])->values()->all(),
+                ],
+                'basis',
+            );
+        }
+    }
+
+    protected function jam(int $menit): string
+    {
+        $jam = intdiv($menit, 60);
+        $sisa = $menit % 60;
+
+        return $sisa === 0 ? "{$jam} jam" : "{$jam} jam {$sisa} menit";
     }
 
     protected function addBonuses(Payslip $payslip, Employee $employee, PayrollPeriod $period, int $sort): void
@@ -370,23 +496,46 @@ class PayrollGenerator
             });
     }
 
+    /**
+     * Cicilan kasbon yang jatuh tempo di periode ini.
+     *
+     * Cicilan yang SUDAH ditandai terpotong oleh run sebelumnya ikut ditarik
+     * lagi: hitung ulang membuat slip baru, dan kasbon tidak boleh hilang
+     * dari slip hanya karena payroll dihitung dua kali. Penandanya dipindah
+     * ke baris slip yang baru.
+     */
     protected function addCashAdvance(Payslip $payslip, Employee $employee, PayrollPeriod $period, int $sort): void
     {
         CashAdvanceInstallment::query()
+            ->with('cashAdvance')
             ->whereHas('cashAdvance', fn ($q) => $q->where('employee_id', $employee->id)->where('status', 'disbursed'))
             ->where('payroll_period_id', $period->id)
-            ->where('status', 'scheduled')
+            ->whereIn('status', ['scheduled', 'deducted'])
+            ->orderBy('cash_advance_id')
+            ->orderBy('sequence')
             ->get()
             ->each(function (CashAdvanceInstallment $cicilan) use ($payslip, $sort) {
+                $kasbon = $cicilan->cashAdvance;
+                $label = $kasbon->installments_count > 1
+                    ? "Kasbon cicilan ke-{$cicilan->sequence} dari {$kasbon->installments_count}"
+                    : 'Kasbon';
+
                 $item = $this->addItem(
                     $payslip,
                     'deduction',
-                    "Kasbon cicilan ke-{$cicilan->sequence}",
+                    $label,
                     1,
                     $cicilan->amount,
                     $cicilan->amount,
                     $sort,
-                    [],
+                    [
+                        'kasbon' => [
+                            'id' => $kasbon->id,
+                            'tanggal' => $kasbon->disbursed_at?->toDateString(),
+                            'total' => $kasbon->amount,
+                            'alasan' => $kasbon->reason,
+                        ],
+                    ],
                     'cash_advance',
                     $cicilan->id,
                 );

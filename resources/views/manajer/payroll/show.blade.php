@@ -106,6 +106,9 @@
                             <td class="text-right text-red-600">{{ number_format($slip->total_statutory, 0, ',', '.') }}</td>
                             <td class="text-right font-semibold">{{ number_format($slip->take_home_pay, 0, ',', '.') }}</td>
                             <td class="text-right">
+                                @if ($slip->total_earning <= 0)
+                                    <x-status-badge warna="red" label="Gaji pokok belum diatur" />
+                                @endif
                                 <a href="{{ route('manajer.payroll.payslip', $slip) }}" class="text-slate-700 hover:underline">Slip</a>
                             </td>
                         </tr>
@@ -119,6 +122,92 @@
         Payroll periode ini belum dihitung. Pastikan absensi sudah final sebelum menekan Hitung payroll.
     </div>
 @endif
+
+{{-- Kasbon --}}
+<div class="kartu mb-6">
+    <div class="kartu-judul">
+        <h2 class="font-semibold">Kasbon</h2>
+        <p class="text-xs text-slate-500">
+            Uang yang sudah diterima karyawan. Cicilan pertama dipotong di periode ini, sisanya otomatis di periode berikutnya.
+            Setelah mencatat, jalankan hitung ulang.
+        </p>
+    </div>
+
+    @error('kasbon')
+        <div class="pemberitahuan mx-4 mt-4 border-red-200 bg-red-50 text-red-800">{{ $message }}</div>
+    @enderror
+
+    @unless ($period->isLocked())
+        <form method="POST" action="{{ route('manajer.payroll.kasbon', $period) }}" class="flex flex-wrap items-end gap-3 border-b border-slate-100 px-4 py-4">
+            @csrf
+            <div>
+                <label class="label">Karyawan</label>
+                <select name="employee_id" required class="kolom mt-1">
+                    @foreach ($employees as $e)<option value="{{ $e->id }}">{{ $e->name }}</option>@endforeach
+                </select>
+            </div>
+            <div>
+                <label class="label">Jumlah (Rp)</label>
+                <input type="number" name="amount" min="1" required class="kolom mt-1 w-36">
+            </div>
+            <div>
+                <label class="label">Dicicil</label>
+                <select name="installments" class="kolom mt-1">
+                    @for ($i = 1; $i <= 6; $i++)<option value="{{ $i }}">{{ $i }}x</option>@endfor
+                </select>
+            </div>
+            <div>
+                <label class="label">Tanggal diterima</label>
+                <input type="date" name="disbursed_at" value="{{ now()->toDateString() }}" class="kolom mt-1">
+            </div>
+            <div class="min-w-[200px] flex-1">
+                <label class="label">Keterangan</label>
+                <input type="text" name="reason" maxlength="200" class="kolom mt-1" placeholder="mis. keperluan keluarga">
+            </div>
+            <button class="btn-utama">Catat kasbon</button>
+        </form>
+    @endunless
+
+    <table class="tabel">
+        <tbody>
+            @forelse ($cicilanKasbon as $c)
+                <tr>
+                    <td >{{ $c->cashAdvance?->employee?->name }}</td>
+                    <td class="text-slate-500">
+                        {{ $c->cashAdvance?->reason }}
+                        <span class="text-xs text-slate-400">
+                            &middot; diterima {{ $c->cashAdvance?->disbursed_at?->translatedFormat('d M Y') }}
+                            @if ($c->cashAdvance?->installments_count > 1)
+                                &middot; cicilan {{ $c->sequence }}/{{ $c->cashAdvance->installments_count }} dari Rp {{ number_format($c->cashAdvance->amount, 0, ',', '.') }}
+                            @endif
+                        </span>
+                    </td>
+                    <td >
+                        @if ($c->status === 'deducted')
+                            <x-status-badge warna="emerald" label="Sudah di slip" />
+                        @elseif ($c->status === 'scheduled')
+                            <x-status-badge warna="amber" label="Menunggu hitung ulang" />
+                        @else
+                            <x-status-badge warna="slate" :label="$c->status" />
+                        @endif
+                    </td>
+                    <td class="text-right">Rp {{ number_format($c->amount, 0, ',', '.') }}</td>
+                    <td class="text-right">
+                        @if (! $period->isLocked() && $c->cashAdvance?->status === 'disbursed')
+                            <form method="POST" action="{{ route('manajer.payroll.kasbon.batal', [$period, $c->cashAdvance]) }}"
+                                  onsubmit="return confirm('Batalkan cicilan kasbon yang belum terpotong untuk {{ $c->cashAdvance?->employee?->name }}?')">
+                                @csrf
+                                <button class="text-xs text-red-600 hover:underline">Batalkan</button>
+                            </form>
+                        @endif
+                    </td>
+                </tr>
+            @empty
+                <tr><td colspan="5" class="px-4 py-6 text-center text-slate-400">Tidak ada cicilan kasbon yang jatuh tempo di periode ini.</td></tr>
+            @endforelse
+        </tbody>
+    </table>
+</div>
 
 {{-- Bonus & potongan manual --}}
 <div class="kartu">

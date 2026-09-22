@@ -26,10 +26,17 @@ class Settings
         'roster.warn_double_shift' => true,
         'attendance.check_in_out_strategy' => 'earliest_latest',
         'attendance.close_day_hour' => 6,
+
+        // Bawaan 0, bukan 10: memaafkan telat diam-diam bukan bawaan yang
+        // aman. Nilai kafe (10 menit) hidup di baris setelan, bukan di sini.
+        'attendance.late_tolerance_minutes' => 0,
         'overtime.allow_backdated' => true,
         'payroll.period_start_day' => 21,
         'payroll.pay_day' => 21,
         'payroll.working_days_basis' => 'scheduled',
+
+        // Pembagi tarif per jam: gaji pokok ÷ hari kerja ÷ jam ini.
+        'payroll.hours_per_day' => 10,
     ];
 
     public static function get(string $key, mixed $default = null): mixed

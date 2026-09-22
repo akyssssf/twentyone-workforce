@@ -6,6 +6,7 @@ use App\Enums\RuleType;
 use App\Models\Branch;
 use App\Models\RuleSet;
 use App\Models\RuleTier;
+use App\Support\Settings;
 use Illuminate\Support\Carbon;
 
 /**
@@ -81,14 +82,17 @@ class RuleResolver
         }
 
         $dailyRate = $workingDays > 0 ? intdiv($baseSalary, $workingDays) : 0;
+        $hourlyRate = $workingDays > 0 ? $this->hourlyRate($baseSalary, $workingDays) : 0;
 
-        // Tarif per jam mengikuti jam kerja terjadwal, bukan konstanta.
-        // Istirahat ikut dibayar (D-02), jadi shift 8 jam bernilai 8 jam.
-        $hourlyRate = $workingDays > 0 ? intdiv($dailyRate, 8) : 0;
+        // daily_rate dikalikan jumlah HARI kalau satuannya hari: dua hari
+        // alpha = dua hari gaji. Dulu pengalinya terlewat, jadi berapa pun
+        // harinya potongannya selalu satu hari — dan tidak ada yang sadar
+        // karena payroll belum pernah dijalankan.
+        $hari = $tier->unit === 'day' ? $value : 1;
 
         $amount = match ($tier->calc_type) {
             'flat' => (int) round((float) $tier->value),
-            'daily_rate' => (int) round($dailyRate * (float) $tier->value),
+            'daily_rate' => (int) round($dailyRate * (float) $tier->value * $hari),
             'hourly_multiplier' => (int) round($hourlyRate * (float) $tier->value * $value),
             'percent_of_base' => (int) round($baseSalary * (float) $tier->value / 100),
             default => 0,
@@ -121,7 +125,7 @@ class RuleResolver
             return ['amount' => 0, 'breakdown' => []];
         }
 
-        $hourlyRate = intdiv(intdiv($baseSalary, $workingDays), 8);
+        $hourlyRate = $this->hourlyRate($baseSalary, $workingDays);
         $hours = $minutes / 60;
         $total = 0;
         $breakdown = [];
@@ -148,5 +152,24 @@ class RuleResolver
         }
 
         return ['amount' => $total, 'breakdown' => $breakdown];
+    }
+
+    /**
+     * Tarif per jam = gaji pokok ÷ hari kerja terjadwal ÷ jam kerja sehari.
+     *
+     * Pembagi jamnya setelan (payroll.hours_per_day, kafe memakai 10), bukan
+     * konstanta 8: shift di sini 10 jam, dan istirahat ikut dibayar (D-02).
+     * Dibulatkan ke bawah dua kali persis seperti rumus pemilik — "gaji pokok
+     * dibagi hari kerja, baru hasilnya dibagi 10".
+     */
+    public function hourlyRate(int $baseSalary, int $workingDays): int
+    {
+        $hoursPerDay = max(1, Settings::int('payroll.hours_per_day', 10));
+
+        if ($workingDays <= 0) {
+            return 0;
+        }
+
+        return intdiv(intdiv($baseSalary, $workingDays), $hoursPerDay);
     }
 }

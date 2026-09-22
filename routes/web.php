@@ -100,6 +100,8 @@ Route::middleware(['auth', EnsureUserIsActive::class, EnsurePasswordIsChanged::c
             Route::post('payroll/{period}/kunci', [PayrollController::class, 'lock'])->name('payroll.lock');
             Route::post('payroll/{period}/buka', [PayrollController::class, 'reopen'])->name('payroll.reopen');
             Route::post('payroll/{period}/entri', [PayrollController::class, 'storeEntry'])->name('payroll.entry');
+            Route::post('payroll/{period}/kasbon', [PayrollController::class, 'storeKasbon'])->name('payroll.kasbon');
+            Route::post('payroll/{period}/kasbon/{kasbon}/batal', [PayrollController::class, 'cancelKasbon'])->name('payroll.kasbon.batal');
             Route::get('slip/{payslip}', [PayrollController::class, 'payslip'])->name('payroll.payslip');
 
             // Karyawan & divisi
