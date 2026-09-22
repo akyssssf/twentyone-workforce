@@ -260,11 +260,12 @@ class MasterDataSeeder extends Seeder
             ['branch_id' => $branch->id, 'type' => 'late', 'effective_from' => $awalTahun],
             ['name' => 'Potongan Terlambat '.now()->year, 'is_active' => true],
         );
-        // Keputusan pemilik (22 Sep 2026): Rp 1.000 per menit, setelah
-        // toleransi 10 menit (setelan attendance.late_tolerance_minutes).
+        // Keputusan pemilik (22 Sep 2026): Rp 10.000 per blok 10 menit yang
+        // genap dilewati, setelah toleransi 10 menit (setelan
+        // attendance.late_tolerance_minutes). 15 menit = 10.000, 23 = 20.000.
         $late->tiers()->delete();
         $late->tiers()->createMany([
-            ['min_value' => 1, 'max_value' => null, 'unit' => 'minute', 'calc_type' => 'per_minute', 'value' => 1000, 'label' => 'Rp1.000 per menit keterlambatan', 'sort_order' => 1],
+            ['min_value' => 1, 'max_value' => null, 'unit' => 'minute', 'calc_type' => 'per_block', 'value' => 10000, 'label' => 'Rp10.000 per 10 menit keterlambatan', 'sort_order' => 1],
         ]);
 
         $early = RuleSet::updateOrCreate(
@@ -289,14 +290,14 @@ class MasterDataSeeder extends Seeder
             ['min_value' => 1, 'max_value' => null, 'unit' => 'hour', 'calc_type' => 'hourly_multiplier', 'value' => 1.0, 'label' => 'Lembur per jam (1× tarif per jam)', 'sort_order' => 1],
         ]);
 
-        // Alpha = satu hari gaji per hari alpha (D-05).
+        // Alpha = Rp 100.000 per hari (keputusan pemilik, 22 Sep 2026).
         $absent = RuleSet::updateOrCreate(
             ['branch_id' => $branch->id, 'type' => 'absent', 'effective_from' => $awalTahun],
             ['name' => 'Potongan Alpha '.now()->year, 'is_active' => true],
         );
         $absent->tiers()->delete();
         $absent->tiers()->createMany([
-            ['min_value' => 1, 'max_value' => null, 'unit' => 'day', 'calc_type' => 'daily_rate', 'value' => 1.0, 'label' => 'Alpha per hari', 'sort_order' => 1],
+            ['min_value' => 1, 'max_value' => null, 'unit' => 'day', 'calc_type' => 'flat', 'value' => 100000, 'label' => 'Alpha Rp100.000 per hari', 'sort_order' => 1],
         ]);
 
         // Porsi karyawan: JHT 2%, JP 1%, Kesehatan 1%. Porsi perusahaan tidak

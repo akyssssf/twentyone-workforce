@@ -160,9 +160,9 @@ class SlipGajiTest extends TestCase
         $potongan = $this->item($slip, 'late');
         $this->assertNotNull($potongan);
         $this->assertSame('Potongan Terlambat (1x)', $potongan->label);
-        // Rp 1.000 per menit, SELURUH 11 menit dihitung (bukan cuma 1 lewat toleransi).
-        $this->assertSame(11_000, (int) $potongan->amount);
-        $this->assertSame([['date' => '2026-08-24', 'minutes' => 11, 'amount' => 11_000, 'rule' => 'Rp1.000 per menit keterlambatan']], $potongan->rule_snapshot['rincian']);
+        // 11 menit = 1 blok 10 menit yang genap dilewati = Rp 10.000.
+        $this->assertSame(10_000, (int) $potongan->amount);
+        $this->assertSame([['date' => '2026-08-24', 'minutes' => 11, 'amount' => 10_000, 'rule' => 'Rp10.000 per 10 menit keterlambatan']], $potongan->rule_snapshot['rincian']);
 
         $info = $slip->items->where('category', 'info')->first(fn ($i) => str_contains($i->label, 'Toleransi telat 10 menit'));
         $this->assertNotNull($info);
@@ -171,9 +171,9 @@ class SlipGajiTest extends TestCase
 
         // Baris info tidak ikut mengurangi gaji, dan tidak ada BPJS.
         $this->assertSame(3_000_000, (int) $slip->total_earning);
-        $this->assertSame(11_000, (int) $slip->total_deduction);
+        $this->assertSame(10_000, (int) $slip->total_deduction);
         $this->assertSame(0, (int) $slip->total_statutory, 'kafe tidak memotong BPJS');
-        $this->assertSame(2_989_000, (int) $slip->take_home_pay);
+        $this->assertSame(2_990_000, (int) $slip->take_home_pay);
     }
 
     /**
@@ -222,22 +222,29 @@ class SlipGajiTest extends TestCase
         $this->assertSame($tarifJam, (int) $basis['Tarif per jam: tarif harian ÷ 10 jam']);
     }
 
-    /**
-     * calc_type per_block (ditambahkan langsung di server): rupiah per blok
-     * 10 menit, dibulatkan ke atas. Harus dikenali, bukan jatuh ke nol.
-     */
-    public function test_tier_per_blok_sepuluh_menit_dikenali(): void
+    /** Blok 10 menit dibulatkan KE BAWAH: 15 menit = 10.000, 23 menit = 20.000 (keputusan pemilik). */
+    public function test_blok_sepuluh_menit_dibulatkan_ke_bawah(): void
     {
-        $late = RuleSet::where('type', 'late')->firstOrFail();
-        $late->tiers()->delete();
-        $late->tiers()->create(['min_value' => 1, 'max_value' => null, 'unit' => 'minute', 'calc_type' => 'per_block', 'value' => 5000, 'label' => 'Per 10 menit', 'sort_order' => 1]);
-
-        $this->hadir('2026-08-24', telatDetik: 25 * 60);
+        $this->hadir('2026-08-24', telatDetik: 15 * 60);
+        $this->hadir('2026-08-25', telatDetik: 23 * 60);
+        $this->hadir('2026-08-26', telatDetik: 60 * 60);
 
         $slip = $this->hitung();
 
-        // 25 menit = 3 blok × Rp 5.000.
-        $this->assertSame(15_000, (int) $this->item($slip, 'late')->amount);
+        $this->assertSame([10_000, 20_000, 60_000], array_column($this->item($slip, 'late')->rule_snapshot['rincian'], 'amount'));
+        $this->assertSame(90_000, (int) $this->item($slip, 'late')->amount);
+    }
+
+    /** Aturan telat lama (per menit) tetap dikenali untuk arsip September. */
+    public function test_tier_per_menit_masih_dikenali(): void
+    {
+        $late = RuleSet::where('type', 'late')->firstOrFail();
+        $late->tiers()->delete();
+        $late->tiers()->create(['min_value' => 1, 'max_value' => null, 'unit' => 'minute', 'calc_type' => 'per_minute', 'value' => 1000, 'label' => 'Per menit', 'sort_order' => 1]);
+
+        $this->hadir('2026-08-24', telatDetik: 25 * 60);
+
+        $this->assertSame(25_000, (int) $this->item($this->hitung(), 'late')->amount);
     }
 
     /**
@@ -283,11 +290,12 @@ class SlipGajiTest extends TestCase
         $this->assertSame('2026-08-25', $cepat->rule_snapshot['rincian'][0]['date']);
         $this->assertSame(20, $cepat->rule_snapshot['rincian'][0]['minutes']);
 
+        // Alpha Rp 100.000 per hari, dikalikan jumlah hari.
         $alpha = $this->item($slip, 'absent');
         $this->assertSame('Potongan Alpha (2 hari)', $alpha->label);
-        $this->assertSame(2 * 115_384, (int) $alpha->amount);
+        $this->assertSame(200_000, (int) $alpha->amount);
         $this->assertSame(['2026-08-27', '2026-09-01'], array_column($alpha->rule_snapshot['rincian'], 'date'));
-        $this->assertSame(115_384, (int) $alpha->rate);
+        $this->assertSame(100_000, (int) $alpha->rate);
     }
 
     /**
@@ -402,7 +410,7 @@ class SlipGajiTest extends TestCase
         $this->get(route('manajer.payroll.payslip', $slip))
             ->assertOk()
             ->assertSee('Potongan Terlambat (1x)')
-            ->assertSee('Rp1.000 per menit keterlambatan')
+            ->assertSee('Rp10.000 per 10 menit keterlambatan')
             ->assertSee('Toleransi telat 10 menit')
             ->assertSee('Kasbon')
             ->assertSee('Dasar perhitungan')

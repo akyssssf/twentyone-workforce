@@ -91,13 +91,13 @@ class RuleResolver
         $hari = $tier->unit === 'day' ? $value : 1;
 
         $amount = match ($tier->calc_type) {
-            'flat' => (int) round((float) $tier->value),
+            // Rupiah tetap per kejadian — atau per HARI kalau satuannya hari
+            // (alpha Rp 100.000 × 2 hari = Rp 200.000).
+            'flat' => (int) round((float) $tier->value) * $hari,
 
-            // Rupiah per blok 10 menit, dibulatkan ke atas: telat 11 menit =
-            // 2 blok. Ditambahkan langsung di server sebelum sempat masuk
-            // git — dipertahankan supaya tier yang memakainya tidak diam-diam
-            // jatuh ke nol.
-            'per_block' => (int) ceil($value / 10) * (int) round((float) $tier->value),
+            // Rupiah per blok 10 menit yang GENAP dilewati (keputusan pemilik,
+            // 22 Sep 2026): telat 15 menit = 1 blok, 23 menit = 2 blok.
+            'per_block' => intdiv($value, 10) * (int) round((float) $tier->value),
 
             // Rupiah per menit: telat 33 menit × Rp 1.000 = Rp 33.000.
             'per_minute' => $value * (int) round((float) $tier->value),

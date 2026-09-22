@@ -708,10 +708,11 @@ tabel dan perintahnya ada di jawaban ke user 22 September.
   **lembur 1× tarif per jam** (bukan 1,5×/2×). Lihat 4.26–4.27.
 - **Jam operasional baru berlaku 1 Oktober** (bukan 21 September seperti
   rencana sebelumnya): Shift 1 08:00–18:00, Shift 2 14:00–23:30.
-- **Potongan telat Rp 1.000 per menit** setelah toleransi 10 menit (pemilik,
-  22 September; migrasi `potongan_telat_per_menit`, calc_type `per_minute`).
-  Sebelumnya di server sempat ada tier `per_block` Rp 10.000/10 menit yang
-  diedit langsung tanpa git.
+- **Potongan telat**: periode 2026-09 (arsip) Rp 1.000/menit (`per_minute`,
+  rule set ditutup 21 Sep); **mulai 22 Sep Rp 10.000 per blok 10 menit yang
+  genap dilewati** (`per_block` = floor: 15 menit → 10.000, 23 → 20.000),
+  keduanya setelah toleransi 10 menit. **Alpha Rp 100.000 per hari** (flat ×
+  hari) mulai 22 Sep. Migrasi `telat_per_blok_dan_alpha_100rb_mulai_oktober`.
 - **BPJS tidak dipotong** (pemilik, 22 September). Rule set BPJS dinonaktifkan
   lewat migrasi `nonaktifkan_bpjs`; seeder pun memasangnya nonaktif.
 - **Periode 2026-09 = arsip slip luar** (zip "Slip_Gaji_21KAFE_Agt_Sep_2026"):
