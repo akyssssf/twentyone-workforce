@@ -313,14 +313,55 @@ class SlipGajiTest extends TestCase
             $slip->items->where('category', 'bonus')->pluck('label')->sort()->values()->all(),
         );
 
-        // Bonus punya kotaknya sendiri di samping Pendapatan & Potongan,
-        // dengan total sendiri dan keterangan bahwa uangnya di luar THP.
+        // Slip gaji TIDAK memuat rincian bonus; ia cuma menunjuk ke slip
+        // bonus, karena uangnya diserahkan sebagai dokumen sendiri.
         $this->get(route('manajer.payroll.payslip', $slip))
             ->assertOk()
-            ->assertSee('Slip Gaji &amp; Bonus', false)
-            ->assertSee('Total Bonus')
-            ->assertSee('Dibayar terpisah, di luar take home pay')
-            ->assertSee('Bonus: Karyawan terbaik bulan ini');
+            ->assertSee('Slip Bonus')
+            ->assertDontSee('Bonus: Karyawan terbaik bulan ini')
+            ->assertSee('dicetak pada');
+
+        // Slip bonus: kop sendiri, rincian per tanggal, total sendiri.
+        $this->get(route('manajer.payroll.payslip.bonus', $slip))
+            ->assertOk()
+            ->assertSee('Slip Bonus')
+            ->assertSee('Rincian Bonus')
+            ->assertSee('Total Bonus Diterima')
+            ->assertSee('Bonus Lembur 2 jam')
+            ->assertSee('Bonus: Karyawan terbaik bulan ini')
+            ->assertSee('Sab, 05 Sep 2026')
+            ->assertSee('Rangkuman Lembur')
+            ->assertSee(number_format($tarifJam, 0, ',', '.'))
+            ->assertSee('Penerima,');
+    }
+
+    /** Slip bonus untuk karyawan: hanya miliknya, dan hanya kalau sudah terbit. */
+    public function test_karyawan_hanya_bisa_membuka_slip_bonus_miliknya(): void
+    {
+        OvertimeRecord::create([
+            'employee_id' => $this->budi->id, 'work_date' => Carbon::parse('2026-09-05'),
+            'actual_minutes' => 60, 'approved_minutes' => 60, 'payable_minutes' => 60,
+            'status' => 'confirmed', 'activated_at' => now(), 'confirmed_at' => now(),
+        ]);
+        $this->hadir('2026-09-05');
+
+        $slip = $this->hitung();
+
+        $akunBudi = User::factory()->create(['role' => UserRole::Karyawan, 'employee_id' => $this->budi->id]);
+        $akunLain = User::factory()->create(['role' => UserRole::Karyawan, 'employee_id' => Employee::factory()->create([
+            'branch_id' => Branch::current()->id, 'pin_device' => '32',
+        ])->id]);
+
+        // Belum disetujui: belum boleh dilihat siapa pun.
+        $this->actingAs($akunBudi)->get(route('karyawan.slip.bonus', $slip))->assertForbidden();
+
+        app(PayrollPeriodFactory::class)->approve($this->periode->fresh());
+
+        $this->actingAs($akunBudi)->get(route('karyawan.slip.bonus', $slip))
+            ->assertOk()
+            ->assertSee('Total Bonus Diterima');
+
+        $this->actingAs($akunLain)->get(route('karyawan.slip.bonus', $slip))->assertForbidden();
     }
 
     /** Setelan dimatikan: bonus kembali digabung ke pendapatan dan masuk THP. */

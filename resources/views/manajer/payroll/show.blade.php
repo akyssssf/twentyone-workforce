@@ -130,6 +130,9 @@
                                     <x-status-badge warna="red" label="Gaji pokok belum diatur" />
                                 @endif
                                 <a href="{{ route('manajer.payroll.payslip', $slip) }}" class="text-slate-700 hover:underline">Slip</a>
+                                @if ($slip->total_bonus > 0)
+                                    <a href="{{ route('manajer.payroll.payslip.bonus', $slip) }}" class="ml-2 text-amber-700 hover:underline">Bonus</a>
+                                @endif
                             </td>
                         </tr>
                     @endforeach

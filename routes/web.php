@@ -103,6 +103,7 @@ Route::middleware(['auth', EnsureUserIsActive::class, EnsurePasswordIsChanged::c
             Route::post('payroll/{period}/kasbon', [PayrollController::class, 'storeKasbon'])->name('payroll.kasbon');
             Route::post('payroll/{period}/kasbon/{kasbon}/batal', [PayrollController::class, 'cancelKasbon'])->name('payroll.kasbon.batal');
             Route::get('slip/{payslip}', [PayrollController::class, 'payslip'])->name('payroll.payslip');
+            Route::get('slip/{payslip}/bonus', [PayrollController::class, 'payslipBonus'])->name('payroll.payslip.bonus');
 
             // Karyawan & divisi
             Route::get('karyawan', [EmployeeController::class, 'index'])->name('karyawan.index');
@@ -149,5 +150,6 @@ Route::middleware(['auth', EnsureUserIsActive::class, EnsurePasswordIsChanged::c
 
         Route::get('slip', [PayslipController::class, 'index'])->name('slip.index');
         Route::get('slip/{payslip}', [PayslipController::class, 'show'])->name('slip.show');
+        Route::get('slip/{payslip}/bonus', [PayslipController::class, 'bonus'])->name('slip.bonus');
     });
 });

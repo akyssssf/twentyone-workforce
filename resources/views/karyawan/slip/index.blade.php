@@ -26,6 +26,9 @@
                     </td>
                     <td class="text-right">
                         <a href="{{ route('karyawan.slip.show', $slip) }}" class="font-medium text-slate-700 hover:underline">Lihat</a>
+                        @if ($slip->total_bonus > 0)
+                            <a href="{{ route('karyawan.slip.bonus', $slip) }}" class="ml-3 font-medium text-amber-700 hover:underline">Slip bonus</a>
+                        @endif
                     </td>
                 </tr>
             @empty

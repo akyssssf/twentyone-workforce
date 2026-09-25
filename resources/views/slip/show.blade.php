@@ -14,12 +14,29 @@
     $info = $payslip->items->where('category', 'info');
 
     $toleransi = \App\Support\Settings::int('attendance.late_tolerance_minutes');
+
+    // Slip yang terbit sebelum kolom late_minutes ada menyimpan 0; angkanya
+    // masih utuh di rincian baris potongannya, jadi diambil dari sana daripada
+    // mencetak "5x (0 mnt)" yang jelas salah di mata penerimanya.
+    $telatMenit = (int) $payslip->late_minutes;
+
+    if ($telatMenit === 0 && $payslip->late_count > 0) {
+        $telatMenit = (int) collect($payslip->items->firstWhere('source_type', 'late')?->rule_snapshot['rincian'] ?? [])
+            ->sum('minutes');
+    }
     $cuti = max(0, $payslip->leave_days - $payslip->permit_days - $payslip->sick_days);
 @endphp
 
 <div class="mb-3 flex items-center justify-between print:hidden">
     <a href="{{ $kembali }}" class="text-sm text-slate-500 hover:underline">&larr; Kembali</a>
-    <button onclick="window.print()" class="btn-netral">Cetak / Simpan PDF</button>
+    <div class="flex gap-2">
+        @if ($bonus->isNotEmpty() && ! empty($slipBonus))
+            <a href="{{ $slipBonus }}" class="btn border border-amber-300 bg-white text-amber-800 hover:bg-amber-50">
+                Slip Bonus ({{ $rp($payslip->total_bonus) }})
+            </a>
+        @endif
+        <button onclick="window.print()" class="btn-netral">Cetak / Simpan PDF</button>
+    </div>
 </div>
 
 {{-- Satu lembar A4: kop, identitas, tiga kotak (pendapatan, potongan,
@@ -40,7 +57,7 @@
             </div>
         </div>
         <div class="text-left sm:text-right">
-            <div class="text-2xl font-light text-slate-800">Slip Gaji @if ($bonus->isNotEmpty())&amp; Bonus @endif</div>
+            <div class="text-2xl font-light text-slate-800">Slip Gaji</div>
             <div class="mt-1 text-[11px] uppercase tracking-wide text-slate-500">
                 Periode: {{ $payslip->run->period->label() }}
             </div>
@@ -57,14 +74,12 @@
         <div class="flex"><span class="w-28 font-semibold text-slate-600">Dibayar</span><span class="font-bold">: {{ $payslip->run->period->pay_date->translatedFormat('d M Y') }}</span></div>
     </div>
 
-    {{-- Pendapatan · Potongan · Bonus --}}
-    <div class="mt-6 grid gap-4 {{ $bonus->isNotEmpty() ? 'sm:grid-cols-3' : 'sm:grid-cols-2' }}">
+    {{-- Pendapatan · Potongan. Bonus TIDAK di sini: dokumennya sendiri. --}}
+    <div class="mt-6 grid gap-4 sm:grid-cols-2">
         @foreach ([
-            ['Pendapatan', $pendapatan, 'text-slate-900', 'bg-emerald-50 border-emerald-200 text-emerald-800', $payslip->total_earning, null],
-            ['Potongan', $potongan, 'text-red-700', 'bg-red-50 border-red-200 text-red-800', $payslip->total_deduction + $payslip->total_statutory, null],
-            ['Bonus', $bonus, 'text-emerald-700', 'bg-emerald-600 border-emerald-600 text-white', $payslip->total_bonus, 'Dibayar terpisah, di luar take home pay'],
-        ] as [$judul, $baris, $warna, $totalKelas, $total, $catatan])
-            @continue($judul === 'Bonus' && $bonus->isEmpty())
+            ['Pendapatan', $pendapatan, 'bg-emerald-50 border-emerald-200 text-emerald-800', $payslip->total_earning],
+            ['Potongan', $potongan, 'bg-red-50 border-red-200 text-red-800', $payslip->total_deduction + $payslip->total_statutory],
+        ] as [$judul, $baris, $totalKelas, $total])
 
             <div class="flex flex-col">
                 <div class="rounded-t border border-slate-300 bg-slate-100 px-3 py-2 text-[11px] font-bold uppercase tracking-wide text-slate-800">
@@ -98,9 +113,6 @@
                     <span>Total {{ $judul }}</span>
                     <span class="tabular-nums">{{ $rp($total) }}</span>
                 </div>
-                @if ($catatan)
-                    <div class="mt-1 text-[10px] leading-snug text-slate-500">{{ $catatan }}</div>
-                @endif
             </div>
         @endforeach
     </div>
@@ -121,7 +133,7 @@
         <div class="grid gap-x-8 gap-y-2.5 px-4 py-3 text-[13px] sm:grid-cols-2">
             @foreach ([
                 'Kehadiran' => $payslip->present_days . ' Hari',
-                'Terlambat (>' . $toleransi . ' mnt)' => $payslip->late_count . 'x (' . $payslip->late_minutes . ' mnt)',
+                'Terlambat (>' . $toleransi . ' mnt)' => $payslip->late_count . 'x (' . $telatMenit . ' mnt)',
                 'Izin' => $payslip->permit_days . ' Hari',
                 'Sakit' => $payslip->sick_days . ' Hari',
                 'Alpha (Tanpa Keterangan)' => $payslip->absent_days . ' Hari',
@@ -154,6 +166,9 @@
         @endforeach
         @if ($payslip->overtime_minutes > 0)
             <div>* Jam lembur dibayarkan terpisah dan tidak termasuk dalam Take Home Pay di atas.</div>
+        @endif
+        @if ($bonus->isNotEmpty())
+            <div>&bull; Bonus {{ $rp($payslip->total_bonus) }} dicetak pada <strong>Slip Bonus</strong> terpisah.</div>
         @endif
     </div>
 

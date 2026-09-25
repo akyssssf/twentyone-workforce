@@ -13,6 +13,7 @@ use App\Services\Audit\AuditLogger;
 use App\Services\Payroll\KasbonService;
 use App\Services\Payroll\PayrollGenerator;
 use App\Services\Payroll\PayrollPeriodFactory;
+use App\Support\SlipBonus;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use RuntimeException;
@@ -195,9 +196,23 @@ class PayrollController extends Controller
 
     public function payslip(Payslip $payslip)
     {
+        $payslip->load(['items', 'employee', 'run.period']);
+
         return view('slip.show', [
-            'payslip' => $payslip->load(['items', 'employee', 'run.period']),
+            'payslip' => $payslip,
             'kembali' => route('manajer.payroll.show', $payslip->run->payroll_period_id),
+            'slipBonus' => route('manajer.payroll.payslip.bonus', $payslip),
+        ]);
+    }
+
+    /** Slip bonus: dokumen sendiri, karena uangnya diserahkan terpisah. */
+    public function payslipBonus(Payslip $payslip)
+    {
+        $payslip->load(['items', 'employee', 'run.period']);
+
+        return view('slip.bonus', SlipBonus::data($payslip) + [
+            'kembali' => route('manajer.payroll.show', $payslip->run->payroll_period_id),
+            'slipGaji' => route('manajer.payroll.payslip', $payslip),
         ]);
     }
 }
