@@ -73,8 +73,14 @@ class ComputePayroll extends Command
             $berjalan ? ' — ESTIMASI, absensi sampai hari ini' : '',
         ));
 
+        $bonus = (int) $run->payslips()->sum('total_bonus');
+
+        if ($bonus > 0) {
+            $this->line('Bonus Rp '.number_format($bonus, 0, ',', '.').' dibayar TERPISAH, di luar THP di atas.');
+        }
+
         $this->table(
-            ['Nama', 'Hadir', 'Alpha', 'Telat', 'Lembur', 'Potongan', 'THP'],
+            ['Nama', 'Hadir', 'Alpha', 'Telat', 'Lembur', 'Potongan', 'THP', 'Bonus'],
             $run->payslips()->with('employee')->get()
                 ->sortBy(fn (Payslip $s) => $s->employee?->name)
                 ->map(fn (Payslip $s) => [
@@ -85,6 +91,7 @@ class ComputePayroll extends Command
                     Durasi::menit((int) $s->overtime_minutes),
                     number_format($s->total_deduction, 0, ',', '.'),
                     number_format($s->take_home_pay, 0, ',', '.'),
+                    $s->total_bonus > 0 ? number_format($s->total_bonus, 0, ',', '.') : '—',
                 ])->all(),
         );
 

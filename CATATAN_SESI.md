@@ -713,6 +713,11 @@ tabel dan perintahnya ada di jawaban ke user 22 September.
   genap dilewati** (`per_block` = floor: 15 menit → 10.000, 23 → 20.000),
   keduanya setelah toleransi 10 menit. **Alpha Rp 100.000 per hari** (flat ×
   hari) mulai 22 Sep. Migrasi `telat_per_blok_dan_alpha_100rb_mulai_oktober`.
+- **Bonus (lembur & bonus manual) dibayar TERPISAH dari gaji** (pemilik,
+  25 September): kategori baris slip `bonus`, kolom `payslips.total_bonus`,
+  TIDAK masuk take home pay, dan dicetak sebagai lembar kedua "Slip Bonus"
+  (`print:break-before-page`). Setelan `payroll.bonus_terpisah` — matikan
+  kalau suatu saat digabung lagi.
 - **BPJS tidak dipotong** (pemilik, 22 September). Rule set BPJS dinonaktifkan
   lewat migrasi `nonaktifkan_bpjs`; seeder pun memasangnya nonaktif.
 - **Periode 2026-09 = arsip slip luar** (zip "Slip_Gaji_21KAFE_Agt_Sep_2026"):
@@ -913,6 +918,12 @@ menganggap sebuah perintah selesai, **lihat outputnya**.
     kalau tidak nilai barunya tidak terbaca sampai cache kedaluwarsa — payroll
     pertama setelah deploy diam-diam memakai toleransi 0. Sudah kejadian di
     lokal saat menguji 4.26. Kalau ragu di server: `php artisan cache:clear`.
+14. **Kelas Tailwind baru tidak berlaku sampai `npm run build`.** CSS-nya
+    di-compile dan ikut di-commit (`public/build/`), jadi kelas yang baru
+    dipakai di blade — mis. `bg-emerald-700`, `print:break-before-page` —
+    diam-diam tidak punya efek: pernah bikin bar "Total Bonus" putih di atas
+    putih, tidak kelihatan sama sekali. Sesudah menyentuh blade dengan kelas
+    baru: `npm run build`, commit hasilnya, lalu periksa di browser.
 
 ## 8. Perintah yang sering dipakai (jalankan di server, folder live)
 

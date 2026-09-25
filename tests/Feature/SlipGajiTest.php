@@ -8,6 +8,7 @@ use App\Models\Attendance;
 use App\Models\Branch;
 use App\Models\CashAdvance;
 use App\Models\Employee;
+use App\Models\ManualPayrollEntry;
 use App\Models\OvertimeRecord;
 use App\Models\PayrollPeriod;
 use App\Models\Payslip;
@@ -205,6 +206,7 @@ class SlipGajiTest extends TestCase
 
         $lembur = $this->item($slip, 'overtime');
         $this->assertNotNull($lembur);
+        $this->assertSame('bonus', $lembur->category, 'bonus dibayar terpisah dari gaji');
         $this->assertSame('Bonus Lembur 3 jam 30 menit', $lembur->label);
         $this->assertSame($tarifJam, (int) $lembur->rate);
         $this->assertSame(2 * $tarifJam + (int) round(1.5 * $tarifJam), (int) $lembur->amount);
@@ -274,6 +276,70 @@ class SlipGajiTest extends TestCase
         $this->assertStringContainsString('Lembur 3 jam 32 menit: dibayar terpisah', $lembur->label);
         $this->assertSame(212, (int) $slip->overtime_minutes);
         $this->assertSame(3_000_000, (int) $slip->take_home_pay);
+    }
+
+    /**
+     * Bonus diserahkan terpisah, jadi TIDAK masuk take home pay — angka di
+     * slip gaji harus sama dengan uang gaji yang benar-benar diterima.
+     */
+    public function test_bonus_tidak_masuk_take_home_pay_dan_punya_slip_sendiri(): void
+    {
+        $this->hadir('2026-09-05');
+
+        OvertimeRecord::create([
+            'employee_id' => $this->budi->id, 'work_date' => Carbon::parse('2026-09-05'),
+            'actual_minutes' => 120, 'approved_minutes' => 120, 'payable_minutes' => 120,
+            'status' => 'confirmed', 'activated_at' => now(), 'confirmed_at' => now(),
+        ]);
+
+        ManualPayrollEntry::create([
+            'employee_id' => $this->budi->id,
+            'payroll_period_id' => $this->periode->id,
+            'entry_type' => 'bonus',
+            'amount' => 150_000,
+            'reason' => 'Karyawan terbaik bulan ini',
+        ]);
+
+        $slip = $this->hitung();
+
+        $tarifJam = intdiv(intdiv(3_000_000, 26), 10);
+
+        $this->assertSame(3_000_000, (int) $slip->total_earning, 'pendapatan cuma gaji pokok');
+        $this->assertSame(2 * $tarifJam + 150_000, (int) $slip->total_bonus);
+        $this->assertSame(3_000_000, (int) $slip->take_home_pay, 'bonus di luar THP');
+
+        $this->assertSame(
+            ['Bonus Lembur 2 jam', 'Bonus: Karyawan terbaik bulan ini'],
+            $slip->items->where('category', 'bonus')->pluck('label')->sort()->values()->all(),
+        );
+
+        $this->get(route('manajer.payroll.payslip', $slip))
+            ->assertOk()
+            ->assertSee('Slip Bonus')
+            ->assertSee('Total Bonus')
+            ->assertSee('dibayar terpisah dari gaji')
+            ->assertSee('Karyawan terbaik bulan ini');
+    }
+
+    /** Setelan dimatikan: bonus kembali digabung ke pendapatan dan masuk THP. */
+    public function test_setelan_bonus_terpisah_bisa_dimatikan(): void
+    {
+        Settings::put('payroll.bonus_terpisah', false);
+
+        $this->hadir('2026-09-05');
+        OvertimeRecord::create([
+            'employee_id' => $this->budi->id, 'work_date' => Carbon::parse('2026-09-05'),
+            'actual_minutes' => 120, 'approved_minutes' => 120, 'payable_minutes' => 120,
+            'status' => 'confirmed', 'activated_at' => now(), 'confirmed_at' => now(),
+        ]);
+
+        $slip = $this->hitung();
+
+        $tarifJam = intdiv(intdiv(3_000_000, 26), 10);
+
+        $this->assertSame('earning', $this->item($slip, 'overtime')->category);
+        $this->assertSame(0, (int) $slip->total_bonus);
+        $this->assertSame(3_000_000 + 2 * $tarifJam, (int) $slip->take_home_pay);
     }
 
     /** Potongan pulang cepat dan alpha punya rincian per tanggal. */

@@ -37,6 +37,10 @@ class Settings
 
         // Pembagi tarif per jam: gaji pokok ÷ hari kerja ÷ jam ini.
         'payroll.hours_per_day' => 10,
+
+        // Bonus (lembur, bonus manual) diserahkan sendiri, di luar gaji —
+        // jadi tidak ikut take home pay dan dicetak sebagai slip sendiri.
+        'payroll.bonus_terpisah' => true,
     ];
 
     public static function get(string $key, mixed $default = null): mixed

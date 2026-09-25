@@ -86,7 +86,10 @@
     </div>
 
     <div class="mb-6 overflow-hidden kartu">
-        <div class="kartu-judul"><h2 class="font-semibold">Slip Gaji</h2></div>
+        <div class="kartu-judul">
+            <h2 class="font-semibold">Slip Gaji</h2>
+            <p class="text-xs text-slate-500">Bonus dibayar terpisah — tidak termasuk kolom THP.</p>
+        </div>
         <div class="tabel-bungkus">
             <table class="tabel">
                 <thead>
@@ -97,6 +100,7 @@
                         <th class="text-right">Telat</th>
                         <th class="text-right">Lembur</th>
                         <th class="text-right">Pendapatan</th>
+                        <th class="text-right">Bonus</th>
                         <th class="text-right">Potongan</th>
                         <th class="text-right">BPJS</th>
                         <th class="text-right">THP</th>
@@ -117,6 +121,7 @@
                             <td class="text-right {{ $slip->late_count > 0 ? 'text-amber-700' : 'text-slate-400' }}">{{ $slip->late_count }}</td>
                             <td class="text-right text-slate-500">{{ $slip->overtime_minutes > 0 ? round($slip->overtime_minutes/60,1).'j' : '—' }}</td>
                             <td class="text-right">{{ number_format($slip->total_earning, 0, ',', '.') }}</td>
+                            <td class="text-right {{ $slip->total_bonus > 0 ? 'text-emerald-700' : 'text-slate-400' }}">{{ $slip->total_bonus > 0 ? number_format($slip->total_bonus, 0, ',', '.') : '—' }}</td>
                             <td class="text-right text-red-600">{{ number_format($slip->total_deduction, 0, ',', '.') }}</td>
                             <td class="text-right text-red-600">{{ number_format($slip->total_statutory, 0, ',', '.') }}</td>
                             <td class="text-right font-semibold">{{ number_format($slip->take_home_pay, 0, ',', '.') }}</td>

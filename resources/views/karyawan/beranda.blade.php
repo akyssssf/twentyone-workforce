@@ -300,7 +300,12 @@
                 <div class="mt-1 text-lg font-semibold tabular-nums">
                     Rp {{ number_format($slipTerbaru->take_home_pay, 0, ',', '.') }}
                 </div>
-                <div class="text-xs text-slate-400">{{ $slipTerbaru->run->period->label() }}</div>
+                <div class="text-xs text-slate-400">
+                    {{ $slipTerbaru->run->period->label() }}
+                    @if ($slipTerbaru->total_bonus > 0)
+                        &middot; bonus Rp {{ number_format($slipTerbaru->total_bonus, 0, ',', '.') }} dibayar terpisah
+                    @endif
+                </div>
             </a>
         @endif
     </div>

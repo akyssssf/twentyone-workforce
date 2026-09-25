@@ -10,7 +10,7 @@ class Payslip extends Model
 {
     protected $fillable = [
         'payroll_run_id', 'employee_id', 'code', 'employee_snapshot',
-        'total_earning', 'total_deduction', 'total_statutory', 'take_home_pay',
+        'total_earning', 'total_deduction', 'total_statutory', 'total_bonus', 'take_home_pay',
         'scheduled_days', 'present_days', 'absent_days', 'leave_days',
         'late_count', 'early_leave_count', 'overtime_minutes',
         'status', 'published_at', 'pdf_path', 'pdf_generated_at',
@@ -23,6 +23,7 @@ class Payslip extends Model
             'total_earning' => 'integer',
             'total_deduction' => 'integer',
             'total_statutory' => 'integer',
+            'total_bonus' => 'integer',
             'take_home_pay' => 'integer',
             'published_at' => 'datetime',
             'pdf_generated_at' => 'datetime',
@@ -57,6 +58,11 @@ class Payslip extends Model
     public function statutories(): HasMany
     {
         return $this->items()->where('category', 'statutory');
+    }
+
+    public function bonuses(): HasMany
+    {
+        return $this->items()->where('category', 'bonus');
     }
 
     public function scopePublished($query)

@@ -43,6 +43,12 @@ class PayrollGenerator
         protected RuleResolver $rules,
     ) {}
 
+    /** Kategori tempat bonus ditaruh: 'bonus' (dibayar terpisah) atau 'earning' (digabung ke gaji). */
+    protected function kategoriBonus(): string
+    {
+        return Settings::bool('payroll.bonus_terpisah', true) ? 'bonus' : 'earning';
+    }
+
     /**
      * @param  string  $trigger  'manual' (ditekan manusia) atau 'otomatis' (estimasi harian cron)
      */
@@ -225,10 +231,16 @@ class PayrollGenerator
         $deduction = (int) $items->where('category', 'deduction')->sum('amount');
         $statutory = (int) $items->where('category', 'statutory')->sum('amount');
 
+        // Bonus punya kategori sendiri dan TIDAK masuk take home pay: uangnya
+        // diserahkan terpisah, jadi angka di slip gaji harus sama dengan yang
+        // benar-benar diterima sebagai gaji.
+        $bonus = (int) $items->where('category', 'bonus')->sum('amount');
+
         $payslip->update([
             'total_earning' => $earning,
             'total_deduction' => $deduction,
             'total_statutory' => $statutory,
+            'total_bonus' => $bonus,
             'take_home_pay' => $earning - $deduction - $statutory,
             'overtime_minutes' => $overtimeMinutes,
         ]);
@@ -324,7 +336,7 @@ class PayrollGenerator
 
         $this->addItem(
             $payslip,
-            'earning',
+            $this->kategoriBonus(),
             'Bonus Lembur ' . $this->jam($minutes),
             round($minutes / 60, 2),
             $this->rules->hourlyRate($baseSalary, $workingDays),
@@ -518,7 +530,7 @@ class PayrollGenerator
             ->bonus()
             ->get()
             ->each(function (ManualPayrollEntry $entry) use ($payslip, $sort) {
-                $this->addItem($payslip, 'earning', 'Bonus: ' . $entry->reason, 1, $entry->amount, $entry->amount, $sort, [], 'manual', $entry->id);
+                $this->addItem($payslip, $this->kategoriBonus(), 'Bonus: ' . $entry->reason, 1, $entry->amount, $entry->amount, $sort, [], 'manual', $entry->id);
             });
     }
 

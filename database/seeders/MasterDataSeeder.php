@@ -161,6 +161,7 @@ class MasterDataSeeder extends Seeder
             ['payroll.pay_day', 21, 'int', 'Tanggal pembayaran gaji'],
             ['payroll.working_days_basis', 'scheduled', 'string', 'Dasar hari kerja'],
             ['payroll.hours_per_day', 10, 'int', 'Jam kerja per hari, pembagi tarif per jam'],
+            ['payroll.bonus_terpisah', true, 'bool', 'Bonus (lembur, bonus manual) dibayar terpisah dari gaji'],
 
             // Nomor yang dihubungi karyawan untuk mengonfirmasi pengajuan.
             // Ditaruh di setelan, bukan ditanam di tampilan, supaya ganti
