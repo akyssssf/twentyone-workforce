@@ -735,9 +735,13 @@ tabel dan perintahnya ada di jawaban ke user 22 September.
 - **Periode 2026-09 = arsip slip luar** (zip "Slip_Gaji_21KAFE_Agt_Sep_2026"):
   potongan hanya kasbon + telat Rp1.000/menit; alpha & pulang cepat TIDAK
   dipotong; lembur dibayar terpisah di luar THP. Dicapai lewat tanggal
-  berlaku aturan (migrasi `aturan_baru_berlaku_21_september`: absent,
-  early_leave, overtime mulai 2026-09-22 = awal periode 2026-10), bukan kode khusus. Lembur tanpa
-  tarif berlaku tampil sebagai baris info "dibayar terpisah".
+  berlaku aturan (migrasi `aturan_baru_berlaku_21_september`: absent &
+  early_leave mulai 2026-09-22 = awal periode 2026-10), bukan kode khusus.
+  **Tarif lembur kemudian dimundurkan ke semua periode** (migrasi
+  `tarif_lembur_berlaku_semua_periode`, 25 Sep) — aman untuk arsip September
+  karena bonus ada di luar THP, jadi gaji yang sudah dibayar tidak bergeser;
+  yang bertambah cuma Slip Bonus-nya. Lembur tanpa tarif berlaku tetap
+  tampil sebagai baris info "dibayar terpisah".
 - **Periode 2026-09 = 21 Agt–21 Sep, 2026-10 = 22 Sep–20 Okt** (migrasi
   `periode_september_sampai_21`): slip luar menghitung sampai 21 Sep. Satu
   kali saja; periode berikutnya kembali 21–20. **Label di UI/slip tetap
