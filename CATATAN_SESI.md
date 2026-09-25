@@ -715,9 +715,17 @@ tabel dan perintahnya ada di jawaban ke user 22 September.
   hari) mulai 22 Sep. Migrasi `telat_per_blok_dan_alpha_100rb_mulai_oktober`.
 - **Bonus (lembur & bonus manual) dibayar TERPISAH dari gaji** (pemilik,
   25 September): kategori baris slip `bonus`, kolom `payslips.total_bonus`,
-  TIDAK masuk take home pay, dan dicetak sebagai lembar kedua "Slip Bonus"
-  (`print:break-before-page`). Setelan `payroll.bonus_terpisah` — matikan
-  kalau suatu saat digabung lagi.
+  TIDAK masuk take home pay. Di slip, kotak **Bonus berdiri di samping**
+  Pendapatan & Potongan dengan totalnya sendiri. Setelan
+  `payroll.bonus_terpisah` — matikan kalau suatu saat digabung lagi.
+- **Desain slip** mengikuti contoh HTML dari pemilik (25 September): kop
+  surat berlogo + alamat kafe, identitas, tiga kotak (Pendapatan · Potongan ·
+  Bonus), bar Take Home Pay hitam, Rangkuman Informasi Kehadiran, keterangan
+  aturan, tanda tangan Penerima/Manager. Alamat & email kafe masih ditanam di
+  `resources/views/slip/show.blade.php` (kolom `branches.address` kosong).
+  Ringkasan kehadirannya dibekukan di kolom slip (`permit_days`, `sick_days`,
+  `late_minutes`) — bukan dihitung ulang dari absensi yang masih bisa
+  berubah.
 - **BPJS tidak dipotong** (pemilik, 22 September). Rule set BPJS dinonaktifkan
   lewat migrasi `nonaktifkan_bpjs`; seeder pun memasangnya nonaktif.
 - **Periode 2026-09 = arsip slip luar** (zip "Slip_Gaji_21KAFE_Agt_Sep_2026"):

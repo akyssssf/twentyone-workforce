@@ -313,12 +313,14 @@ class SlipGajiTest extends TestCase
             $slip->items->where('category', 'bonus')->pluck('label')->sort()->values()->all(),
         );
 
+        // Bonus punya kotaknya sendiri di samping Pendapatan & Potongan,
+        // dengan total sendiri dan keterangan bahwa uangnya di luar THP.
         $this->get(route('manajer.payroll.payslip', $slip))
             ->assertOk()
-            ->assertSee('Slip Bonus')
+            ->assertSee('Slip Gaji &amp; Bonus', false)
             ->assertSee('Total Bonus')
-            ->assertSee('dibayar terpisah dari gaji')
-            ->assertSee('Karyawan terbaik bulan ini');
+            ->assertSee('Dibayar terpisah, di luar take home pay')
+            ->assertSee('Bonus: Karyawan terbaik bulan ini');
     }
 
     /** Setelan dimatikan: bonus kembali digabung ke pendapatan dan masuk THP. */
@@ -475,11 +477,12 @@ class SlipGajiTest extends TestCase
 
         $this->get(route('manajer.payroll.payslip', $slip))
             ->assertOk()
+            ->assertSee('21 KAFE')
             ->assertSee('Potongan Terlambat (1x)')
-            ->assertSee('Rp10.000 per 10 menit keterlambatan')
             ->assertSee('Toleransi telat 10 menit')
             ->assertSee('Kasbon')
-            ->assertSee('Dasar perhitungan')
-            ->assertSee('Tarif per jam');
+            ->assertSee('Rangkuman Informasi Kehadiran')
+            ->assertSee('Tarif per jam')
+            ->assertSee('Penerima,');
     }
 }

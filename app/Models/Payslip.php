@@ -12,7 +12,8 @@ class Payslip extends Model
         'payroll_run_id', 'employee_id', 'code', 'employee_snapshot',
         'total_earning', 'total_deduction', 'total_statutory', 'total_bonus', 'take_home_pay',
         'scheduled_days', 'present_days', 'absent_days', 'leave_days',
-        'late_count', 'early_leave_count', 'overtime_minutes',
+        'permit_days', 'sick_days',
+        'late_count', 'late_minutes', 'early_leave_count', 'overtime_minutes',
         'status', 'published_at', 'pdf_path', 'pdf_generated_at',
     ];
 
