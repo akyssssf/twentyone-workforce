@@ -2,6 +2,8 @@
 @section('title', 'Slip Gaji')
 @section('lebar', 'max-w-4xl')
 
+@section('judul-berkas', \App\Support\NamaBerkasSlip::untuk($payslip, 'SLIP_GAJI'))
+
 @section('content')
 @php
     $snap = $payslip->employee_snapshot ?? [];
@@ -82,7 +84,7 @@
         ] as [$judul, $baris, $totalKelas, $total])
 
             <div class="flex flex-col">
-                <div class="rounded-t border border-slate-300 bg-slate-100 px-3 py-2 text-[11px] font-bold uppercase tracking-wide text-slate-800">
+                <div class="cetak-warna rounded-t border border-slate-300 bg-slate-100 px-3 py-2 text-[11px] font-bold uppercase tracking-wide text-slate-800">
                     {{ $judul }}
                 </div>
                 <div class="min-h-[96px] grow rounded-b border border-t-0 border-slate-300 px-3 py-3">
@@ -109,7 +111,7 @@
                         <div class="text-[13px] text-slate-400">—</div>
                     @endforelse
                 </div>
-                <div class="mt-2 flex items-center justify-between rounded border px-3 py-2 text-[13px] font-bold {{ $totalKelas }}">
+                <div class="cetak-warna mt-2 flex items-center justify-between rounded border px-3 py-2 text-[13px] font-bold {{ $totalKelas }}">
                     <span>Total {{ $judul }}</span>
                     <span class="tabular-nums">{{ $rp($total) }}</span>
                 </div>
@@ -120,14 +122,14 @@
     {{-- Take home pay: gaji saja. Bonus sengaja tidak dijumlahkan ke sini —
          uangnya diserahkan terpisah, jadi angka ini harus sama dengan yang
          benar-benar diterima sebagai gaji. --}}
-    <div class="mt-6 rounded bg-slate-900 px-5 py-4 text-white">
+    <div class="cetak-warna mt-6 rounded bg-slate-900 px-5 py-4 text-white">
         <div class="text-[11px] uppercase tracking-[2px] text-slate-400">Total Diterima (Take Home Pay)</div>
         <div class="text-3xl font-bold tabular-nums">{{ $rp($payslip->take_home_pay) }}</div>
     </div>
 
     {{-- Rangkuman kehadiran --}}
     <div class="mt-6 rounded border border-slate-300">
-        <div class="border-b border-slate-300 bg-slate-50 px-3 py-2 text-[11px] font-bold uppercase tracking-wide text-slate-800">
+        <div class="cetak-warna border-b border-slate-300 bg-slate-50 px-3 py-2 text-[11px] font-bold uppercase tracking-wide text-slate-800">
             Rangkuman Informasi Kehadiran
         </div>
         <div class="grid gap-x-8 gap-y-2.5 px-4 py-3 text-[13px] sm:grid-cols-2">

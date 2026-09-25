@@ -2,6 +2,8 @@
 @section('title', 'Slip Bonus')
 @section('lebar', 'max-w-4xl')
 
+@section('judul-berkas', \App\Support\NamaBerkasSlip::untuk($payslip, 'SLIP_BONUS'))
+
 @section('content')
 @php
     $snap = $payslip->employee_snapshot ?? [];
@@ -53,12 +55,15 @@
     {{-- Rincian sampai ke hari dan jamnya: bonus lembur paling sering
          dipertanyakan, dan pertanyaannya selalu "yang mana saja". --}}
     <div class="mt-6">
-        <div class="rounded-t border border-slate-300 bg-slate-100 px-3 py-2 text-[11px] font-bold uppercase tracking-wide text-slate-800">
+        <div class="cetak-warna rounded-t border border-slate-300 bg-slate-100 px-3 py-2 text-[11px] font-bold uppercase tracking-wide text-slate-800">
             Rincian Bonus
         </div>
         <div class="rounded-b border border-t-0 border-slate-300 px-4 py-3">
             @forelse ($bonus as $item)
-                @php $rincian = $item->rule_snapshot['rincian'] ?? []; @endphp
+                @php
+                    $rincian = $item->rule_snapshot['rincian'] ?? [];
+                    $adaKeterangan = collect($rincian)->contains(fn ($r) => ! empty($r['note'] ?? $r['rule'] ?? null));
+                @endphp
 
                 <div class="{{ $loop->last ? '' : 'mb-4 border-b border-slate-100 pb-4' }}">
                     <div class="flex items-baseline justify-between gap-3 text-[13px]">
@@ -73,13 +78,17 @@
                         <span class="shrink-0 font-semibold tabular-nums">{{ $rp($item->amount) }}</span>
                     </div>
 
+                    @if (! $rincian && $item->source_type === 'manual')
+                        <div class="mt-0.5 text-[11px] text-slate-500">Bonus manual, disetujui manajer</div>
+                    @endif
+
                     @if ($rincian)
                         <table class="mt-2 w-full text-[12px]">
                             <thead>
                                 <tr class="text-left text-[10px] uppercase tracking-wide text-slate-500">
                                     <th class="pb-1 font-medium">Tanggal</th>
                                     <th class="pb-1 font-medium">Lama</th>
-                                    <th class="pb-1 font-medium">Keterangan</th>
+                                    @if ($adaKeterangan)<th class="pb-1 font-medium">Keterangan</th>@endif
                                     <th class="pb-1 text-right font-medium">Jumlah</th>
                                 </tr>
                             </thead>
@@ -88,7 +97,7 @@
                                     <tr class="text-slate-600">
                                         <td class="py-0.5">{{ \Illuminate\Support\Carbon::parse($r['date'])->translatedFormat('D, d M Y') }}</td>
                                         <td class="py-0.5">@isset($r['minutes']){{ $durasi($r['minutes']) }}@else—@endisset</td>
-                                        <td class="py-0.5">{{ $r['note'] ?? ($r['rule'] ?? '—') }}</td>
+                                        @if ($adaKeterangan)<td class="py-0.5">{{ $r['note'] ?? ($r['rule'] ?? '—') }}</td>@endif
                                         <td class="py-0.5 text-right tabular-nums">{{ $rp($r['amount'] ?? 0) }}</td>
                                     </tr>
                                 @endforeach
@@ -102,14 +111,14 @@
         </div>
     </div>
 
-    <div class="mt-6 rounded bg-amber-900 px-5 py-4 text-white">
+    <div class="cetak-warna mt-6 rounded bg-amber-900 px-5 py-4 text-white">
         <div class="text-[11px] uppercase tracking-[2px] text-amber-200">Total Bonus Diterima</div>
         <div class="text-3xl font-bold tabular-nums">{{ $rp($payslip->total_bonus) }}</div>
     </div>
 
     @if ($payslip->overtime_minutes > 0)
         <div class="mt-4 rounded border border-slate-300">
-            <div class="border-b border-slate-300 bg-slate-50 px-3 py-2 text-[11px] font-bold uppercase tracking-wide text-slate-800">
+            <div class="cetak-warna border-b border-slate-300 bg-slate-50 px-3 py-2 text-[11px] font-bold uppercase tracking-wide text-slate-800">
                 Rangkuman Lembur
             </div>
             <div class="grid gap-x-8 gap-y-2.5 px-4 py-3 text-[13px] sm:grid-cols-2">

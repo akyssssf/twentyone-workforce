@@ -335,6 +335,30 @@ class SlipGajiTest extends TestCase
             ->assertSee('Penerima,');
     }
 
+    /**
+     * Nama berkas PDF. Peramban memakai <title> halaman, jadi judulnya
+     * memang harus berbentuk nama berkas — bukan "Slip Bonus · 21 Kafe".
+     */
+    public function test_judul_halaman_jadi_nama_berkas_pdf(): void
+    {
+        OvertimeRecord::create([
+            'employee_id' => $this->budi->id, 'work_date' => Carbon::parse('2026-09-05'),
+            'actual_minutes' => 60, 'approved_minutes' => 60, 'payable_minutes' => 60,
+            'status' => 'confirmed', 'activated_at' => now(), 'confirmed_at' => now(),
+        ]);
+        $this->hadir('2026-09-05');
+
+        $slip = $this->hitung();
+
+        $this->get(route('manajer.payroll.payslip.bonus', $slip))
+            ->assertOk()
+            ->assertSee('<title>BUDI_UJI_SLIP_BONUS_21-09-2026</title>', false);
+
+        $this->get(route('manajer.payroll.payslip', $slip))
+            ->assertOk()
+            ->assertSee('<title>BUDI_UJI_SLIP_GAJI_21-09-2026</title>', false);
+    }
+
     /** Slip bonus untuk karyawan: hanya miliknya, dan hanya kalau sudah terbit. */
     public function test_karyawan_hanya_bisa_membuka_slip_bonus_miliknya(): void
     {

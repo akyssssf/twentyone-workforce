@@ -149,6 +149,11 @@
 }
 
 /* Cetak: buang seluruh kerangka aplikasi, sisakan isinya. Dipakai slip gaji. */
+@page {
+    size: A4;
+    margin: 12mm;
+}
+
 @media print {
     .cetak-sembunyi {
         display: none !important;
@@ -161,5 +166,14 @@
     main {
         max-width: none !important;
         padding: 0 !important;
+    }
+
+    /* Bar Take Home Pay & Total Bonus: latar gelapnya BAGIAN dari dokumen,
+       bukan hiasan layar. Tanpa ini peramban membuang latarnya saat mencetak
+       dan yang tersisa teks putih di atas putih — angka terpentingnya lenyap. */
+    .cetak-warna,
+    .cetak-warna * {
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
     }
 }

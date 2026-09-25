@@ -4,7 +4,11 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <meta name="theme-color" content="#0f172a">
-    <title>@yield('title', 'Beranda') &middot; {{ config('app.name') }}</title>
+    {{-- Peramban memakai <title> sebagai nama berkas saat "Simpan sebagai
+         PDF". Halaman yang dicetak (slip) memberi judulnya sendiri lewat
+         @@section('judul-berkas') supaya berkasnya langsung bernama
+         NAMA_DIVISI_SLIP_GAJI_TANGGAL, bukan "Slip Gaji · 21 Kafe". --}}
+    <title>@hasSection('judul-berkas')@yield('judul-berkas')@else@yield('title', 'Beranda') &middot; {{ config('app.name') }}@endif</title>
 
     {{-- Logo putih di atas latar gelap, bukan logo polos transparan: ikon tab
          yang transparan ikut hilang begitu peramban dipakai dalam mode gelap. --}}

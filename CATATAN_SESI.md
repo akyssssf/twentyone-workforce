@@ -934,7 +934,15 @@ menganggap sebuah perintah selesai, **lihat outputnya**.
     kalau tidak nilai barunya tidak terbaca sampai cache kedaluwarsa — payroll
     pertama setelah deploy diam-diam memakai toleransi 0. Sudah kejadian di
     lokal saat menguji 4.26. Kalau ragu di server: `php artisan cache:clear`.
-14. **Kelas Tailwind baru tidak berlaku sampai `npm run build`.** CSS-nya
+14. **Cetak: latar gelap hilang kalau tidak diberi `.cetak-warna`.** Peramban
+    membuang warna latar saat mencetak, jadi bar Take Home Pay & Total Bonus
+    (teks putih) berubah jadi putih di atas putih — angka terpentingnya
+    lenyap di PDF. Kelas `.cetak-warna` memasang `print-color-adjust: exact`.
+15. **Nama berkas PDF = `<title>` halaman.** Tidak ada cara lain menamainya
+    dari sisi server; slip memakai `@section('judul-berkas')` +
+    `App\Support\NamaBerkasSlip` sehingga berkasnya bernama
+    NAMA_DIVISI_SLIP_BONUS_21-09-2026.
+16. **Kelas Tailwind baru tidak berlaku sampai `npm run build`.** CSS-nya
     di-compile dan ikut di-commit (`public/build/`), jadi kelas yang baru
     dipakai di blade — mis. `bg-emerald-700`, `print:break-before-page` —
     diam-diam tidak punya efek: pernah bikin bar "Total Bonus" putih di atas
