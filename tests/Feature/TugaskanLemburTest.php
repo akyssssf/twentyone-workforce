@@ -207,11 +207,11 @@ class TugaskanLemburTest extends TestCase
 
         $this->assertSame(0, (int) $this->rekap()?->overtime_minutes);
 
-        $record = \App\Models\OvertimeRecord::sole();
+        $record = OvertimeRecord::sole();
         $this->assertSame('cancelled', $record->status);
         $this->assertSame(0, (int) $record->payable_minutes);
         $this->assertStringContainsString('Salah tanggal', $record->note);
-        $this->assertSame('cancelled', \App\Models\Request::sole()->status->value);
+        $this->assertSame('cancelled', Request::sole()->status->value);
 
         // Hitung ulang berkali-kali: tetap nol.
         Artisan::call('attendance:compute', ['--from' => '2026-09-06', '--to' => '2026-09-06']);
