@@ -1054,6 +1054,11 @@ php artisan fingerspot:ping
 # Lihat aliran data absensi hari ini, dari callback sampai rekap
 php artisan attendance:status
 
+# Lembur yang keliru ditugaskan (lembur:tugaskan langsung SAH, jalur pengajuan
+# biasa tidak bisa membatalkannya). Catatan tidak dihapus: status cancelled,
+# dibayar 0, alasan wajib.
+php artisan lembur:batal <pin> <tanggal> --alasan="..."
+
 # Gaji & payroll
 php artisan gaji:atur --divisi=barista --divisi=chef --jumlah=3000000 --dari=2026-08-21
 php artisan gaji:atur --pin=17 --pin=14 --jumlah=2500000 --dari=2026-08-21   # PIN menang atas divisi

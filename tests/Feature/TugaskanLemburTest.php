@@ -7,7 +7,9 @@ use App\Models\Attendance;
 use App\Models\AttendanceLog;
 use App\Models\Branch;
 use App\Models\Employee;
+use App\Models\OvertimeRecord;
 use App\Models\OvertimeRequest;
+use App\Models\Request;
 use App\Models\Shift;
 use App\Models\User;
 use App\Services\Roster\RosterService;
@@ -187,5 +189,42 @@ class TugaskanLemburTest extends TestCase
     public function test_pin_tidak_dikenal_ditolak(): void
     {
         $this->artisan('lembur:tugaskan 999 2026-09-06 --keperluan=acara --alasan="Acara"')->assertFailed();
+    }
+
+    /**
+     * Lembur yang keliru ditugaskan harus bisa dibatalkan — dan tetap batal
+     * walau perhitungan otomatis jalan lagi, karena perhitungan itu hanya
+     * menyentuh catatan yang belum disahkan manusia.
+     */
+    public function test_lembur_bisa_dibatalkan_dan_tidak_hidup_lagi(): void
+    {
+        $this->artisan('lembur:tugaskan 20 2026-09-06 --keperluan=acara --alasan="Acara kafe" --aktifkan')
+            ->assertSuccessful();
+        $this->assertSame(420, (int) $this->rekap()?->overtime_minutes);
+
+        $this->artisan('lembur:batal 20 2026-09-06 --alasan="Salah tanggal, dia masuk shift malam"')
+            ->assertSuccessful();
+
+        $this->assertSame(0, (int) $this->rekap()?->overtime_minutes);
+
+        $record = \App\Models\OvertimeRecord::sole();
+        $this->assertSame('cancelled', $record->status);
+        $this->assertSame(0, (int) $record->payable_minutes);
+        $this->assertStringContainsString('Salah tanggal', $record->note);
+        $this->assertSame('cancelled', \App\Models\Request::sole()->status->value);
+
+        // Hitung ulang berkali-kali: tetap nol.
+        Artisan::call('attendance:compute', ['--from' => '2026-09-06', '--to' => '2026-09-06']);
+        $this->assertSame(0, (int) $this->rekap()?->overtime_minutes);
+    }
+
+    public function test_batal_lembur_wajib_beralasan(): void
+    {
+        $this->artisan('lembur:tugaskan 20 2026-09-06 --keperluan=acara --alasan="Acara kafe" --aktifkan')
+            ->assertSuccessful();
+
+        $this->artisan('lembur:batal 20 2026-09-06')->assertFailed();
+
+        $this->assertSame(420, (int) $this->rekap()?->overtime_minutes);
     }
 }
