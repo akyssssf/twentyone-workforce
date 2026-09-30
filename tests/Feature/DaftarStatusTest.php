@@ -174,4 +174,11 @@ class DaftarStatusTest extends TestCase
     {
         $this->artisan('attendance:daftar --from=2026-08-25 --to=2026-08-23')->assertFailed();
     }
+
+    /** --telat-min tanpa --status mencari di semua status: orang telat itu Hadir, bukan Alpha. */
+    public function test_telat_min_tanpa_status_mencari_yang_hadir(): void
+    {
+        $this->assertSame(0, Artisan::call('attendance:daftar', ['--telat-min' => 1, '--from' => '2026-08-01', '--to' => '2026-08-31']));
+        $this->assertStringNotContainsString('Alpha dengan telat', Artisan::output());
+    }
 }

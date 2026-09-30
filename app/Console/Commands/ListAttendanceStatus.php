@@ -24,7 +24,7 @@ use Illuminate\Console\Command;
 class ListAttendanceStatus extends Command
 {
     protected $signature = 'attendance:daftar
-                            {--status=alpha : Status yang dicari, atau "semua" untuk semua status}
+                            {--status= : Status yang dicari, atau "semua" (bawaan: alpha; semua kalau --telat-min dipakai)}
                             {--telat-min= : Hanya yang telatnya minimal sekian MENIT}
                             {--from= : Tanggal awal (YYYY-MM-DD), kosong berarti hari ini}
                             {--to= : Tanggal akhir, kosong berarti sama dengan --from}';
@@ -33,7 +33,12 @@ class ListAttendanceStatus extends Command
 
     public function handle(): int
     {
-        $kodeStatus = strtolower(trim((string) $this->option('status')));
+        // Tanpa --status: cari Alpha, KECUALI kalau yang dicari telat. Orang
+        // telat berstatus Hadir, jadi bawaan "alpha" + --telat-min selalu
+        // kosong — dan dulu memang begitu: "tidak ada telat ≥ 180 menit"
+        // padahal di web jelas ada.
+        $kodeStatus = strtolower(trim((string) ($this->option('status')
+            ?? ($this->option('telat-min') !== null ? 'semua' : 'alpha'))));
 
         // "semua" ada supaya penyaring telat bisa dipakai lintas status: telat
         // yang janggal tidak selalu berstatus alpha, dan justru yang berstatus
