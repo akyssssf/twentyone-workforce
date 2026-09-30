@@ -757,11 +757,14 @@ tabel dan perintahnya ada di jawaban ke user 22 September.
   per shift tiap hari SAMA dengan rotasi asli. **Jangan jalankan
   `roster:apply-waiters` untuk Oktober** — itu menimpa jadwal sementara ini.
   Pemilik akan mengabari kalau Nuryati sudah normal.
-- **Oktober 2026 — Barista**: pola mingguan dari foto pemilik untuk Zahra,
-  Jihan, Abdila (Zahra libur Sel, Jihan libur Rab, Abdila libur Sen);
-  Sigit/Faza/Fikri disusun pelengkapnya supaya tiap shift minimal 2 orang dan
-  Zahra–Faza, Jihan–Sigit tidak pernah satu shift (Sigit libur Kam, Faza Rab,
-  Fikri Sen). Rencana "pasangan" Oktober sebelumnya diganti seluruhnya.
+- **Oktober 2026 — Barista dibagi dua pos**: **depan** = Zahra, Jihan, Abdila
+  (pola mingguan dari foto pemilik: Zahra libur Sel, Jihan Rab, Abdila Sen);
+  **belakang** = Sigit, Faza, Fikri (disusun pelengkapnya: Sigit libur Kam,
+  Faza Rab, Fikri Sen — hari libur tak pernah bersamaan, jadi pos belakang
+  selalu punya minimal 1 pagi + 1 malam). Zahra–Faza dan Jihan–Sigit tidak
+  pernah satu shift. Dicari menyeluruh: tidak ada susunan pos belakang dengan
+  pelanggaran jeda istirahat lebih sedikit dari ini (2 kali per minggu).
+  Rencana "pasangan" Oktober sebelumnya diganti seluruhnya.
 - **Siklus rotasi 4-mingguan waiters**: patokan "Minggu 1" = **Senin 17 Agustus
   2026** (jadwal BARU per 18 Agustus 2026 — menggantikan jadwal lama yang
   patokannya 27 Juli; jangan pakai patokan lama lagi). Berlaku 17 Agt–30 Sep,
