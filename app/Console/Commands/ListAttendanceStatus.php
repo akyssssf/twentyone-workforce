@@ -26,6 +26,7 @@ class ListAttendanceStatus extends Command
     protected $signature = 'attendance:daftar
                             {--status= : Status yang dicari, atau "semua" (bawaan: alpha; semua kalau --telat-min dipakai)}
                             {--telat-min= : Hanya yang telatnya minimal sekian MENIT}
+                            {--pin= : Hanya karyawan ini}
                             {--from= : Tanggal awal (YYYY-MM-DD), kosong berarti hari ini}
                             {--to= : Tanggal akhir, kosong berarti sama dengan --from}';
 
@@ -82,6 +83,10 @@ class ListAttendanceStatus extends Command
             ->with(['employee', 'shift'])
             ->when($status !== null, fn ($q) => $q->where('status', $status->value))
             ->when($telatMin !== null, fn ($q) => $q->where('late_minutes', '>=', $telatMin))
+            ->when($this->option('pin') !== null, fn ($q) => $q->whereHas(
+                'employee',
+                fn ($e) => $e->where('pin_device', (string) $this->option('pin')),
+            ))
 
             // Batas atas eksplisit sampai akhir hari: work_date tersimpan
             // sebagai "Y-m-d 00:00:00", jadi whereBetween dengan string tanggal

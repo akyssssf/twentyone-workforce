@@ -181,4 +181,11 @@ class DaftarStatusTest extends TestCase
         $this->assertSame(0, Artisan::call('attendance:daftar', ['--telat-min' => 1, '--from' => '2026-08-01', '--to' => '2026-08-31']));
         $this->assertStringNotContainsString('Alpha dengan telat', Artisan::output());
     }
+
+    /** --pin menyaring satu orang: untuk menelusuri rincian telat seseorang. */
+    public function test_pin_menyaring_satu_orang(): void
+    {
+        $this->assertSame(0, Artisan::call('attendance:daftar', ['--status' => 'semua', '--pin' => '99999', '--from' => '2026-08-01', '--to' => '2026-08-31']));
+        $this->assertStringContainsString('Tidak ada rekap', Artisan::output());
+    }
 }
