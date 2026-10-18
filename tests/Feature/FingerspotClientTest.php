@@ -22,6 +22,12 @@ class FingerspotClientTest extends TestCase
 
         // Jaring pengaman: tes ini tidak boleh menyentuh API sungguhan.
         Http::preventStrayRequests();
+
+        // Tanggal uji di bawah semuanya Agustus 2026. Tanpa jam yang dipatok,
+        // tes-tes itu lulus selama Agustus lalu mulai gagal sendiri begitu
+        // tanggalnya lewat batas retensi 60 hari — tidak ada yang berubah di
+        // kode, hanya kalendernya.
+        Carbon::setTestNow('2026-08-06 12:00:00');
     }
 
     protected function client(): FingerspotClient
