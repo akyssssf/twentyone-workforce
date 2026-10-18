@@ -1059,6 +1059,10 @@ php artisan attendance:status
 # dibayar 0, alasan wajib.
 php artisan lembur:batal <pin> <tanggal> --alasan="..."
 
+# Semua scan mentah satu orang lintas hari + jadwalnya (cari jadwal yang tergeser:
+# alpha padahal ada scan di hari yang jadwalnya libur)
+php artisan attendance:scan <pin> --from=2026-10-12 --to=2026-10-18
+
 # Gaji & payroll
 php artisan gaji:atur --divisi=barista --divisi=chef --jumlah=3000000 --dari=2026-08-21
 php artisan gaji:atur --pin=17 --pin=14 --jumlah=2500000 --dari=2026-08-21   # PIN menang atas divisi
