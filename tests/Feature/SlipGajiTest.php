@@ -21,6 +21,7 @@ use App\Services\Payroll\PayrollGenerator;
 use App\Services\Payroll\PayrollPeriodFactory;
 use App\Services\Roster\RosterService;
 use App\Support\Settings;
+use App\Support\ToleransiTelat;
 use Database\Seeders\MasterDataSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
@@ -90,8 +91,6 @@ class SlipGajiTest extends TestCase
 
     protected function hadir(string $tanggal, int $telatDetik = 0, int $pulangCepatMenit = 0, AttendanceStatus $status = AttendanceStatus::Hadir): Attendance
     {
-        $toleransi = Settings::int('attendance.late_tolerance_minutes');
-
         return Attendance::create([
             'employee_id' => $this->budi->id,
             'shift_id' => $this->pagi->id,
@@ -102,7 +101,7 @@ class SlipGajiTest extends TestCase
             'check_out_at' => Carbon::parse("{$tanggal} 18:00:00", 'Asia/Jakarta')->subMinutes($pulangCepatMenit),
             'late_seconds' => $telatDetik,
             // Seperti AttendanceComputer: menit nol di dalam toleransi.
-            'late_minutes' => $telatDetik > $toleransi * 60 ? (int) ceil($telatDetik / 60) : 0,
+            'late_minutes' => $telatDetik > 0 && ! ToleransiTelat::dimaafkan($telatDetik) ? (int) ceil($telatDetik / 60) : 0,
             'early_leave_seconds' => $pulangCepatMenit * 60,
             'early_leave_minutes' => $pulangCepatMenit,
             'status' => $status,
@@ -151,8 +150,8 @@ class SlipGajiTest extends TestCase
         $this->assertSame(10, Settings::int('attendance.late_tolerance_minutes'));
 
         $this->hadir('2026-08-21', telatDetik: 7 * 60);
-        $this->hadir('2026-08-22', telatDetik: 10 * 60);
-        $this->hadir('2026-08-24', telatDetik: 11 * 60);
+        $this->hadir('2026-08-22', telatDetik: 10 * 60 + 45);   // menit ke-10, tertulis "11" kalau dibulatkan
+        $this->hadir('2026-08-24', telatDetik: 12 * 60);
 
         $slip = $this->hitung();
 
@@ -161,9 +160,9 @@ class SlipGajiTest extends TestCase
         $potongan = $this->item($slip, 'late');
         $this->assertNotNull($potongan);
         $this->assertSame('Potongan Terlambat (1x)', $potongan->label);
-        // 11 menit = 1 blok 10 menit yang genap dilewati = Rp 10.000.
+        // 12 menit = 1 blok 10 menit yang genap dilewati = Rp 10.000.
         $this->assertSame(10_000, (int) $potongan->amount);
-        $this->assertSame([['date' => '2026-08-24', 'minutes' => 11, 'amount' => 10_000, 'rule' => 'Rp10.000 per 10 menit keterlambatan']], $potongan->rule_snapshot['rincian']);
+        $this->assertSame([['date' => '2026-08-24', 'minutes' => 12, 'amount' => 10_000, 'rule' => 'Rp10.000 per 10 menit keterlambatan']], $potongan->rule_snapshot['rincian']);
 
         $info = $slip->items->where('category', 'info')->first(fn ($i) => str_contains($i->label, 'Toleransi telat 10 menit'));
         $this->assertNotNull($info);
@@ -534,7 +533,7 @@ class SlipGajiTest extends TestCase
     /** Halaman slip merender rincian tanpa error. */
     public function test_halaman_slip_menampilkan_rincian(): void
     {
-        $this->hadir('2026-08-24', telatDetik: 11 * 60);
+        $this->hadir('2026-08-24', telatDetik: 12 * 60);
         $this->hadir('2026-08-21', telatDetik: 5 * 60);
         app(KasbonService::class)->catat($this->budi, 300_000, '2026-09', 1, null, Carbon::parse('2026-09-01'));
 

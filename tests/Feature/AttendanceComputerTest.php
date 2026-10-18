@@ -477,8 +477,8 @@ class AttendanceComputerTest extends TestCase
 
         $employee = $this->karyawan();
         $this->scan('1', '2026-08-06 09:07:30');
-        $this->scan('1', '2026-08-07 09:10:00');
-        $this->scan('1', '2026-08-08 09:10:01');
+        $this->scan('1', '2026-08-07 09:10:30');
+        $this->scan('1', '2026-08-08 09:11:01');
 
         $dalam = $this->hitung($employee, '2026-08-06');
         $this->assertSame(450, $dalam->late_seconds);
@@ -487,10 +487,14 @@ class AttendanceComputerTest extends TestCase
         $this->assertFalse($dalam->isLate());
 
         $pas = $this->hitung($employee, '2026-08-07');
-        $this->assertSame(0, $pas->late_minutes, 'tepat 10 menit masih dalam toleransi');
+        // 10 menit 30 detik masih "menit ke-10": dibulatkan ke atas akan
+        // tertulis 11, dan itu dulu yang bikin orang terpotong padahal
+        // jamnya sendiri bilang belum lewat.
+        $this->assertSame(0, $pas->late_minutes, '10m30d masih dalam toleransi 10 menit');
+        $this->assertSame(630, $pas->late_seconds);
 
         $lewat = $this->hitung($employee, '2026-08-08');
-        $this->assertSame(11, $lewat->late_minutes, 'lewat satu detik: seluruh 10m 1d dihitung, dibulatkan ke atas');
+        $this->assertSame(12, $lewat->late_minutes, '11m01d sudah lewat: seluruhnya dihitung, dibulatkan ke atas jadi 12');
         $this->assertFalse($lewat->telatDalamToleransi());
     }
 }

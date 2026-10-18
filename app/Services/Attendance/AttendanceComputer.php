@@ -11,7 +11,7 @@ use App\Models\Employee;
 use App\Models\Holiday;
 use App\Models\RosterAssignment;
 use App\Models\Shift;
-use App\Support\Settings;
+use App\Support\ToleransiTelat;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 
@@ -653,7 +653,9 @@ class AttendanceComputer
         // Lewat toleransi, SELURUH keterlambatan dihitung (bukan cuma
         // sisanya): toleransi adalah ambang, bukan potongan gratis 10 menit.
         // Menit dibulatkan KE ATAS karena tier potongan berbicara dalam menit.
-        if ($selisih <= Settings::int('attendance.late_tolerance_minutes') * 60) {
+        // Batasnya sampai menit ke-10 PENUH (10:59), bukan 10:00 — lihat
+        // ToleransiTelat.
+        if (ToleransiTelat::dimaafkan($selisih)) {
             return ['seconds' => $selisih, 'minutes' => 0];
         }
 

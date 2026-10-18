@@ -635,6 +635,14 @@ jadi rekap/dashboard tidak menandai telat, tapi slip gaji dan
 Lewat toleransi, SELURUH keterlambatan dihitung (11 menit = 11, bukan 1):
 toleransi itu ambang, bukan potongan gratis.
 
+**Batas toleransi 10 menit = sampai 10:59** (`App\Support\ToleransiTelat`,
+19 Okt): menit dibulatkan ke atas, jadi 10:30 tertulis "11 menit" — dulu itu
+lolos dari toleransi (pembandingnya detik mentah ≤ 600) dan terpotong, padahal
+jam di tangan pemilik bilang masih menit ke-10. Sekarang yang dipotong mulai
+12 menit. AttendanceComputer dan PayrollGenerator memakai fungsi yang sama.
+Rekap lama baru ikut setelah `attendance:compute` rentang yang diinginkan
+(cron cuma 2 hari terakhir).
+
 Payroll membaca toleransi dari DETIK (bukan `late_minutes`), supaya baris rekap
 yang dihitung sebelum toleransi ada pun benar tanpa harus dihitung ulang —
 tapi rekap/dashboard baru ikut berubah setelah `attendance:compute` ulang.

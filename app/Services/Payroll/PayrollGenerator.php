@@ -20,6 +20,7 @@ use App\Models\SalaryComponent;
 use App\Services\Audit\AuditLogger;
 use App\Services\Rules\RuleResolver;
 use App\Support\Settings;
+use App\Support\ToleransiTelat;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use RuntimeException;
@@ -169,9 +170,9 @@ class PayrollGenerator
         // dinolkan AttendanceComputer. Dua alasan: baris rekap yang dihitung
         // sebelum toleransi ada masih menyimpan menitnya, dan slip harus bisa
         // bilang "3 kali datang lewat, semuanya dalam toleransi".
-        $toleransi = Settings::int('attendance.late_tolerance_minutes');
-        $telatDipotong = $attendances->filter(fn ($a) => $a->late_seconds > $toleransi * 60);
-        $telatDimaafkan = $attendances->filter(fn ($a) => $a->late_seconds > 0 && $a->late_seconds <= $toleransi * 60);
+        $toleransi = ToleransiTelat::menit();
+        $telatDipotong = $attendances->filter(fn ($a) => $a->late_seconds > 0 && ! ToleransiTelat::dimaafkan((int) $a->late_seconds));
+        $telatDimaafkan = $attendances->filter(fn ($a) => $a->late_seconds > 0 && ToleransiTelat::dimaafkan((int) $a->late_seconds));
 
         $payslip = Payslip::updateOrCreate(
             ['payroll_run_id' => $run->id, 'employee_id' => $employee->id],
