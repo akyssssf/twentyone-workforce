@@ -1059,6 +1059,10 @@ php artisan attendance:status
 # dibayar 0, alasan wajib.
 php artisan lembur:batal <pin> <tanggal> --alasan="..."
 
+# Rincian telat PER ORANG (tiap kejadian + estimasi potongan + ringkasan peringkat);
+# tanpa --from = awal periode gajian berjalan
+php artisan attendance:telat [--from=2026-09-22 --to=2026-10-18 --pin=15]
+
 # Semua scan mentah satu orang lintas hari + jadwalnya (cari jadwal yang tergeser:
 # alpha padahal ada scan di hari yang jadwalnya libur)
 php artisan attendance:scan <pin> --from=2026-10-12 --to=2026-10-18
