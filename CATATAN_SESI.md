@@ -1075,6 +1075,11 @@ php artisan attendance:telat [--from=2026-09-22 --to=2026-10-18 --pin=15]
 # alpha padahal ada scan di hari yang jadwalnya libur)
 php artisan attendance:scan <pin> --from=2026-10-12 --to=2026-10-18
 
+# Bonus manual untuk kejadian di luar periode (mis. lembur bulan lalu yang
+# belum terkonfirmasi): lembur:tugaskan menempel ke TANGGAL kerja, jadi masuk
+# ke periode lama yang sudah dibayar. Ini masuk ke periode yang dipilih.
+php artisan bonus:catat <pin> <jumlah> --bulan=2026-10 --alasan="Lembur full shift 4 & 5 Sep"
+
 # Gaji & payroll
 php artisan gaji:atur --divisi=barista --divisi=chef --jumlah=3000000 --dari=2026-08-21
 php artisan gaji:atur --pin=17 --pin=14 --jumlah=2500000 --dari=2026-08-21   # PIN menang atas divisi
