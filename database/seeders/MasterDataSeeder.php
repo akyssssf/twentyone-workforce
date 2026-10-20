@@ -269,9 +269,11 @@ class MasterDataSeeder extends Seeder
             ['min_value' => 1, 'max_value' => null, 'unit' => 'minute', 'calc_type' => 'per_block', 'value' => 10000, 'label' => 'Rp10.000 per 10 menit keterlambatan', 'sort_order' => 1],
         ]);
 
+        // NONAKTIF: kafe tidak memotong gaji untuk pulang cepat (pemilik, 20 Okt
+        // 2026). Tiernya disimpan sebagai acuan kalau kebijakannya berubah.
         $early = RuleSet::updateOrCreate(
             ['branch_id' => $branch->id, 'type' => 'early_leave', 'effective_from' => $awalTahun],
-            ['name' => 'Potongan Pulang Cepat '.now()->year, 'is_active' => true],
+            ['name' => 'Potongan Pulang Cepat '.now()->year, 'is_active' => false],
         );
         $early->tiers()->delete();
         $early->tiers()->createMany([

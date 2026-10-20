@@ -408,19 +408,21 @@ class SlipGajiTest extends TestCase
         $this->assertSame(3_000_000 + 2 * $tarifJam, (int) $slip->take_home_pay);
     }
 
-    /** Potongan pulang cepat dan alpha punya rincian per tanggal. */
-    public function test_potongan_pulang_cepat_dan_alpha_dirinci_per_tanggal(): void
+    /**
+     * Pulang cepat TIDAK dipotong (pemilik, 20 Okt 2026): rule set-nya
+     * dinonaktifkan. Alpha tetap dipotong dan dirinci per tanggal.
+     */
+    public function test_pulang_cepat_tidak_dipotong_dan_alpha_dirinci_per_tanggal(): void
     {
+        RuleSet::where('type', 'early_leave')->update(['is_active' => false]);
+
         $this->hadir('2026-08-25', pulangCepatMenit: 20);
         $this->hadir('2026-08-27', status: AttendanceStatus::Alpha);
         $this->hadir('2026-09-01', status: AttendanceStatus::Alpha);
 
         $slip = $this->hitung();
 
-        $cepat = $this->item($slip, 'early_leave');
-        $this->assertSame(10_000, (int) $cepat->amount);
-        $this->assertSame('2026-08-25', $cepat->rule_snapshot['rincian'][0]['date']);
-        $this->assertSame(20, $cepat->rule_snapshot['rincian'][0]['minutes']);
+        $this->assertNull($this->item($slip, 'early_leave'), 'pulang cepat tidak ada potongannya');
 
         // Alpha Rp 100.000 per hari, dikalikan jumlah hari.
         $alpha = $this->item($slip, 'absent');

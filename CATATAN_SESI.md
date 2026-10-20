@@ -738,6 +738,10 @@ tabel dan perintahnya ada di jawaban ke user 22 September.
   berubah. Slip yang terbit SEBELUM kolom `late_minutes` ada menampilkan
   "5x (0 mnt)"; tampilannya jatuh balik ke rincian baris potongan, tapi cara
   benarnya tetap hitung ulang payroll-nya.
+- **Pulang cepat tidak dipotong** (pemilik, 20 Okt): rule set dinonaktifkan
+  (migrasi `nonaktifkan_potongan_pulang_cepat`), tetap tercatat sebagai angka
+  di rekap. Asalnya scan pulang beberapa menit sebelum tutup (mis. 23:15 untuk
+  shift bubar 23:30) terbaca "pulang cepat" dan jatuh ke tier seeder.
 - **BPJS tidak dipotong** (pemilik, 22 September). Rule set BPJS dinonaktifkan
   lewat migrasi `nonaktifkan_bpjs`; seeder pun memasangnya nonaktif.
 - **Periode 2026-09 = arsip slip luar** (zip "Slip_Gaji_21KAFE_Agt_Sep_2026"):
