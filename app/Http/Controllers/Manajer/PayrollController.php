@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Manajer;
 use App\Http\Controllers\Controller;
 use App\Models\CashAdvance;
 use App\Models\CashAdvanceInstallment;
+use App\Models\DeductionType;
 use App\Models\Employee;
 use App\Models\ManualPayrollEntry;
 use App\Models\PayrollPeriod;
@@ -14,6 +15,7 @@ use App\Services\Payroll\KasbonService;
 use App\Services\Payroll\PayrollGenerator;
 use App\Services\Payroll\PayrollPeriodFactory;
 use App\Support\SlipBonus;
+use App\Support\SlipView;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use RuntimeException;
@@ -60,7 +62,7 @@ class PayrollController extends Controller
             'payslips' => $run?->payslips()->with('employee')->get() ?? collect(),
             'employees' => Employee::query()->active()->orderBy('name')->get(),
             'entries' => $period->manualEntries()->with(['employee', 'deductionType'])->get(),
-            'deductionTypes' => \App\Models\DeductionType::manual()->get(),
+            'deductionTypes' => DeductionType::manual()->get(),
 
             // Cicilan kasbon yang jatuh tempo di periode ini, apa pun statusnya,
             // supaya manajer melihat mana yang sudah masuk slip dan mana yang
@@ -202,6 +204,28 @@ class PayrollController extends Controller
             'payslip' => $payslip,
             'kembali' => route('manajer.payroll.show', $payslip->run->payroll_period_id),
             'slipBonus' => route('manajer.payroll.payslip.bonus', $payslip),
+        ]);
+    }
+
+    /**
+     * Halaman unduhan massal: semua slip gaji dan slip bonus satu periode,
+     * dijadikan PDF di browser lalu dibungkus satu ZIP.
+     */
+    public function unduh(PayrollPeriod $period)
+    {
+        $run = $period->activeRun();
+
+        abort_if($run === null, 404, 'Payroll periode ini belum dihitung.');
+
+        $slips = $run->payslips()->with(['items', 'employee', 'run.period'])->get()
+            ->sortBy(fn (Payslip $p) => $p->employee?->name)
+            ->values()
+            ->map(fn (Payslip $p) => SlipView::data($p));
+
+        return view('manajer.payroll.unduh', [
+            'period' => $period,
+            'run' => $run,
+            'slips' => $slips,
         ]);
     }
 

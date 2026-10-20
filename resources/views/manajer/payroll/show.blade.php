@@ -27,6 +27,10 @@
             </form>
         @endif
 
+        @if ($run)
+            <a href="{{ route('manajer.payroll.unduh', $period) }}" class="btn-netral">Unduh semua slip</a>
+        @endif
+
         @if ($period->status->value === 'generated')
             <form method="POST" action="{{ route('manajer.payroll.approve', $period) }}">
                 @csrf

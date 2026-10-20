@@ -975,6 +975,17 @@ menganggap sebuah perintah selesai, **lihat outputnya**.
     diam-diam tidak punya efek: pernah bikin bar "Total Bonus" putih di atas
     putih, tidak kelihatan sama sekali. Sesudah menyentuh blade dengan kelas
     baru: `npm run build`, commit hasilnya, lalu periksa di browser.
+17. **Unduhan massal slip dibuat di BROWSER (html2pdf + JSZip), bukan di server**
+    — tidak ada library PDF di server, dan Hostinger bukan tempat untuk itu.
+    Halaman `manajer/payroll/{periode}/unduh`. Tiga jebakan yang SUDAH kejadian
+    dan dikunci: (a) dokumen PDF harus bergaya INLINE dengan warna hex
+    (`slip/dokumen/*`), kelas Tailwind 4 memakai warna `oklch()` yang tidak
+    dimengerti html2canvas ("unsupported color function"); (b) html2canvas
+    membaca warna `<html>`/`<body>` halaman ASLI sebelum mengkloning, jadi
+    keduanya dinetralkan sementara (`netralkanHalaman`); (c) lembar gaya
+    Tailwind harus dibuang dari salinan (`onclone`) karena aturan dasarnya
+    memakai oklch untuk setiap elemen. Angka & kalimat slip disusun satu kali di
+    `App\Support\SlipView` dan dipakai tampilan layar maupun PDF.
 
 ## 8. Perintah yang sering dipakai (jalankan di server, folder live)
 

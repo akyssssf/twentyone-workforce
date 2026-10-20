@@ -568,4 +568,32 @@ class SlipGajiTest extends TestCase
         // Tetap tersimpan di data untuk catatan internal.
         $this->assertSame('Bon Agustus-September, dipotong gajian', CashAdvance::sole()->reason);
     }
+
+    /** Halaman unduhan massal memuat satu dokumen gaji per orang dan satu dokumen bonus bagi yang punya bonus. */
+    public function test_halaman_unduh_memuat_dokumen_gaji_dan_bonus(): void
+    {
+        $this->hadir('2026-09-05');
+        OvertimeRecord::create([
+            'employee_id' => $this->budi->id, 'work_date' => Carbon::parse('2026-09-05'),
+            'actual_minutes' => 120, 'approved_minutes' => 120, 'payable_minutes' => 120,
+            'status' => 'confirmed', 'activated_at' => now(), 'confirmed_at' => now(),
+        ]);
+
+        $this->hitung();
+
+        $this->get(route('manajer.payroll.unduh', $this->periode))
+            ->assertOk()
+            ->assertSee('Unduh semua slip')
+            ->assertSee('1 slip gaji + 1 slip bonus')
+            ->assertSee('data-nama="BUDI_UJI_SLIP_GAJI_21-09-2026"', false)
+            ->assertSee('data-nama="BUDI_UJI_SLIP_BONUS_21-09-2026"', false)
+            // Dokumen PDF memakai gaya inline, tanpa kelas Tailwind.
+            ->assertSee('Total Diterima (Take Home Pay)')
+            ->assertSee('Total Bonus Diterima');
+    }
+
+    public function test_halaman_unduh_menolak_periode_yang_belum_dihitung(): void
+    {
+        $this->get(route('manajer.payroll.unduh', $this->periode))->assertNotFound();
+    }
 }

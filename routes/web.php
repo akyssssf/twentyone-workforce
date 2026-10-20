@@ -102,6 +102,7 @@ Route::middleware(['auth', EnsureUserIsActive::class, EnsurePasswordIsChanged::c
             Route::post('payroll/{period}/entri', [PayrollController::class, 'storeEntry'])->name('payroll.entry');
             Route::post('payroll/{period}/kasbon', [PayrollController::class, 'storeKasbon'])->name('payroll.kasbon');
             Route::post('payroll/{period}/kasbon/{kasbon}/batal', [PayrollController::class, 'cancelKasbon'])->name('payroll.kasbon.batal');
+            Route::get('payroll/{period}/unduh', [PayrollController::class, 'unduh'])->name('payroll.unduh');
             Route::get('slip/{payslip}', [PayrollController::class, 'payslip'])->name('payroll.payslip');
             Route::get('slip/{payslip}/bonus', [PayrollController::class, 'payslipBonus'])->name('payroll.payslip.bonus');
 

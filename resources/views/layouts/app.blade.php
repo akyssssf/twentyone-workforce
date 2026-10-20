@@ -8,7 +8,11 @@
          PDF". Halaman yang dicetak (slip) memberi judulnya sendiri lewat
          @@section('judul-berkas') supaya berkasnya langsung bernama
          NAMA_DIVISI_SLIP_GAJI_TANGGAL, bukan "Slip Gaji · 21 Kafe". --}}
-    <title>@hasSection('judul-berkas')@yield('judul-berkas')@else@yield('title', 'Beranda') &middot; {{ config('app.name') }}@endif</title>
+    @php
+        $judulHalaman = trim($__env->yieldContent('judul-berkas'))
+            ?: trim($__env->yieldContent('title', 'Beranda')).' · '.config('app.name');
+    @endphp
+    <title>{{ $judulHalaman }}</title>
 
     {{-- Logo putih di atas latar gelap, bukan logo polos transparan: ikon tab
          yang transparan ikut hilang begitu peramban dipakai dalam mode gelap. --}}
