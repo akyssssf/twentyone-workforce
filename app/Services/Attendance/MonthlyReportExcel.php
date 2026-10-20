@@ -13,10 +13,12 @@ use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 /**
  * Pembuat berkas Excel rekap bulanan.
  *
- * Dua sheet:
+ * Empat sheet:
  *   1. Ringkasan  - satu baris per karyawan, siap dipakai hitung gajian.
  *   2. Rincian    - satu baris per karyawan per tanggal, buat menelusuri
  *                   kalau ada karyawan yang protes angkanya.
+ *   3. Detail Telat   - tiap kejadian telat yang dihitung, per orang.
+ *   4. Detail Lembur  - tiap lembur yang terbayar, dengan jam dan keperluannya.
  *
  * Angka rupiah dan durasi ditulis sebagai ANGKA, bukan teks yang sudah
  * diformat. Jadi kalau owner mau menjumlah atau memfilter sendiri di Excel,
@@ -66,6 +68,8 @@ class MonthlyReportExcel
 
         $this->sheetRingkasan($spreadsheet->getActiveSheet());
         $this->sheetRincian($spreadsheet->createSheet());
+        $this->sheetDetailTelat($spreadsheet->createSheet());
+        $this->sheetDetailLembur($spreadsheet->createSheet());
 
         $spreadsheet->setActiveSheetIndex(0);
 
@@ -173,11 +177,11 @@ class MonthlyReportExcel
 
         $judul = [
             'Tanggal', 'PIN', 'Nama', 'Shift', 'Jadwal Masuk',
-            'Scan Masuk', 'Scan Pulang', 'Telat', 'Pulang Cepat', 'Status',
+            'Scan Masuk', 'Scan Pulang', 'Telat', 'Pulang Cepat', 'Status', 'Lembur',
         ];
 
         $sheet->fromArray($judul, null, 'A1');
-        $this->gayaJudul($sheet, 'A1:J1');
+        $this->gayaJudul($sheet, 'A1:K1');
 
         $baris = 2;
 
@@ -199,6 +203,7 @@ class MonthlyReportExcel
                 $data['status'] instanceof AttendanceStatus
                     ? $data['status']->label()
                     : (string) $data['status'],
+                $data['lembur_menit'],
             ], null, 'A'.$baris, strictNullComparison: true);
 
             $baris++;
@@ -207,18 +212,120 @@ class MonthlyReportExcel
         if ($baris > 2) {
             $akhir = $baris - 1;
 
-            $sheet->getStyle("A1:J{$akhir}")->getBorders()->getAllBorders()
+            $sheet->getStyle("A1:K{$akhir}")->getBorders()->getAllBorders()
                 ->setBorderStyle(Border::BORDER_THIN)->getColor()->setARGB('FFE2E8F0');
             $sheet->getStyle("H2:I{$akhir}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
             $sheet->getStyle("H2:I{$akhir}")->getNumberFormat()->setFormatCode(self::FORMAT_MENIT);
+            $sheet->getStyle("K2:K{$akhir}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+            $sheet->getStyle("K2:K{$akhir}")->getNumberFormat()->setFormatCode(self::FORMAT_MENIT);
 
             // Filter kolom supaya owner bisa menyaring sendiri per nama atau
             // per status tanpa perlu minta laporan baru.
-            $sheet->setAutoFilter("A1:J{$akhir}");
+            $sheet->setAutoFilter("A1:K{$akhir}");
         }
 
-        $this->lebarOtomatis($sheet, 'A', 'J');
+        $this->lebarOtomatis($sheet, 'A', 'K');
         $sheet->freezePane('D2');
+    }
+
+    protected function sheetDetailTelat(Worksheet $sheet): void
+    {
+        $sheet->setTitle('Detail Telat');
+
+        $sheet->fromArray(['Nama', 'PIN', 'Tanggal', 'Shift', 'Jadwal Masuk', 'Scan Masuk', 'Telat'], null, 'A1');
+        $this->gayaJudul($sheet, 'A1:G1');
+
+        $baris = 2;
+
+        foreach ($this->report->detailTelat() as $nama => $kejadian) {
+            foreach ($kejadian as $data) {
+                $sheet->fromArray([
+                    $nama,
+                    $data['pin'],
+                    $data['tanggal']->format('Y-m-d'),
+                    $data['shift'],
+                    $data['jadwal']?->format('H:i') ?? '-',
+                    $data['masuk']?->format('H:i:s') ?? '-',
+                    $data['telat_menit'],
+                ], null, 'A'.$baris, strictNullComparison: true);
+
+                $baris++;
+            }
+
+            // Subtotal per orang: yang dicari biasanya "berapa kali dan berapa
+            // lama total", bukan menjumlah sendiri di Excel.
+            $sheet->setCellValue('A'.$baris, "Total {$nama}: {$kejadian->count()}x");
+            $sheet->setCellValue('G'.$baris, (int) $kejadian->sum('telat_menit'));
+            $sheet->getStyle("A{$baris}:G{$baris}")->getFont()->setBold(true);
+            $sheet->getStyle("A{$baris}:G{$baris}")->getFill()
+                ->setFillType(Fill::FILL_SOLID)->getStartColor()->setARGB(self::WARNA_TOTAL);
+
+            $baris++;
+        }
+
+        if ($baris > 2) {
+            $akhir = $baris - 1;
+
+            $sheet->getStyle("A1:G{$akhir}")->getBorders()->getAllBorders()
+                ->setBorderStyle(Border::BORDER_THIN)->getColor()->setARGB('FFE2E8F0');
+            $sheet->getStyle("G2:G{$akhir}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+            $sheet->getStyle("G2:G{$akhir}")->getNumberFormat()->setFormatCode(self::FORMAT_MENIT);
+        } else {
+            $sheet->setCellValue('A2', 'Tidak ada telat yang dihitung pada periode ini.');
+        }
+
+        $this->lebarOtomatis($sheet, 'A', 'G');
+        $sheet->freezePane('A2');
+    }
+
+    protected function sheetDetailLembur(Worksheet $sheet): void
+    {
+        $sheet->setTitle('Detail Lembur');
+
+        $sheet->fromArray(['Nama', 'PIN', 'Tanggal', 'Mulai', 'Selesai', 'Lembur', 'Keperluan', 'Catatan'], null, 'A1');
+        $this->gayaJudul($sheet, 'A1:H1');
+
+        $baris = 2;
+        $total = 0;
+
+        foreach ($this->report->detailLembur() as $data) {
+            $sheet->fromArray([
+                $data['nama'],
+                $data['pin'],
+                $data['tanggal']->format('Y-m-d'),
+                $data['mulai']?->format('H:i') ?? '-',
+                // Selesai bisa lewat tengah malam; tanggalnya ikut ditulis.
+                $data['selesai'] === null
+                    ? '-'
+                    : ($data['selesai']->isSameDay($data['tanggal'])
+                        ? $data['selesai']->format('H:i:s')
+                        : $data['selesai']->format('H:i:s').' (+1 hari)'),
+                $data['menit'],
+                $data['keperluan'],
+                $data['catatan'],
+            ], null, 'A'.$baris, strictNullComparison: true);
+
+            $total += $data['menit'];
+            $baris++;
+        }
+
+        if ($baris > 2) {
+            $sheet->setCellValue('A'.$baris, 'TOTAL');
+            $sheet->setCellValue('F'.$baris, $total);
+            $sheet->getStyle("A{$baris}:H{$baris}")->getFont()->setBold(true);
+            $sheet->getStyle("A{$baris}:H{$baris}")->getFill()
+                ->setFillType(Fill::FILL_SOLID)->getStartColor()->setARGB(self::WARNA_TOTAL);
+
+            $sheet->getStyle("A1:H{$baris}")->getBorders()->getAllBorders()
+                ->setBorderStyle(Border::BORDER_THIN)->getColor()->setARGB('FFE2E8F0');
+            $sheet->getStyle("F2:F{$baris}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+            $sheet->getStyle("F2:F{$baris}")->getNumberFormat()->setFormatCode(self::FORMAT_MENIT);
+        } else {
+            $sheet->setCellValue('A2', 'Tidak ada lembur terbayar pada periode ini.');
+        }
+
+        $this->lebarOtomatis($sheet, 'A', 'H');
+        $sheet->freezePane('A2');
     }
 
     /**

@@ -1071,6 +1071,11 @@ php artisan attendance:status
 # dibayar 0, alasan wajib.
 php artisan lembur:batal <pin> <tanggal> --alasan="..."
 
+# Rekap absensi periode gajian ke Excel (4 sheet: Ringkasan, Rincian Harian,
+# Detail Telat per orang + subtotal, Detail Lembur): buka di browser
+#   https://twentyonecafe.id/laporan/excel?tampilan=custom&dari=2026-09-21&sampai=2026-10-20
+# (atau Rekap Absensi → Custom → Unduh Excel)
+
 # Rincian telat PER ORANG (tiap kejadian + estimasi potongan + ringkasan peringkat);
 # tanpa --from = awal periode gajian berjalan
 php artisan attendance:telat [--from=2026-09-22 --to=2026-10-18 --pin=15]

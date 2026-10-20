@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\AttendanceLog;
 use App\Models\Employee;
+use App\Models\OvertimeRecord;
 use App\Models\Shift;
 use App\Models\User;
 use App\Services\Attendance\AttendanceComputer;
@@ -240,7 +241,7 @@ class MonthlyReportTest extends TestCase
         // bukan sekadar berkas yang terbentuk.
         $spreadsheet = IOFactory::load($path);
 
-        $this->assertSame(['Ringkasan', 'Rincian Harian'], $spreadsheet->getSheetNames());
+        $this->assertSame(['Ringkasan', 'Rincian Harian', 'Detail Telat', 'Detail Lembur'], $spreadsheet->getSheetNames());
 
         $ringkasan = $spreadsheet->getSheetByName('Ringkasan');
         $this->assertStringContainsString('Agustus 2026', (string) $ringkasan->getCell('A1')->getValue());
@@ -260,6 +261,24 @@ class MonthlyReportTest extends TestCase
         $rincian = $spreadsheet->getSheetByName('Rincian Harian');
         $this->assertSame('Tanggal', $rincian->getCell('A1')->getValue());
         $this->assertSame('2026-08-03', $rincian->getCell('A2')->getValue());
+        $this->assertSame('Lembur', $rincian->getCell('K1')->getValue());
+
+        // Detail telat: dua kejadian Budi (4 & 5 Agustus) lalu subtotal orangnya.
+        $telat = $spreadsheet->getSheetByName('Detail Telat');
+        $this->assertSame('Nama', $telat->getCell('A1')->getValue());
+        $this->assertSame('Budi', $telat->getCell('A2')->getValue());
+        $this->assertSame('2026-08-04', $telat->getCell('C2')->getValue());
+        $this->assertSame('2026-08-05', $telat->getCell('C3')->getValue());
+        $this->assertSame('Total Budi: 2x', $telat->getCell('A4')->getValue());
+        $this->assertSame(
+            $telat->getCell('G2')->getValue() + $telat->getCell('G3')->getValue(),
+            $telat->getCell('G4')->getValue(),
+        );
+
+        // Tanpa lembur terbayar, sheet-nya tetap ada dan bilang begitu.
+        $lembur = $spreadsheet->getSheetByName('Detail Lembur');
+        $this->assertSame('Nama', $lembur->getCell('A1')->getValue());
+        $this->assertStringContainsString('Tidak ada lembur', (string) $lembur->getCell('A2')->getValue());
 
         $spreadsheet->disconnectWorksheets();
         @unlink($path);
@@ -303,7 +322,39 @@ class MonthlyReportTest extends TestCase
         (new MonthlyReportExcel(MonthlyReport::for(2026, 1)))->simpan($path);
 
         $this->assertFileExists($path);
-        $this->assertSame(['Ringkasan', 'Rincian Harian'], IOFactory::load($path)->getSheetNames());
+        $this->assertSame(['Ringkasan', 'Rincian Harian', 'Detail Telat', 'Detail Lembur'], IOFactory::load($path)->getSheetNames());
+
+        @unlink($path);
+    }
+
+    /** Lembur yang sudah disahkan muncul di sheet Detail Lembur, lengkap dengan jam dan totalnya. */
+    public function test_detail_lembur_memuat_jam_dan_total(): void
+    {
+        $budi = $this->skenario();
+
+        foreach ([['2026-08-04', 120], ['2026-08-05', 90]] as [$tanggal, $menit]) {
+            OvertimeRecord::create([
+                'employee_id' => $budi->id,
+                'work_date' => Carbon::parse($tanggal),
+                'actual_start' => Carbon::parse("{$tanggal} 17:00:00", 'Asia/Jakarta'),
+                'actual_end' => Carbon::parse("{$tanggal} 17:00:00", 'Asia/Jakarta')->addMinutes($menit),
+                'actual_minutes' => $menit, 'approved_minutes' => $menit, 'payable_minutes' => $menit,
+                'status' => 'confirmed', 'activated_at' => now(), 'confirmed_at' => now(),
+            ]);
+        }
+
+        $path = tempnam(sys_get_temp_dir(), 'uji').'.xlsx';
+        (new MonthlyReportExcel(MonthlyReport::for(2026, 8)))->simpan($path);
+
+        $sheet = IOFactory::load($path)->getSheetByName('Detail Lembur');
+
+        $this->assertSame('Budi', $sheet->getCell('A2')->getValue());
+        $this->assertSame('2026-08-04', $sheet->getCell('C2')->getValue());
+        $this->assertSame('17:00', $sheet->getCell('D2')->getValue());
+        $this->assertSame(120, $sheet->getCell('F2')->getValue());
+        $this->assertSame(90, $sheet->getCell('F3')->getValue());
+        $this->assertSame('TOTAL', $sheet->getCell('A4')->getValue());
+        $this->assertSame(210, $sheet->getCell('F4')->getValue());
 
         @unlink($path);
     }

@@ -5,6 +5,7 @@ namespace App\Services\Attendance;
 use App\Enums\AttendanceStatus;
 use App\Models\Attendance;
 use App\Models\Employee;
+use App\Models\OvertimeRecord;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 
@@ -210,7 +211,64 @@ class MonthlyReport
                 'telat_detik' => $a->late_seconds,
                 'telat_menit' => $a->late_minutes,
                 'pulang_cepat_menit' => $a->early_leave_minutes,
+                'lembur_menit' => $a->overtime_minutes,
                 'status' => $a->status,
+            ]);
+    }
+
+    /**
+     * Tiap kejadian telat yang DIHITUNG (menit > 0), dikelompokkan per orang.
+     * Yang masih dalam toleransi tidak ikut: menitnya nol, tidak dipotong.
+     *
+     * @return Collection<int, Collection<int, array<string, mixed>>>
+     */
+    public function detailTelat(): Collection
+    {
+        return Attendance::with(['employee', 'shift'])
+            ->whereBetween('work_date', [$this->periodeAwal(), $this->periodeAkhir()])
+            ->where('late_minutes', '>', 0)
+            ->get()
+            ->sortBy(fn (Attendance $a) => [(string) $a->employee?->name, $a->work_date->toDateString()])
+            ->values()
+            ->map(fn (Attendance $a) => [
+                'tanggal' => $a->work_date,
+                'pin' => $a->employee?->pin_device ?? '-',
+                'nama' => $a->employee?->name ?? '-',
+                'shift' => $a->shift?->name ?? '-',
+                'jadwal' => $a->scheduled_in,
+                'masuk' => $a->check_in_at,
+                'telat_menit' => (int) $a->late_minutes,
+            ])
+            ->groupBy('nama');
+    }
+
+    /**
+     * Tiap lembur yang terbayar (sudah disahkan, menit dibayar > 0).
+     *
+     * Lembur menempel ke TANGGAL kerjanya, jadi bonus lembur yang dicatat
+     * manual untuk periode lain (bonus:catat) tidak muncul di sini — itu bukan
+     * catatan absensi.
+     *
+     * @return Collection<int, array<string, mixed>>
+     */
+    public function detailLembur(): Collection
+    {
+        return OvertimeRecord::with(['employee', 'overtimeRequest'])
+            ->whereBetween('work_date', [$this->periodeAwal(), $this->periodeAkhir()])
+            ->confirmed()
+            ->where('payable_minutes', '>', 0)
+            ->get()
+            ->sortBy(fn (OvertimeRecord $r) => [(string) $r->employee?->name, $r->work_date->toDateString()])
+            ->values()
+            ->map(fn (OvertimeRecord $r) => [
+                'tanggal' => $r->work_date,
+                'pin' => $r->employee?->pin_device ?? '-',
+                'nama' => $r->employee?->name ?? '-',
+                'mulai' => $r->actual_start,
+                'selesai' => $r->actual_end,
+                'menit' => (int) $r->payable_minutes,
+                'keperluan' => $r->overtimeRequest?->occasion?->label() ?? '-',
+                'catatan' => $r->note ?? $r->overtimeRequest?->reason ?? '',
             ]);
     }
 
