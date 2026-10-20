@@ -99,9 +99,10 @@
                                             {{ \Illuminate\Support\Carbon::parse($r['date'])->translatedFormat('d M') }}@isset($r['minutes']) {{ $durasi($r['minutes']) }}@endisset {{ number_format($r['amount'] ?? 0, 0, ',', '.') }}{{ $loop->last ? '' : ' · ' }}
                                         @endforeach
                                     </span>
-                                @elseif (! empty($item->rule_snapshot['kasbon']['alasan']) && $item->rule_snapshot['kasbon']['alasan'] !== 'Kasbon')
-                                    <span class="mt-0.5 block text-[10px] text-slate-500">{{ $item->rule_snapshot['kasbon']['alasan'] }}</span>
                                 @endif
+                                {{-- Kasbon sengaja tanpa keterangan di slip: cukup tertulis
+                                     "Kasbon" dan nominalnya (permintaan pemilik). Alasannya
+                                     tetap tersimpan di data, terlihat di kasbon:daftar. --}}
                             </span>
                             <span class="shrink-0 font-medium tabular-nums {{ $judul === 'Potongan' ? 'text-red-600' : '' }}">
                                 {{ $rp($item->amount) }}

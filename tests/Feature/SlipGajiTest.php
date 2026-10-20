@@ -551,4 +551,21 @@ class SlipGajiTest extends TestCase
             ->assertSee('Tarif per jam')
             ->assertSee('Penerima,');
     }
+
+    /** Di slip kasbon cukup tertulis "Kasbon" — keterangan internalnya tidak ikut tercetak. */
+    public function test_slip_menulis_kasbon_tanpa_keterangan(): void
+    {
+        app(KasbonService::class)->catat($this->budi, 300_000, '2026-09', 1, 'Bon Agustus-September, dipotong gajian', Carbon::parse('2026-09-01'));
+
+        $slip = $this->hitung();
+
+        $this->get(route('manajer.payroll.payslip', $slip))
+            ->assertOk()
+            ->assertSee('Kasbon')
+            ->assertSee('300.000')
+            ->assertDontSee('Bon Agustus-September');
+
+        // Tetap tersimpan di data untuk catatan internal.
+        $this->assertSame('Bon Agustus-September, dipotong gajian', CashAdvance::sole()->reason);
+    }
 }
