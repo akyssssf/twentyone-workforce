@@ -6,6 +6,7 @@ use App\Enums\UserRole;
 use App\Models\AttendanceLog;
 use App\Models\Employee;
 use App\Models\Shift;
+use App\Models\ShiftTimeOverride;
 use App\Models\User;
 use App\Services\Attendance\AttendanceComputer;
 use App\Support\Settings;
@@ -372,5 +373,42 @@ class DashboardTest extends TestCase
         // jadi (sementara) libur, bukan alpha.
         $this->assertSame(0, $ringkasan['alpha']);
         $this->assertSame(1, $ringkasan['libur']);
+    }
+
+    /**
+     * Rekap yang tidak menempel ke roster (shift ditebak dari scan) muncul di
+     * tabel absensi tapi tidak di panel Roster Hari Ini. Itu dulu terlihat
+     * seperti dua halaman yang bertentangan; sekarang dijelaskan di halaman.
+     */
+    public function test_rekap_tanpa_roster_ditandai(): void
+    {
+        $this->siapkanData();
+
+        $this->actingAs(User::factory()->create())
+            ->get('/dashboard?tanggal=2026-08-06')
+            ->assertOk()
+            ->assertSee('2 orang belum ada di roster hari ini')
+            ->assertSee('ditebak dari scan pertama')
+            ->assertSee('tanpa roster');
+    }
+
+    /** Jam shift di panel roster mengikuti TANGGAL yang dilihat, bukan jam master. */
+    public function test_panel_roster_memakai_jam_shift_pada_tanggal_itu(): void
+    {
+        $shift = Shift::factory()->create([
+            'name' => 'Shift Uji Jam', 'start_time' => '14:00:00', 'end_time' => '01:00:00',
+            'show_hours' => true, 'is_active' => true,
+        ]);
+
+        ShiftTimeOverride::create([
+            'shift_id' => $shift->id, 'effective_from' => '2026-08-01', 'effective_to' => null,
+            'start_time' => '14:00:00', 'end_time' => '23:30:00',
+        ]);
+
+        $this->actingAs(User::factory()->create())
+            ->get('/dashboard?tanggal=2026-08-06')
+            ->assertOk()
+            ->assertSee('14:00–23:30')
+            ->assertDontSee('14:00–01:00');
     }
 }

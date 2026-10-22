@@ -114,6 +114,16 @@
     </div>
 @endif
 
+@if ($tanpaRoster->isNotEmpty())
+    <div class="pemberitahuan mb-5 border-orange-200 bg-orange-50 text-orange-900">
+        <strong>{{ $tanpaRoster->count() }} orang belum ada di roster hari ini:</strong>
+        {{ $tanpaRoster->map(fn ($a) => $a->employee?->name)->filter()->implode(', ') }}.
+        Mereka tetap muncul di tabel absensi karena shift-nya <b>ditebak dari scan pertama</b>, tapi tidak masuk
+        panel Roster Hari Ini. Selama rosternya kosong, bolos mereka tidak tercatat sebagai alpha dan telatnya bisa keliru.
+        Isi rosternya dengan <code class="rounded bg-orange-100 px-1">roster:set</code> atau <code class="rounded bg-orange-100 px-1">roster:salin</code>.
+    </div>
+@endif
+
 @if ($belumDihitung)
     <div class="pemberitahuan mb-5 border-sky-200 bg-sky-50 text-sky-900">
         Belum ada rekap untuk tanggal ini. Jalankan
@@ -186,7 +196,8 @@
                                      permanen — perubahannya cuma berlaku hari ini. --}}
                                 @php $khusus = $petugas->first(fn ($a) => $a->pakaiJamKhusus()); @endphp
                                 <span class="font-normal {{ $khusus ? 'text-amber-700' : 'text-slate-500' }}">
-                                    {{ substr($khusus?->mulaiEfektif() ?? $shift->start_time, 0, 5) }}–{{ substr($khusus?->selesaiEfektif() ?? $shift->end_time, 0, 5) }}
+                                    @php $jamHariIni = $shift->jamPada($tanggal); @endphp
+                                    {{ substr($khusus?->mulaiEfektif() ?? $jamHariIni['start_time'], 0, 5) }}–{{ substr($khusus?->selesaiEfektif() ?? $jamHariIni['end_time'], 0, 5) }}
                                     @if ($khusus)<span class="text-xs">(jam khusus)</span>@endif
                                 </span>
                             @endif
@@ -318,7 +329,12 @@
                                 <span class="font-medium whitespace-nowrap">{{ $a->employee?->name ?? '—' }}</span>
                             </div>
                         </td>
-                        <td class="whitespace-nowrap text-slate-500">{{ $a->shift?->name ?? '—' }}</td>
+                        <td class="whitespace-nowrap text-slate-500">
+                            {{ $a->shift?->name ?? '—' }}
+                            @if ($a->roster_assignment_id === null && $a->shift_id !== null)
+                                <span class="ml-1 rounded bg-orange-50 px-1.5 py-0.5 text-[10px] font-medium text-orange-700 ring-1 ring-inset ring-orange-200" title="Tidak ada di roster hari ini: shift ditebak dari scan pertama">tanpa roster</span>
+                            @endif
+                        </td>
                         <td class="tabular-nums text-slate-500">{{ $a->scheduled_in?->format('H:i') ?? '—' }}</td>
                         <td class="tabular-nums">
                             @if ($a->check_in_at)

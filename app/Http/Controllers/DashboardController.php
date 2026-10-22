@@ -6,6 +6,8 @@ use App\Enums\AttendanceStatus;
 use App\Models\Attendance;
 use App\Models\AttendanceLog;
 use App\Models\Employee;
+use App\Models\OvertimeRecord;
+use App\Models\PayrollPeriod;
 use App\Models\Request as PengajuanModel;
 use App\Models\RosterAssignment;
 use App\Models\Shift;
@@ -70,6 +72,14 @@ class DashboardController extends Controller
             'jadwal' => $jadwal,
             'shifts' => Shift::query()->where('is_active', true)->get(),
 
+            // Rekap yang TIDAK menempel ke satu pun baris roster: shift-nya
+            // ditebak dari scan pertama. Mereka muncul di tabel absensi tapi
+            // tidak di panel Roster Hari Ini, dan itu terlihat seperti dua
+            // halaman yang saling bertentangan. Padahal yang kurang rosternya.
+            'tanpaRoster' => $rekap->filter(
+                fn (Attendance $a) => $a->roster_assignment_id === null && $a->shift_id !== null
+            )->values(),
+
             // PIN yang mengirim scan tapi tidak dikenali pemetaan mana pun.
             // Scan-nya tersimpan aman, tapi belum masuk rekap siapa pun.
             'pinAsing' => $scan->whereNull('employee_id')->pluck('pin')->unique()->values(),
@@ -101,12 +111,12 @@ class DashboardController extends Controller
             // "6 alpha" baru berarti setelah terlihat kemarin cuma 1.
             'tren' => $this->tren($tanggal),
 
-            'lemburHariIni' => \App\Models\OvertimeRecord::query()
+            'lemburHariIni' => OvertimeRecord::query()
                 ->with('employee')
                 ->whereDate('work_date', $tanggal)
                 ->get(),
 
-            'periodeBerjalan' => \App\Models\PayrollPeriod::query()
+            'periodeBerjalan' => PayrollPeriod::query()
                 ->whereDate('start_date', '<=', $tanggal)
                 ->whereDate('end_date', '>=', $tanggal)
                 ->first(),
