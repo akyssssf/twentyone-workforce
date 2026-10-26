@@ -1095,6 +1095,14 @@ php artisan attendance:telat [--from=2026-09-22 --to=2026-10-18 --pin=15]
 # alpha padahal ada scan di hari yang jadwalnya libur)
 php artisan attendance:scan <pin> --from=2026-10-12 --to=2026-10-18
 
+# Lembur hari kerja bersama (General Cleaning 27 Okt 2026, tarif x2) DARI JAM SCAN.
+# Tanpa --simpan hanya menampilkan hitungan per orang. Libur: scan pertama s/d
+# scan terakhir, maks 13:00. Shift sore/malam/middle: scan pagi s/d jam mulai
+# shiftnya. Shift pagi: tidak ada tambahan. JANGAN ubah roster hari itu jadi
+# "pagi semua". Pengali disimpan di overtime_records.multiplier (menit tetap nyata).
+php artisan lembur:umum 2026-10-27 --pengali=2
+php artisan lembur:umum 2026-10-27 --pengali=2 --abaikan=7 --simpan
+
 # Bonus manual untuk kejadian di luar periode (mis. lembur bulan lalu yang
 # belum terkonfirmasi): lembur:tugaskan menempel ke TANGGAL kerja, jadi masuk
 # ke periode lama yang sudah dibayar. Ini masuk ke periode yang dipilih.

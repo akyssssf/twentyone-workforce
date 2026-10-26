@@ -66,7 +66,8 @@ class SlipView
             $keterangan[] = '* Jam lembur dibayarkan terpisah dan tidak termasuk dalam Take Home Pay di atas.';
         }
 
-        $lembur = $items->firstWhere('source_type', 'overtime');
+        $barisLembur = $items->where('source_type', 'overtime');
+        $lembur = $barisLembur->first();
 
         return [
             'payslip' => $payslip,
@@ -95,8 +96,8 @@ class SlipView
 
             // Tarif yang BENAR-BENAR dipakai saat slip dihitung (sudah dibekukan
             // di baris lembur), bukan tarif hari ini.
-            'tarifJam' => (int) ($lembur?->rate ?? 0),
-            'hariLembur' => count($lembur?->rule_snapshot['rincian'] ?? []),
+            'tarifJam' => (int) ($lembur?->rule_snapshot['tarif_dasar'] ?? $lembur?->rate ?? 0),
+            'hariLembur' => (int) $barisLembur->sum(fn ($i) => count($i->rule_snapshot['rincian'] ?? [])),
             'hariKerja' => (int) $payslip->scheduled_days,
             'jamPerHari' => max(1, Settings::int('payroll.hours_per_day', 10)),
 

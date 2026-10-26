@@ -16,7 +16,7 @@ class OvertimeRecord extends Model
     protected $fillable = [
         'employee_id', 'work_date', 'overtime_request_id', 'attendance_id',
         'actual_start', 'actual_end', 'actual_minutes', 'approved_minutes',
-        'payable_minutes', 'status', 'confirmed_by', 'confirmed_at', 'note',
+        'payable_minutes', 'multiplier', 'status', 'confirmed_by', 'confirmed_at', 'note',
         'activated_at', 'activated_by',
     ];
 
@@ -29,6 +29,7 @@ class OvertimeRecord extends Model
             'actual_minutes' => 'integer',
             'approved_minutes' => 'integer',
             'payable_minutes' => 'integer',
+            'multiplier' => 'float',
             'confirmed_at' => 'datetime',
             'activated_at' => 'datetime',
         ];

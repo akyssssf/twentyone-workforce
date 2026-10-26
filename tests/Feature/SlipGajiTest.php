@@ -596,4 +596,43 @@ class SlipGajiTest extends TestCase
     {
         $this->get(route('manajer.payroll.unduh', $this->periode))->assertNotFound();
     }
+
+    /**
+     * Lembur berpengali (General Cleaning ×2): menit yang tertulis tetap menit
+     * nyata, dan uangnya = menit × tarif × pengali, di baris slip sendiri
+     * supaya jam × tarif = rupiah cocok di kalkulator.
+     */
+    public function test_lembur_berpengali_dipisah_dan_dikali(): void
+    {
+        $this->hadir('2026-09-05');
+
+        foreach ([['2026-09-05', 120, 1.0], ['2026-09-06', 90, 2.0]] as [$tanggal, $menit, $pengali]) {
+            OvertimeRecord::create([
+                'employee_id' => $this->budi->id, 'work_date' => Carbon::parse($tanggal),
+                'actual_minutes' => $menit, 'approved_minutes' => $menit, 'payable_minutes' => $menit,
+                'multiplier' => $pengali, 'note' => $pengali > 1 ? 'General cleaning 08:00–09:30, tarif ×2' : null,
+                'status' => 'confirmed', 'activated_at' => now(), 'confirmed_at' => now(),
+            ]);
+        }
+
+        $slip = $this->hitung();
+        $tarif = intdiv(intdiv(3_000_000, 26), 10);
+
+        $baris = $slip->items->where('source_type', 'overtime')->values();
+        $this->assertCount(2, $baris);
+
+        $biasa = $baris[0];
+        $this->assertSame('Bonus Lembur 2 jam', $biasa->label);
+        $this->assertSame(2 * $tarif, (int) $biasa->amount);
+
+        $dua = $baris[1];
+        $this->assertSame('Bonus Lembur ×2 1 jam 30 menit', $dua->label);
+        $this->assertSame(2 * $tarif, (int) $dua->rate, 'tarif tampil sudah dikali pengali');
+        $this->assertSame((int) round(1.5 * $tarif * 2), (int) $dua->amount);
+
+        // Menit yang tercatat di slip: nyata, tidak digandakan.
+        $this->assertSame(210, (int) $slip->overtime_minutes);
+        $this->assertSame((int) $biasa->amount + (int) $dua->amount, (int) $slip->total_bonus);
+        $this->assertSame(3_000_000, (int) $slip->take_home_pay);
+    }
 }

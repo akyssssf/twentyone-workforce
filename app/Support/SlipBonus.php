@@ -17,16 +17,17 @@ class SlipBonus
 {
     public static function data(Payslip $payslip): array
     {
-        $lembur = $payslip->items->firstWhere('source_type', 'overtime');
-        $rincian = $lembur?->rule_snapshot['rincian'] ?? [];
+        // Bisa lebih dari satu baris lembur (biasa dan berpengali, mis. ×2).
+        $barisLembur = $payslip->items->where('source_type', 'overtime');
+        $lembur = $barisLembur->first();
 
         return [
             'payslip' => $payslip,
 
             // Tarif yang BENAR-BENAR dipakai saat slip dihitung, bukan tarif
             // hari ini: rate baris lemburnya sudah dibekukan di situ.
-            'tarifJam' => (int) ($lembur?->rate ?? 0),
-            'hariLembur' => count($rincian),
+            'tarifJam' => (int) ($lembur?->rule_snapshot['tarif_dasar'] ?? $lembur?->rate ?? 0),
+            'hariLembur' => (int) $barisLembur->sum(fn ($i) => count($i->rule_snapshot['rincian'] ?? [])),
             'jamPerHari' => max(1, Settings::int('payroll.hours_per_day', 10)),
         ];
     }

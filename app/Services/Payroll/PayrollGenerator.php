@@ -301,56 +301,70 @@ class PayrollGenerator
             return 0;
         }
 
-        $minutes = 0;
-        $total = 0;
-        $rincian = [];
+        $tarifDasar = $this->rules->hourlyRate($baseSalary, $workingDays);
+        $semuaMenit = 0;
 
-        foreach ($records as $record) {
-            $result = $this->rules->overtimePay($record->work_date, (int) $record->payable_minutes, $baseSalary, $workingDays);
+        // Satu baris slip per pengali: lembur biasa (1x) dan lembur khusus
+        // (mis. General Cleaning 2x) dipisah, supaya "jam x tarif = rupiah"
+        // di tiap baris benar-benar cocok kalau dihitung dengan kalkulator.
+        foreach ($records->groupBy(fn (OvertimeRecord $r) => (float) $r->multiplier)->sortKeys() as $pengali => $kelompok) {
+            $minutes = 0;
+            $total = 0;
+            $rincian = [];
 
-            $minutes += (int) $record->payable_minutes;
-            $total += $result['amount'];
+            foreach ($kelompok as $record) {
+                $result = $this->rules->overtimePay($record->work_date, (int) $record->payable_minutes, $baseSalary, $workingDays);
+                $uang = (int) round($result['amount'] * $pengali);
 
-            $rincian[] = [
-                'date' => $record->work_date->toDateString(),
-                'minutes' => (int) $record->payable_minutes,
-                'amount' => $result['amount'],
-                'note' => $record->note,
-            ];
-        }
+                $minutes += (int) $record->payable_minutes;
+                $total += $uang;
 
-        // Tidak ada tarif lembur yang berlaku di tanggal-tanggal itu (periode
-        // sebelum aturan lembur dipasang): jamnya tetap tercatat di slip
-        // sebagai keterangan, tapi bukan uang — dibayar di luar payroll.
-        if ($total <= 0) {
+                $rincian[] = [
+                    'date' => $record->work_date->toDateString(),
+                    'minutes' => (int) $record->payable_minutes,
+                    'amount' => $uang,
+                    'note' => $record->note,
+                ];
+            }
+
+            $semuaMenit += $minutes;
+            $khusus = $pengali != 1.0;
+            $penanda = $khusus ? ' ×'.rtrim(rtrim(number_format($pengali, 1, ',', ''), '0'), ',') : '';
+
+            // Tidak ada tarif lembur yang berlaku di tanggal-tanggal itu (periode
+            // sebelum aturan lembur dipasang): jamnya tetap tercatat di slip
+            // sebagai keterangan, tapi bukan uang — dibayar di luar payroll.
+            if ($total <= 0) {
+                $this->addItem(
+                    $payslip,
+                    'info',
+                    'Lembur'.$penanda.' '.$this->jam($minutes).': dibayar terpisah, tidak termasuk take home pay',
+                    round($minutes / 60, 2),
+                    0,
+                    0,
+                    $sort,
+                    ['rincian' => $rincian],
+                    'overtime',
+                );
+
+                continue;
+            }
+
             $this->addItem(
                 $payslip,
-                'info',
-                'Lembur ' . $this->jam($minutes) . ': dibayar terpisah, tidak termasuk take home pay',
+                $this->kategoriBonus(),
+                'Bonus Lembur'.$penanda.' '.$this->jam($minutes),
                 round($minutes / 60, 2),
-                0,
-                0,
+                // Tarif yang dikalikan pengali, supaya jam × tarif = rupiah.
+                (int) round($tarifDasar * $pengali),
+                $total,
                 $sort,
-                ['rincian' => $rincian],
+                ['rincian' => $rincian, 'pengali' => $pengali, 'tarif_dasar' => $tarifDasar],
                 'overtime',
             );
-
-            return $minutes;
         }
 
-        $this->addItem(
-            $payslip,
-            $this->kategoriBonus(),
-            'Bonus Lembur ' . $this->jam($minutes),
-            round($minutes / 60, 2),
-            $this->rules->hourlyRate($baseSalary, $workingDays),
-            $total,
-            $sort,
-            ['rincian' => $rincian],
-            'overtime',
-        );
-
-        return $minutes;
+        return $semuaMenit;
     }
 
     /** @param  Collection<int, Attendance>  $late  baris yang telatnya SUDAH lewat toleransi */
