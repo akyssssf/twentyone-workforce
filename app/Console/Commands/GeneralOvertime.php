@@ -49,6 +49,7 @@ class GeneralOvertime extends Command
                             {--awal=05:00 : Scan sebelum jam ini tidak dianggap}
                             {--pin=* : Hanya PIN ini (boleh diulang)}
                             {--abaikan=* : Lewati PIN ini (boleh diulang)}
+                            {--tambah=* : Jam manual untuk yang lupa scan: PIN:08:00-13:00 (boleh diulang; menggantikan hitungan dari scan)}
                             {--catatan=General cleaning : Tertulis di slip}
                             {--simpan : Simpan. Tanpa ini hanya menampilkan hitungannya}';
 
@@ -148,6 +149,35 @@ class GeneralOvertime extends Command
 
             $baris[] = [$e->pin_device, $e->name, $jenis, $mulai->format('H:i:s'), $selesai->format('H:i'), Durasi::menit($menit), '×'.rtrim(rtrim(number_format($pengali, 1, ',', ''), '0'), ',')];
             $hitungan[] = ['employee' => $e, 'mulai' => $mulai, 'selesai' => $selesai, 'menit' => $menit, 'jenis' => $jenis];
+        }
+
+        // Jam manual untuk yang lupa scan (atau scannya keliru). Menggantikan
+        // hitungan dari scan untuk PIN itu, dan ditandai "Manual" supaya terlihat
+        // di tabel mana yang bukan dari mesin.
+        foreach ((array) $this->option('tambah') as $entri) {
+            if (! preg_match('/^(\w+):(\d{1,2}:\d{2})-(\d{1,2}:\d{2})$/', trim((string) $entri), $m)) {
+                $this->error("Format --tambah salah: \"{$entri}\". Harus PIN:08:00-13:00");
+
+                return self::FAILURE;
+            }
+
+            $orang = Employee::where('pin_device', $m[1])->first();
+            $dari = $this->jam($tanggal, $m[2], $timezone);
+            $sampai = $this->jam($tanggal, $m[3], $timezone);
+
+            if ($orang === null || $dari === null || $sampai === null || $sampai->lessThanOrEqualTo($dari)) {
+                $this->error("--tambah {$entri}: PIN tidak ada, atau jam selesai tidak setelah jam masuk.");
+
+                return self::FAILURE;
+            }
+
+            $menit = (int) floor($dari->diffInSeconds($sampai) / 60);
+
+            $baris = array_values(array_filter($baris, fn ($b) => (string) $b[0] !== (string) $orang->pin_device));
+            $hitungan = array_values(array_filter($hitungan, fn ($h) => $h['employee']->id !== $orang->id));
+
+            $baris[] = [$orang->pin_device, $orang->name, 'Manual', $dari->format('H:i:s'), $sampai->format('H:i'), Durasi::menit($menit), '×'.rtrim(rtrim(number_format($pengali, 1, ',', ''), '0'), ',')];
+            $hitungan[] = ['employee' => $orang, 'mulai' => $dari, 'selesai' => $sampai, 'menit' => $menit, 'jenis' => 'Manual'];
         }
 
         $this->newLine();

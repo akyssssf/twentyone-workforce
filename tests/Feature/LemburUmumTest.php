@@ -129,4 +129,27 @@ class LemburUmumTest extends TestCase
     {
         $this->assertSame(1, Artisan::call('lembur:umum', ['tanggal' => self::TANGGAL, '--pengali' => 9]));
     }
+
+    /** Yang lupa scan ditolong dengan jam manual, tanpa kode. */
+    public function test_tambah_manual_untuk_yang_lupa_scan(): void
+    {
+        $this->orang('Lupa Scan', '11', null, []);
+
+        $this->artisan('lembur:umum '.self::TANGGAL.' --tambah=11:08:00-13:00 --simpan')->assertSuccessful();
+
+        $r = OvertimeRecord::sole();
+        $this->assertSame(300, (int) $r->payable_minutes);
+        $this->assertSame(2.0, (float) $r->multiplier);
+        $this->assertStringContainsString('08:00–13:00', $r->note);
+    }
+
+    public function test_tambah_menggantikan_hitungan_scan_dan_format_salah_ditolak(): void
+    {
+        $this->orang('Scan Keliru', '11', null, ['08:05:00', '12:30:00']);
+
+        Artisan::call('lembur:umum', ['tanggal' => self::TANGGAL, '--tambah' => ['11:09:00-12:00'], '--simpan' => true]);
+        $this->assertSame(180, (int) OvertimeRecord::sole()->payable_minutes);
+
+        $this->assertSame(1, Artisan::call('lembur:umum', ['tanggal' => self::TANGGAL, '--tambah' => ['bukan-format']]));
+    }
 }

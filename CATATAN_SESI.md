@@ -1102,6 +1102,10 @@ php artisan attendance:scan <pin> --from=2026-10-12 --to=2026-10-18
 # "pagi semua". Pengali disimpan di overtime_records.multiplier (menit tetap nyata).
 php artisan lembur:umum 2026-10-27 --pengali=2
 php artisan lembur:umum 2026-10-27 --pengali=2 --abaikan=7 --simpan
+# Yang lupa scan / scannya keliru: jam manual (menggantikan hitungan scan untuk PIN itu)
+php artisan lembur:umum 2026-10-27 --tambah=11:08:00-13:00 --simpan
+# Kode lembur TIDAK dipakai untuk acara bersama: kode hanya menyambung SETELAH
+# jam pulang shift, orang libur ditolak, dan bisa terhitung dobel dengan scan.
 
 # Bonus manual untuk kejadian di luar periode (mis. lembur bulan lalu yang
 # belum terkonfirmasi): lembur:tugaskan menempel ke TANGGAL kerja, jadi masuk
