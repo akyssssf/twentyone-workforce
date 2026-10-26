@@ -105,6 +105,13 @@ class OvertimeResolver
             return;
         }
 
+        // Hari kerja bersama (General Cleaning): jamnya diisi lembur:umum dari
+        // scan. Menghitung "setelah jam pulang shift" di sini akan menimpanya
+        // dengan angka yang tidak pernah dikerjakan siapa pun.
+        if ($record->overtimeRequest?->occasion?->hitungDariScan()) {
+            return;
+        }
+
         $batas = $this->batasAkhirHari($workDate);
 
         $scanTerakhir = AttendanceLog::query()

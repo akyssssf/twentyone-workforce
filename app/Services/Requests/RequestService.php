@@ -277,6 +277,60 @@ class RequestService
         });
     }
 
+    /**
+     * Lembur hari kerja bersama (General Cleaning): satu kode untuk satu orang.
+     *
+     * Beda dengan submitOvertime(): tidak butuh jadwal shift (yang libur ikut),
+     * tidak menyambung setelah jam pulang, dan TIDAK mengirim kode lewat
+     * WhatsApp — kodenya dibagikan manajer sendiri. Jamnya baru diisi
+     * lembur:umum dari scan; kode hanya membuktikan orangnya ikut.
+     */
+    public function submitGeneralOvertime(Employee $employee, Carbon $workDate, float $pengali, string $alasan): Request
+    {
+        $this->lockGuard->ensureUnlocked($workDate->copy()->startOfDay());
+
+        return DB::transaction(function () use ($employee, $workDate, $pengali, $alasan) {
+            $request = $this->createRequest($employee, RequestType::Overtime, RequestStatus::Approved);
+
+            $request->update([
+                'substitute_accepted_at' => now(),
+                'decided_by' => auth()->id(),
+                'decided_at' => now(),
+                'decision_note' => 'Ditunjuk langsung oleh manajer.',
+            ]);
+
+            $request->overtime()->create([
+                'work_date' => $workDate->copy()->startOfDay(),
+                'occasion' => OvertimeOccasion::GeneralCleaning,
+                'planned_start' => '08:00:00',
+                'planned_end' => '13:00:00',
+                'planned_minutes' => 300,
+                'initiated_by' => 'manager',
+                'is_backdated' => $workDate->copy()->startOfDay()->lessThan(today()),
+                'reason' => $alasan,
+                'secret_code' => OvertimeRequest::generateCode(),
+            ]);
+
+            OvertimeRecord::create([
+                'employee_id' => $employee->id,
+                'work_date' => $workDate->copy()->startOfDay(),
+                'overtime_request_id' => $request->id,
+                'approved_minutes' => 300,
+                'payable_minutes' => 0,
+                'multiplier' => $pengali,
+                'status' => 'pending_confirmation',
+            ]);
+
+            AuditLogger::record('overtime.general_code', $request, [], [
+                'employee' => $employee->name,
+                'work_date' => $workDate->toDateString(),
+                'multiplier' => $pengali,
+            ]);
+
+            return $request->fresh('overtime');
+        });
+    }
+
     public function submitSwap(Employee $employee, array $data): Request
     {
         $assignment = RosterAssignment::findOrFail($data['requester_assignment_id']);

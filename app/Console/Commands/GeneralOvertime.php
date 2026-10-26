@@ -3,6 +3,7 @@
 namespace App\Console\Commands;
 
 use App\Enums\AssignmentStatus;
+use App\Enums\OvertimeOccasion as OccasionKode;
 use App\Models\AttendanceLog;
 use App\Models\Employee;
 use App\Models\OvertimeRecord;
@@ -49,6 +50,7 @@ class GeneralOvertime extends Command
                             {--awal=05:00 : Scan sebelum jam ini tidak dianggap}
                             {--pin=* : Hanya PIN ini (boleh diulang)}
                             {--abaikan=* : Lewati PIN ini (boleh diulang)}
+                            {--tanpa-kode : Hitung semua yang punya scan, walau belum mengaktifkan kodenya}
                             {--tambah=* : Jam manual untuk yang lupa scan: PIN:08:00-13:00 (boleh diulang; menggantikan hitungan dari scan)}
                             {--catatan=General cleaning : Tertulis di slip}
                             {--simpan : Simpan. Tanpa ini hanya menampilkan hitungannya}';
@@ -82,6 +84,20 @@ class GeneralOvertime extends Command
         $karyawan = Employee::query()->tracked()->employed()->orderBy('name')->get()
             ->when($pins !== [], fn ($c) => $c->filter(fn ($e) => in_array((string) $e->pin_device, $pins, true)))
             ->reject(fn ($e) => in_array((string) $e->pin_device, $abaikan, true));
+
+        // Kode lembur umum yang sudah dibuat (lembur:kode-umum). Kalau ada,
+        // yang dihitung hanya yang SUDAH mengaktifkan kodenya — itu syarat dari
+        // manajer. --tanpa-kode melonggarkannya.
+        $catatanKode = OvertimeRecord::query()
+            ->with('overtimeRequest')
+            ->whereDate('work_date', $tanggal)
+            ->where('status', '!=', 'cancelled')
+            ->get()
+            ->filter(fn (OvertimeRecord $r) => $r->overtimeRequest?->occasion === OccasionKode::GeneralCleaning)
+            ->keyBy('employee_id');
+
+        $pakaiKode = $catatanKode->isNotEmpty() && ! $this->option('tanpa-kode');
+        $belumAktif = [];
 
         $baris = [];
         $hitungan = [];
@@ -147,6 +163,12 @@ class GeneralOvertime extends Command
                 continue;
             }
 
+            if ($pakaiKode && ! $catatanKode->get($e->id)?->isActivated()) {
+                $belumAktif[] = $e->name;
+
+                continue;
+            }
+
             $baris[] = [$e->pin_device, $e->name, $jenis, $mulai->format('H:i:s'), $selesai->format('H:i'), Durasi::menit($menit), '×'.rtrim(rtrim(number_format($pengali, 1, ',', ''), '0'), ',')];
             $hitungan[] = ['employee' => $e, 'mulai' => $mulai, 'selesai' => $selesai, 'menit' => $menit, 'jenis' => $jenis];
         }
@@ -189,6 +211,11 @@ class GeneralOvertime extends Command
             return self::SUCCESS;
         }
 
+        if ($belumAktif !== []) {
+            $this->warn('Ada scan tapi BELUM mengaktifkan kode (tidak dihitung): '.implode(', ', $belumAktif));
+            $this->line('  Kalau tetap mau dihitung: --tanpa-kode');
+        }
+
         $this->table(['PIN', 'Nama', 'Jenis', 'Masuk', 'Sampai', 'Lama', 'Pengali'], $baris);
         $this->line(sprintf('%d orang · total %s (belum dikali pengali)', count($hitungan), Durasi::menit((int) collect($hitungan)->sum('menit'))));
 
@@ -204,13 +231,15 @@ class GeneralOvertime extends Command
         $tersimpan = 0;
         $dilewati = [];
 
-        DB::transaction(function () use ($hitungan, $tanggal, $pengali, $admin, &$tersimpan, &$dilewati) {
+        DB::transaction(function () use ($hitungan, $tanggal, $pengali, $admin, $catatanKode, &$tersimpan, &$dilewati) {
             foreach ($hitungan as $h) {
+                $punyaKode = $catatanKode->get($h['employee']->id);
+
                 $sudah = OvertimeRecord::query()
                     ->where('employee_id', $h['employee']->id)
                     ->whereDate('work_date', $tanggal)
                     ->where('multiplier', '>', 1)
-                    ->where('status', '!=', 'cancelled')
+                    ->where('status', 'confirmed')
                     ->exists();
 
                 if ($sudah) {
@@ -221,7 +250,9 @@ class GeneralOvertime extends Command
 
                 $catatan = sprintf('%s %s–%s, tarif ×%s', $this->option('catatan'), $h['mulai']->format('H:i'), $h['selesai']->format('H:i'), rtrim(rtrim(number_format($pengali, 1, ',', ''), '0'), ','));
 
-                $record = OvertimeRecord::create([
+                // Catatan yang sudah dibuat bersama kodenya DIISI, bukan dibuat
+                // baru — kalau tidak, orang yang sama punya dua catatan lembur.
+                $nilai = [
                     'employee_id' => $h['employee']->id,
                     'work_date' => $tanggal,
                     'actual_start' => $h['mulai'],
@@ -240,7 +271,14 @@ class GeneralOvertime extends Command
                     'activated_at' => now(),
                     'activated_by' => $admin?->id,
                     'note' => $catatan,
-                ]);
+                ];
+
+                if ($punyaKode !== null) {
+                    $punyaKode->update($nilai + ['activated_at' => $punyaKode->activated_at ?? now(), 'activated_by' => $punyaKode->activated_by ?? $admin?->id]);
+                    $record = $punyaKode->fresh();
+                } else {
+                    $record = OvertimeRecord::create($nilai);
+                }
 
                 AuditLogger::record('overtime.general', $record, [], [
                     'employee' => $h['employee']->name, 'minutes' => $h['menit'], 'multiplier' => $pengali,

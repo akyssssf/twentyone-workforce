@@ -59,9 +59,15 @@ class AssignOvertime extends Command
 
         $keperluan = OvertimeOccasion::tryFrom(strtolower(trim((string) $this->option('keperluan'))));
 
+        if ($keperluan?->hitungDariScan()) {
+            $this->error('General Cleaning tidak lewat sini: lembur:tugaskan menyambung SETELAH jam pulang shift. Pakai lembur:kode-umum lalu lembur:umum.');
+
+            return self::FAILURE;
+        }
+
         if ($keperluan === null) {
             $this->error("Keperluan '{$this->option('keperluan')}' tidak dikenal.");
-            $this->line('Yang tersedia: '.collect(OvertimeOccasion::cases())->pluck('value')->implode(', '));
+            $this->line('Yang tersedia: '.collect(OvertimeOccasion::untukFormulir())->pluck('value')->implode(', '));
 
             return self::FAILURE;
         }

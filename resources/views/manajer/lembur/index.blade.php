@@ -26,7 +26,7 @@
             <label class="label" for="occasion">Lembur untuk apa</label>
             <select id="occasion" name="occasion" required class="kolom mt-1 sm:max-w-xs"
                     onchange="document.getElementById('kotak-pengganti').hidden = this.value !== 'pengganti'">
-                @foreach (\App\Enums\OvertimeOccasion::cases() as $o)
+                @foreach (\App\Enums\OvertimeOccasion::untukFormulir() as $o)
                     <option value="{{ $o->value }}" @selected(old('occasion', 'pengganti') === $o->value)>
                         {{ $o->label() }}
                     </option>

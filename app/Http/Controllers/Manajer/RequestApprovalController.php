@@ -153,7 +153,7 @@ class RequestApprovalController extends Controller
             'employee_ids' => ['required', 'array', 'min:1'],
             'employee_ids.*' => ['exists:employees,id'],
             'work_date' => ['required', 'date'],
-            'occasion' => ['required', Rule::enum(OvertimeOccasion::class)],
+            'occasion' => ['required', Rule::in(array_map(fn (OvertimeOccasion $o) => $o->value, OvertimeOccasion::untukFormulir()))],
 
             // Pengganti cuma wajib kalau lemburnya memang menutup posisi
             // orang lain. Acara seperti live music tidak menggantikan siapa

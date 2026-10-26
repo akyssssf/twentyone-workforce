@@ -1104,8 +1104,18 @@ php artisan lembur:umum 2026-10-27 --pengali=2
 php artisan lembur:umum 2026-10-27 --pengali=2 --abaikan=7 --simpan
 # Yang lupa scan / scannya keliru: jam manual (menggantikan hitungan scan untuk PIN itu)
 php artisan lembur:umum 2026-10-27 --tambah=11:08:00-13:00 --simpan
-# Kode lembur TIDAK dipakai untuk acara bersama: kode hanya menyambung SETELAH
-# jam pulang shift, orang libur ditolak, dan bisa terhitung dobel dengan scan.
+# Manager minta tetap pakai KODE untuk acara bersama. Kode lembur biasa tidak
+# cocok (menyambung SETELAH jam pulang, menolak yang libur), jadi dibuat jalur
+# sendiri: occasion `general_cleaning` — kode = bukti ikut, jam = dari scan.
+#   1) buat kode semua orang (tanpa WhatsApp otomatis, kode tampil di terminal):
+php artisan lembur:kode-umum 2026-10-27 --pengali=2
+#   2) karyawan memasukkan kode di menu Lembur portal
+#   3) pratinjau & simpan: yang dihitung hanya yang SUDAH mengaktifkan kode
+#      (--tanpa-kode untuk melonggarkan); catatan yang ada DIISI, bukan dibuat baru
+php artisan lembur:umum 2026-10-27
+# OvertimeResolver::isiRealisasi melewati occasion ini (hitungDariScan) — kalau
+# tidak, "setelah jam pulang shift" menimpa jam dari scan. lembur:tugaskan dan
+# formulir lembur menolak/menyembunyikannya (OvertimeOccasion::untukFormulir).
 
 # Bonus manual untuk kejadian di luar periode (mis. lembur bulan lalu yang
 # belum terkonfirmasi): lembur:tugaskan menempel ke TANGGAL kerja, jadi masuk

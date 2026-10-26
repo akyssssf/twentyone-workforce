@@ -8,8 +8,10 @@ use App\Models\AttendanceLog;
 use App\Models\Branch;
 use App\Models\Employee;
 use App\Models\OvertimeRecord;
+use App\Models\OvertimeRequest;
 use App\Models\Shift;
 use App\Models\User;
+use App\Services\Requests\OvertimeCodeService;
 use App\Services\Roster\RosterService;
 use Database\Seeders\MasterDataSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -151,5 +153,87 @@ class LemburUmumTest extends TestCase
         $this->assertSame(180, (int) OvertimeRecord::sole()->payable_minutes);
 
         $this->assertSame(1, Artisan::call('lembur:umum', ['tanggal' => self::TANGGAL, '--tambah' => ['bukan-format']]));
+    }
+
+    // ------------------------------------------------------------------ kode
+
+    /** Satu kode per orang, termasuk yang libur; dijalankan lagi tidak membuat kode kedua. */
+    public function test_kode_dibuat_untuk_semua_orang_dan_tidak_dobel(): void
+    {
+        $this->orang('Libur', '11', null, []);
+        $this->orang('Malam', '12', 'malam', []);
+
+        $this->assertSame(0, Artisan::call('lembur:kode-umum', ['tanggal' => self::TANGGAL]));
+
+        $kode = OvertimeRequest::pluck('secret_code');
+        $this->assertCount(2, $kode);
+        $this->assertCount(2, $kode->unique());
+        $this->assertSame(2, OvertimeRecord::count());
+        $this->assertSame([2.0, 2.0], OvertimeRecord::pluck('multiplier')->map(fn ($m) => (float) $m)->all());
+
+        Artisan::call('lembur:kode-umum', ['tanggal' => self::TANGGAL]);
+        $this->assertSame(2, OvertimeRequest::count(), 'kode tidak dibuat dua kali');
+    }
+
+    /**
+     * Dengan kode: yang dihitung hanya yang SUDAH mengaktifkannya, jamnya tetap
+     * dari scan, dan catatan yang sudah ada DIISI (tidak dibuat catatan kedua).
+     */
+    public function test_hanya_yang_mengaktifkan_kode_yang_dihitung(): void
+    {
+        $aktif = $this->orang('Aktif', '11', null, ['08:05:00', '12:30:00']);
+        $this->orang('Belum', '12', null, ['08:00:00', '12:00:00']);
+
+        Artisan::call('lembur:kode-umum', ['tanggal' => self::TANGGAL]);
+
+        $kodeAktif = OvertimeRequest::query()
+            ->whereHas('request', fn ($q) => $q->where('employee_id', $aktif->id))
+            ->value('secret_code');
+
+        app(OvertimeCodeService::class)->activate($aktif, $kodeAktif);
+
+        // Pratinjau: yang belum aktif diberitahukan, tidak dihitung.
+        $this->artisan('lembur:umum '.self::TANGGAL)
+            ->expectsOutputToContain('BELUM mengaktifkan kode')
+            ->assertSuccessful();
+
+        Artisan::call('lembur:umum', ['tanggal' => self::TANGGAL, '--simpan' => true]);
+
+        $this->assertSame(2, OvertimeRecord::count(), 'tidak ada catatan kedua');
+
+        $r = OvertimeRecord::where('employee_id', $aktif->id)->sole();
+        $this->assertSame('confirmed', $r->status);
+        $this->assertSame(265, (int) $r->payable_minutes, 'jam dari scan: 08:05 → 12:30');
+
+        $belum = OvertimeRecord::where('employee_id', '!=', $aktif->id)->sole();
+        $this->assertSame('pending_confirmation', $belum->status);
+        $this->assertSame(0, (int) $belum->payable_minutes);
+
+        // Perhitungan otomatis tidak boleh menimpa jam dari scan.
+        Artisan::call('attendance:compute', ['--from' => self::TANGGAL, '--to' => self::TANGGAL]);
+        $this->assertSame(265, (int) $r->fresh()->payable_minutes);
+    }
+
+    public function test_tanpa_kode_melonggarkan_syarat_aktivasi(): void
+    {
+        $e = $this->orang('Belum', '12', null, ['08:00:00', '12:00:00']);
+        Artisan::call('lembur:kode-umum', ['tanggal' => self::TANGGAL]);
+
+        Artisan::call('lembur:umum', ['tanggal' => self::TANGGAL, '--tanpa-kode' => true, '--simpan' => true]);
+
+        $r = OvertimeRecord::where('employee_id', $e->id)->sole();
+        $this->assertSame(240, (int) $r->payable_minutes);
+        $this->assertNotNull($r->activated_at);
+    }
+
+    /** General Cleaning tidak boleh lewat lembur:tugaskan, yang menyambung setelah jam pulang shift. */
+    public function test_lembur_tugaskan_menolak_general_cleaning(): void
+    {
+        $this->orang('Pagi', '15', 'pagi', []);
+
+        $this->assertSame(1, Artisan::call('lembur:tugaskan', [
+            'pin' => '15', 'tanggal' => self::TANGGAL, '--keperluan' => 'general_cleaning', '--alasan' => 'uji',
+        ]));
+        $this->assertSame(0, OvertimeRecord::count());
     }
 }
