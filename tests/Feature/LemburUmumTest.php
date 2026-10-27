@@ -3,10 +3,12 @@
 namespace Tests\Feature;
 
 use App\Enums\UserRole;
+use App\Jobs\SendWhatsAppMessage;
 use App\Models\Attendance;
 use App\Models\AttendanceLog;
 use App\Models\Branch;
 use App\Models\Employee;
+use App\Models\Notification;
 use App\Models\OvertimeRecord;
 use App\Models\OvertimeRequest;
 use App\Models\Shift;
@@ -17,6 +19,7 @@ use Database\Seeders\MasterDataSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\Queue;
 use Tests\TestCase;
 
 /**
@@ -176,54 +179,84 @@ class LemburUmumTest extends TestCase
     }
 
     /**
-     * Dengan kode: yang dihitung hanya yang SUDAH mengaktifkannya, jamnya tetap
-     * dari scan, dan catatan yang sudah ada DIISI (tidak dibuat catatan kedua).
+     * Bawaan: kode dipakai OTOMATIS untuk yang punya scan, walau orangnya tidak
+     * pernah memintanya. Orangnya diberi tahu; jam tetap dari scan; catatan
+     * yang sudah ada DIISI (tidak dibuat catatan kedua).
      */
-    public function test_hanya_yang_mengaktifkan_kode_yang_dihitung(): void
+    public function test_kode_dipakai_otomatis_dan_orangnya_diberi_tahu(): void
     {
-        $aktif = $this->orang('Aktif', '11', null, ['08:05:00', '12:30:00']);
-        $this->orang('Belum', '12', null, ['08:00:00', '12:00:00']);
+        Queue::fake();
+
+        $sendiri = $this->orang('Masukkan Sendiri', '11', null, ['08:05:00', '12:30:00']);
+        $otomatis = $this->orang('Tidak Minta', '12', null, ['08:00:00', '12:00:00']);
+        $tidakDatang = $this->orang('Tidak Datang', '13', null, []);
 
         Artisan::call('lembur:kode-umum', ['tanggal' => self::TANGGAL]);
 
-        $kodeAktif = OvertimeRequest::query()
-            ->whereHas('request', fn ($q) => $q->where('employee_id', $aktif->id))
+        $kodeSendiri = OvertimeRequest::query()
+            ->whereHas('request', fn ($q) => $q->where('employee_id', $sendiri->id))
             ->value('secret_code');
 
-        app(OvertimeCodeService::class)->activate($aktif, $kodeAktif);
+        app(OvertimeCodeService::class)->activate($sendiri, $kodeSendiri);
 
-        // Pratinjau: yang belum aktif diberitahukan, tidak dihitung.
         $this->artisan('lembur:umum '.self::TANGGAL)
-            ->expectsOutputToContain('BELUM mengaktifkan kode')
+            ->expectsOutputToContain('dipakai otomatis')
             ->assertSuccessful();
 
         Artisan::call('lembur:umum', ['tanggal' => self::TANGGAL, '--simpan' => true]);
 
-        $this->assertSame(2, OvertimeRecord::count(), 'tidak ada catatan kedua');
+        $this->assertSame(3, OvertimeRecord::count(), 'tidak ada catatan kedua');
 
-        $r = OvertimeRecord::where('employee_id', $aktif->id)->sole();
+        $r = OvertimeRecord::where('employee_id', $otomatis->id)->sole();
         $this->assertSame('confirmed', $r->status);
-        $this->assertSame(265, (int) $r->payable_minutes, 'jam dari scan: 08:05 → 12:30');
+        $this->assertSame(240, (int) $r->payable_minutes, 'jam dari scan: 08:00 → 12:00');
+        $this->assertNotNull($r->activated_at, 'kode terpakai otomatis');
 
-        $belum = OvertimeRecord::where('employee_id', '!=', $aktif->id)->sole();
-        $this->assertSame('pending_confirmation', $belum->status);
-        $this->assertSame(0, (int) $belum->payable_minutes);
+        $this->assertSame(0, (int) OvertimeRecord::where('employee_id', $tidakDatang->id)->sole()->payable_minutes);
 
-        // Perhitungan otomatis tidak boleh menimpa jam dari scan.
+        // Pemberitahuan HANYA untuk yang kodenya dipakai otomatis.
+        Queue::assertPushed(SendWhatsAppMessage::class, 1);
+        $pesan = Notification::sole();
+        $this->assertStringContainsString('terpakai otomatis', $pesan->body);
+        $this->assertStringContainsString('08:00–12:00', $pesan->body);
+        $this->assertStringContainsString('×2', $pesan->body);
+
         Artisan::call('attendance:compute', ['--from' => self::TANGGAL, '--to' => self::TANGGAL]);
-        $this->assertSame(265, (int) $r->fresh()->payable_minutes);
+        $this->assertSame(240, (int) $r->fresh()->payable_minutes);
     }
 
-    public function test_tanpa_kode_melonggarkan_syarat_aktivasi(): void
+    public function test_wajib_kode_mengembalikan_syarat_lama(): void
     {
-        $e = $this->orang('Belum', '12', null, ['08:00:00', '12:00:00']);
+        $aktif = $this->orang('Aktif', '11', null, ['08:05:00', '12:30:00']);
+        $belum = $this->orang('Belum', '12', null, ['08:00:00', '12:00:00']);
+
         Artisan::call('lembur:kode-umum', ['tanggal' => self::TANGGAL]);
 
-        Artisan::call('lembur:umum', ['tanggal' => self::TANGGAL, '--tanpa-kode' => true, '--simpan' => true]);
+        app(OvertimeCodeService::class)->activate($aktif, OvertimeRequest::query()
+            ->whereHas('request', fn ($q) => $q->where('employee_id', $aktif->id))
+            ->value('secret_code'));
 
-        $r = OvertimeRecord::where('employee_id', $e->id)->sole();
-        $this->assertSame(240, (int) $r->payable_minutes);
-        $this->assertNotNull($r->activated_at);
+        $this->artisan('lembur:umum '.self::TANGGAL.' --wajib-kode')
+            ->expectsOutputToContain('BELUM mengaktifkan kode')
+            ->assertSuccessful();
+
+        Artisan::call('lembur:umum', ['tanggal' => self::TANGGAL, '--wajib-kode' => true, '--simpan' => true]);
+
+        $this->assertSame(265, (int) OvertimeRecord::where('employee_id', $aktif->id)->sole()->payable_minutes);
+        $this->assertSame(0, (int) OvertimeRecord::where('employee_id', $belum->id)->sole()->payable_minutes);
+    }
+
+    public function test_tanpa_notif_tidak_mengirim_apa_apa(): void
+    {
+        Queue::fake();
+
+        $this->orang('Tidak Minta', '12', null, ['08:00:00', '12:00:00']);
+        Artisan::call('lembur:kode-umum', ['tanggal' => self::TANGGAL]);
+
+        Artisan::call('lembur:umum', ['tanggal' => self::TANGGAL, '--simpan' => true, '--tanpa-notif' => true]);
+
+        $this->assertSame(240, (int) OvertimeRecord::sole()->payable_minutes);
+        Queue::assertNothingPushed();
     }
 
     /** General Cleaning tidak boleh lewat lembur:tugaskan, yang menyambung setelah jam pulang shift. */

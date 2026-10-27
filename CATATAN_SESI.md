@@ -1124,8 +1124,10 @@ php artisan lembur:umum 2026-10-27 --tambah=11:08:00-13:00 --simpan
 #   1) buat kode semua orang (tanpa WhatsApp otomatis, kode tampil di terminal):
 php artisan lembur:kode-umum 2026-10-27 --pengali=2
 #   2) karyawan memasukkan kode di menu Lembur portal
-#   3) pratinjau & simpan: yang dihitung hanya yang SUDAH mengaktifkan kode
-#      (--tanpa-kode untuk melonggarkan); catatan yang ada DIISI, bukan dibuat baru
+#   3) pratinjau & simpan: kode dipakai OTOMATIS untuk yang punya scan (walau
+#      tak pernah minta/memasukkan), orangnya diberi tahu lewat WhatsApp
+#      (--tanpa-notif untuk menahan); --wajib-kode = hanya yang memasukkan
+#      kodenya sendiri. Catatan yang ada DIISI, bukan dibuat baru.
 php artisan lembur:umum 2026-10-27
 # OvertimeResolver::isiRealisasi melewati occasion ini (hitungDariScan) — kalau
 # tidak, "setelah jam pulang shift" menimpa jam dari scan. lembur:tugaskan dan

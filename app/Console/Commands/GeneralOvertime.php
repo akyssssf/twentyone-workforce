@@ -10,6 +10,7 @@ use App\Models\OvertimeRecord;
 use App\Models\RosterAssignment;
 use App\Models\User;
 use App\Services\Audit\AuditLogger;
+use App\Services\Notifications\Notifier;
 use App\Support\DateInput;
 use App\Support\Durasi;
 use Illuminate\Console\Command;
@@ -50,7 +51,8 @@ class GeneralOvertime extends Command
                             {--awal=05:00 : Scan sebelum jam ini tidak dianggap}
                             {--pin=* : Hanya PIN ini (boleh diulang)}
                             {--abaikan=* : Lewati PIN ini (boleh diulang)}
-                            {--tanpa-kode : Hitung semua yang punya scan, walau belum mengaktifkan kodenya}
+                            {--wajib-kode : Hanya yang SUDAH memasukkan kodenya sendiri (bawaan: kode dipakai otomatis untuk yang punya scan)}
+                            {--tanpa-notif : Jangan kirim pemberitahuan WhatsApp}
                             {--tambah=* : Jam manual untuk yang lupa scan: PIN:08:00-13:00 (boleh diulang; menggantikan hitungan dari scan)}
                             {--catatan=General cleaning : Tertulis di slip}
                             {--simpan : Simpan. Tanpa ini hanya menampilkan hitungannya}';
@@ -85,9 +87,11 @@ class GeneralOvertime extends Command
             ->when($pins !== [], fn ($c) => $c->filter(fn ($e) => in_array((string) $e->pin_device, $pins, true)))
             ->reject(fn ($e) => in_array((string) $e->pin_device, $abaikan, true));
 
-        // Kode lembur umum yang sudah dibuat (lembur:kode-umum). Kalau ada,
-        // yang dihitung hanya yang SUDAH mengaktifkan kodenya — itu syarat dari
-        // manajer. --tanpa-kode melonggarkannya.
+        // Kode lembur umum yang sudah dibuat (lembur:kode-umum). Bawaannya kode
+        // dipakai OTOMATIS untuk yang punya scan, walau orangnya tidak pernah
+        // memintanya atau memasukkannya (permintaan manajer); orangnya diberi
+        // tahu. --wajib-kode mengembalikan syarat lama: hanya yang memasukkan
+        // kodenya sendiri.
         $catatanKode = OvertimeRecord::query()
             ->with('overtimeRequest')
             ->whereDate('work_date', $tanggal)
@@ -96,7 +100,7 @@ class GeneralOvertime extends Command
             ->filter(fn (OvertimeRecord $r) => $r->overtimeRequest?->occasion === OccasionKode::GeneralCleaning)
             ->keyBy('employee_id');
 
-        $pakaiKode = $catatanKode->isNotEmpty() && ! $this->option('tanpa-kode');
+        $pakaiKode = $catatanKode->isNotEmpty() && $this->option('wajib-kode');
         $belumAktif = [];
 
         $baris = [];
@@ -154,7 +158,12 @@ class GeneralOvertime extends Command
                 continue;
             }
 
-            $baris[] = [$e->pin_device, $e->name, $jenis, $mulai->format('H:i:s'), $selesai->format('H:i'), Durasi::menit($menit), '×'.rtrim(rtrim(number_format($pengali, 1, ',', ''), '0'), ',')];
+            $punyaKodeCatatan = $catatanKode->get($e->id);
+            $statusKode = $punyaKodeCatatan === null
+                ? 'tanpa kode'
+                : ($punyaKodeCatatan->isActivated() ? 'dimasukkan sendiri' : 'dipakai otomatis');
+
+            $baris[] = [$e->pin_device, $e->name, $jenis, $mulai->format('H:i:s'), $selesai->format('H:i'), Durasi::menit($menit), '×'.rtrim(rtrim(number_format($pengali, 1, ',', ''), '0'), ','), $statusKode];
             $hitungan[] = ['employee' => $e, 'mulai' => $mulai, 'selesai' => $selesai, 'menit' => $menit, 'jenis' => $jenis];
         }
 
@@ -183,7 +192,7 @@ class GeneralOvertime extends Command
             $baris = array_values(array_filter($baris, fn ($b) => (string) $b[0] !== (string) $orang->pin_device));
             $hitungan = array_values(array_filter($hitungan, fn ($h) => $h['employee']->id !== $orang->id));
 
-            $baris[] = [$orang->pin_device, $orang->name, 'Manual', $dari->format('H:i:s'), $sampai->format('H:i'), Durasi::menit($menit), '×'.rtrim(rtrim(number_format($pengali, 1, ',', ''), '0'), ',')];
+            $baris[] = [$orang->pin_device, $orang->name, 'Manual', $dari->format('H:i:s'), $sampai->format('H:i'), Durasi::menit($menit), '×'.rtrim(rtrim(number_format($pengali, 1, ',', ''), '0'), ','), $catatanKode->has($orang->id) ? ($catatanKode->get($orang->id)->isActivated() ? 'dimasukkan sendiri' : 'dipakai otomatis') : 'tanpa kode'];
             $hitungan[] = ['employee' => $orang, 'mulai' => $dari, 'selesai' => $sampai, 'menit' => $menit, 'jenis' => 'Manual'];
         }
 
@@ -197,11 +206,10 @@ class GeneralOvertime extends Command
         }
 
         if ($belumAktif !== []) {
-            $this->warn('Ada scan tapi BELUM mengaktifkan kode (tidak dihitung): '.implode(', ', $belumAktif));
-            $this->line('  Kalau tetap mau dihitung: --tanpa-kode');
+            $this->warn('Ada scan tapi BELUM mengaktifkan kode (tidak dihitung karena --wajib-kode): '.implode(', ', $belumAktif));
         }
 
-        $this->table(['PIN', 'Nama', 'Roster', 'Masuk', 'Sampai', 'Lama', 'Pengali'], $baris);
+        $this->table(['PIN', 'Nama', 'Roster', 'Masuk', 'Sampai', 'Lama', 'Pengali', 'Kode'], $baris);
         $this->line(sprintf('%d orang · total %s (belum dikali pengali)', count($hitungan), Durasi::menit((int) collect($hitungan)->sum('menit'))));
 
         if (! $this->option('simpan')) {
@@ -216,7 +224,9 @@ class GeneralOvertime extends Command
         $tersimpan = 0;
         $dilewati = [];
 
-        DB::transaction(function () use ($hitungan, $tanggal, $pengali, $admin, $catatanKode, &$tersimpan, &$dilewati) {
+        $diberitahu = [];
+
+        DB::transaction(function () use ($hitungan, $tanggal, $pengali, $admin, $catatanKode, &$tersimpan, &$dilewati, &$diberitahu) {
             foreach ($hitungan as $h) {
                 $punyaKode = $catatanKode->get($h['employee']->id);
 
@@ -258,6 +268,8 @@ class GeneralOvertime extends Command
                     'note' => $catatan,
                 ];
 
+                $otomatis = $punyaKode !== null && ! $punyaKode->isActivated();
+
                 if ($punyaKode !== null) {
                     $punyaKode->update($nilai + ['activated_at' => $punyaKode->activated_at ?? now(), 'activated_by' => $punyaKode->activated_by ?? $admin?->id]);
                     $record = $punyaKode->fresh();
@@ -270,6 +282,13 @@ class GeneralOvertime extends Command
                 ]);
 
                 $tersimpan++;
+
+                // Kode yang tidak pernah dimasukkan orangnya dipakai OTOMATIS;
+                // orangnya diberi tahu supaya tidak bingung kenapa lemburnya
+                // tercatat, dan tahu jam yang dipakai.
+                if ($otomatis) {
+                    $diberitahu[] = ['employee' => $h['employee'], 'record' => $record, 'kode' => $punyaKode->overtimeRequest?->secret_code, 'mulai' => $h['mulai'], 'selesai' => $h['selesai'], 'menit' => $h['menit']];
+                }
             }
         });
 
@@ -278,6 +297,22 @@ class GeneralOvertime extends Command
             '--to' => $tanggal->toDateString(),
         ]);
 
+        $terkirim = 0;
+        $tanpaNomor = [];
+
+        if ($diberitahu !== [] && ! $this->option('tanpa-notif')) {
+            $notifier = app(Notifier::class);
+
+            foreach ($diberitahu as $d) {
+                if (blank($d['employee']->phone)) {
+                    $tanpaNomor[] = $d['employee']->name;
+                }
+
+                $notifier->whatsappToEmployee($d['employee'], 'Lembur General Cleaning tercatat', $this->pesan($d, $tanggal, $pengali));
+                $terkirim++;
+            }
+        }
+
         $this->newLine();
         $this->info("{$tersimpan} lembur tersimpan (tarif ×{$pengali}, masuk slip bonus periode yang mencakup {$tanggal->toDateString()}).");
 
@@ -285,7 +320,37 @@ class GeneralOvertime extends Command
             $this->warn('Dilewati karena sudah punya lembur berpengali di tanggal itu: '.implode(', ', $dilewati));
         }
 
+        if ($diberitahu !== []) {
+            $this->line(sprintf('%d orang kodenya dipakai otomatis; %s',
+                count($diberitahu),
+                $this->option('tanpa-notif') ? 'pemberitahuan TIDAK dikirim (--tanpa-notif).' : "{$terkirim} pemberitahuan WhatsApp diantrekan."));
+        }
+
+        if ($tanpaNomor !== []) {
+            $this->warn('Nomor WhatsApp belum diisi, pemberitahuan gagal untuk: '.implode(', ', $tanpaNomor));
+        }
+
         return self::SUCCESS;
+    }
+
+    /** @param  array<string, mixed>  $d */
+    protected function pesan(array $d, Carbon $tanggal, float $pengali): string
+    {
+        $x = rtrim(rtrim(number_format($pengali, 1, ',', ''), '0'), ',');
+
+        return sprintf(
+            "Halo %s, lembur General Cleaning %s sudah tercatat otomatis.\n".
+            "%s\n".
+            "Jam dihitung dari scan: %s–%s (%s), tarif lembur ×%s.\n".
+            'Kalau jam ini tidak sesuai, hubungi manajer.',
+            $d['employee']->name,
+            $tanggal->translatedFormat('d F Y'),
+            $d['kode'] ? "Kode lembur {$d['kode']} terpakai otomatis, kamu tidak perlu memasukkannya." : 'Kamu tidak perlu memasukkan kode.',
+            $d['mulai']->format('H:i'),
+            $d['selesai']->format('H:i'),
+            Durasi::menit($d['menit']),
+            $x,
+        );
     }
 
     protected function jam(Carbon $tanggal, string $hhmm, string $timezone): ?Carbon
