@@ -73,12 +73,18 @@ class RosterAssignment extends Model
      */
     public function mulaiEfektif(): ?string
     {
-        return $this->start_time_override ?? $this->shift?->start_time;
+        return $this->start_time_override
+            ?? ($this->shift !== null && $this->work_date !== null
+                ? $this->shift->jamPada($this->work_date)['start_time']
+                : $this->shift?->start_time);
     }
 
     public function selesaiEfektif(): ?string
     {
-        return $this->end_time_override ?? $this->shift?->end_time;
+        return $this->end_time_override
+            ?? ($this->shift !== null && $this->work_date !== null
+                ? $this->shift->jamPada($this->work_date)['end_time']
+                : $this->shift?->end_time);
     }
 
     /** Hari ini jamnya menyimpang dari master shift? */

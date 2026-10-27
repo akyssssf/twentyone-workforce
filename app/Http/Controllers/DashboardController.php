@@ -55,6 +55,32 @@ class DashboardController extends Controller
             ->get()
             ->groupBy('shift_id');
 
+        // Orang yang TERJADWAL tapi belum punya rekap untuk shift itu. Rekap
+        // baru terbentuk saat ada scan di jendela shift-nya (atau saat jendela
+        // tutup, lalu jadi alpha) — jadi sebelum itu orangnya tidak muncul di
+        // tabel absensi, dan itulah yang terlihat seperti "hanya ada pagi".
+        // Scan di LUAR jendela (mis. pagi hari untuk shift malam) tidak dihitung.
+        $sudahAda = $rekap->mapWithKeys(fn (Attendance $a) => [$a->employee_id.'-'.$a->shift_id => true]);
+        $sekarang = Carbon::now($timezone);
+        $hariIni = $tanggal->isSameDay($sekarang);
+
+        $belumScan = $jadwal->flatten(1)
+            ->reject(fn (RosterAssignment $a) => $sudahAda->has($a->employee_id.'-'.$a->shift_id))
+            ->map(function (RosterAssignment $a) use ($tanggal, $sekarang, $hariIni, $timezone) {
+                $jam = substr((string) $a->mulaiEfektif(), 0, 5);
+                $mulai = Carbon::parse($tanggal->toDateString().' '.$jam, $timezone);
+
+                return [
+                    'kunci' => $a->employee_id.'-'.$a->shift_id,
+                    'nama' => $a->employee?->name,
+                    'shift' => $a->shift?->name,
+                    'jam' => $jam,
+                    // Sudah lewat 15 menit dari jam masuk dan belum ada scan sama sekali.
+                    'lewat' => $hariIni && $sekarang->greaterThanOrEqualTo($mulai->copy()->addMinutes(15)),
+                ];
+            })
+            ->values();
+
         $urutan = $request->query('urutan', 'nama');
         $kondisi = $request->query('kondisi', '');
         $shiftFilter = $request->query('shift_id', '');
@@ -70,6 +96,8 @@ class DashboardController extends Controller
             ],
             'scan' => $scan,
             'jadwal' => $jadwal,
+            'belumScan' => $belumScan,
+            'jamSekarang' => $sekarang->format('H:i'),
             'shifts' => Shift::query()->where('is_active', true)->get(),
 
             // Rekap yang TIDAK menempel ke satu pun baris roster: shift-nya

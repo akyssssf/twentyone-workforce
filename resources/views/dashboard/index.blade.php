@@ -114,6 +114,16 @@
     </div>
 @endif
 
+@php $terlewat = $belumScan->where('lewat', true); @endphp
+@if ($terlewat->isNotEmpty())
+    <div class="pemberitahuan mb-5 border-red-200 bg-red-50 text-red-900">
+        <strong>{{ $terlewat->count() }} orang terjadwal belum scan</strong> padahal shift-nya sudah mulai (sekarang {{ $jamSekarang }}):
+        {{ $terlewat->map(fn ($b) => $b['nama'].' ('.$b['shift'].' '.$b['jam'].')')->implode(', ') }}.
+        Mereka belum muncul di tabel absensi karena <b>belum ada scan di jendela shift-nya</b>.
+        Scan di luar jendela (mis. pagi hari untuk shift malam) tidak dihitung. Kalau sampai jendelanya tutup tetap tanpa scan, barulah tercatat alpha.
+    </div>
+@endif
+
 @if ($tanpaRoster->isNotEmpty())
     <div class="pemberitahuan mb-5 border-orange-200 bg-orange-50 text-orange-900">
         <strong>{{ $tanpaRoster->count() }} orang belum ada di roster hari ini:</strong>
@@ -214,6 +224,11 @@
                                     <x-avatar :employee="$a->employee" ukuran="sm" />
                                     <span class="h-2 w-2 rounded-full" style="background: {{ $a->division?->color ?? '#94a3b8' }}"></span>
                                     {{ $a->employee?->name }}
+                                    @php $b = $belumScan->firstWhere('kunci', $a->employee_id.'-'.$a->shift_id); @endphp
+                                    @if ($b)
+                                        <span class="rounded px-1 text-[10px] font-medium {{ $b['lewat'] ? 'bg-red-50 text-red-700 ring-1 ring-inset ring-red-200' : 'bg-slate-200 text-slate-500' }}"
+                                              title="Belum ada scan di jendela shift ini">belum scan</span>
+                                    @endif
                                 </span>
                             @endforeach
                         </div>

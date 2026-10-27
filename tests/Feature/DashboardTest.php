@@ -9,6 +9,7 @@ use App\Models\Shift;
 use App\Models\ShiftTimeOverride;
 use App\Models\User;
 use App\Services\Attendance\AttendanceComputer;
+use App\Services\Roster\RosterService;
 use App\Support\Settings;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
@@ -410,5 +411,47 @@ class DashboardTest extends TestCase
             ->assertOk()
             ->assertSee('14:00–23:30')
             ->assertDontSee('14:00–01:00');
+    }
+
+    /**
+     * Terjadwal shift malam, hanya scan pagi hari (mis. kerja bakti), dan jam
+     * sudah lewat shift mulai: tidak ada rekap (scan pagi di luar jendela
+     * malam), jadi orangnya tidak ada di tabel absensi. Sebelumnya itu tampak
+     * seperti "hanya ada shift pagi"; sekarang dijelaskan.
+     */
+    public function test_terjadwal_tapi_belum_scan_ditandai(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-08-10 18:00:00', 'Asia/Jakarta'));
+
+        $malam = Shift::factory()->create([
+            'name' => 'Shift Malam Uji', 'start_time' => '14:00:00', 'end_time' => '23:30:00',
+            'show_hours' => true, 'is_active' => true,
+        ]);
+
+        $budi = Employee::factory()->create(['pin_device' => '7', 'name' => 'Budi Malam', 'default_shift_id' => $malam->id]);
+
+        $service = app(RosterService::class);
+        $service->assign($service->findOrCreate(2026, 8), $budi, Carbon::parse('2026-08-10'), $malam->id);
+
+        $this->scan('7', '2026-08-10 07:50:00');
+
+        app(AttendanceComputer::class)->computeDate(Carbon::parse('2026-08-10', 'Asia/Jakarta'));
+
+        $this->actingAs(User::factory()->create())
+            ->get('/dashboard?tanggal=2026-08-10')
+            ->assertOk()
+            ->assertSee('1 orang terjadwal belum scan')
+            ->assertSee('Budi Malam (Shift Malam Uji 14:00)')
+            ->assertSee('belum ada scan di jendela shift-nya')
+            ->assertSee('belum scan');
+
+        // Sudah scan di jendela shiftnya: penanda hilang.
+        $this->scan('7', '2026-08-10 13:55:00');
+        app(AttendanceComputer::class)->computeDate(Carbon::parse('2026-08-10', 'Asia/Jakarta'));
+
+        $this->actingAs(User::factory()->create())
+            ->get('/dashboard?tanggal=2026-08-10')
+            ->assertOk()
+            ->assertDontSee('orang terjadwal belum scan');
     }
 }

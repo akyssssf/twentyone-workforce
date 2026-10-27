@@ -986,6 +986,12 @@ menganggap sebuah perintah selesai, **lihat outputnya**.
     Tailwind harus dibuang dari salinan (`onclone`) karena aturan dasarnya
     memakai oklch untuk setiap elemen. Angka & kalimat slip disusun satu kali di
     `App\Support\SlipView` dan dipakai tampilan layar maupun PDF.
+18. **Rekap absensi baru ADA setelah ada scan DI JENDELA shift-nya.** Orang yang
+    terjadwal malam tapi hanya scan pagi (kerja bakti/General Cleaning) tidak
+    muncul di tabel Absensi Hari Ini sampai ia scan setelah 10:00 — atau sampai
+    jendela tutup (03:30), baru jadi alpha. Dulu itu terlihat seperti "hanya ada
+    shift pagi" tanpa penjelasan; dashboard kini menandai "belum scan"
+    (kotak merah + lencana di panel roster) 15 menit setelah jam shift mulai.
 
 ## 8. Perintah yang sering dipakai (jalankan di server, folder live)
 
@@ -1090,6 +1096,10 @@ php artisan lembur:batal <pin> <tanggal> --alasan="..."
 # Rincian telat PER ORANG (tiap kejadian + estimasi potongan + ringkasan peringkat);
 # tanpa --from = awal periode gajian berjalan
 php artisan attendance:telat [--from=2026-09-22 --to=2026-10-18 --pin=15]
+
+# Semua karyawan pada SATU tanggal: jadwal + scan masing-masing (audit "kenapa
+# si A tidak ada di tabel absensi")
+php artisan attendance:scan --from=2026-10-27
 
 # Semua scan mentah satu orang lintas hari + jadwalnya (cari jadwal yang tergeser:
 # alpha padahal ada scan di hari yang jadwalnya libur)

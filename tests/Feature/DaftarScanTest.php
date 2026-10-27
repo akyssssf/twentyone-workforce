@@ -46,4 +46,34 @@ class DaftarScanTest extends TestCase
 
         Carbon::setTestNow();
     }
+
+    /** Tanpa PIN: semua karyawan pada satu tanggal, dengan jadwal dan scan masing-masing. */
+    public function test_tanpa_pin_menampilkan_semua_karyawan(): void
+    {
+        $this->seed(MasterDataSeeder::class);
+        Carbon::setTestNow(Carbon::parse('2026-10-28 12:00:00', 'Asia/Jakarta'));
+
+        $malam = Shift::where('code', 'malam')->firstOrFail();
+        $a = Employee::factory()->create(['branch_id' => Branch::current()->id, 'name' => 'Ada Scan', 'pin_device' => '81']);
+        Employee::factory()->create(['branch_id' => Branch::current()->id, 'name' => 'Tanpa Scan', 'pin_device' => '82']);
+
+        $service = app(RosterService::class);
+        $service->assign($service->findOrCreate(2026, 10), $a, Carbon::parse('2026-10-27'), $malam->id);
+
+        $at = Carbon::parse('2026-10-27 07:50:00', 'Asia/Jakarta');
+        AttendanceLog::create([
+            'cloud_id' => 'UJI', 'employee_id' => $a->id, 'pin' => '81',
+            'scanned_at' => $at, 'scan_minute' => $at->copy()->startOfMinute(), 'source' => 'webhook',
+        ]);
+
+        $this->assertSame(0, Artisan::call('attendance:scan', ['--from' => '2026-10-27']));
+        $keluaran = Artisan::output();
+
+        $this->assertStringContainsString('Ada Scan', $keluaran);
+        $this->assertStringContainsString('07:50', $keluaran);
+        $this->assertStringContainsString('Tanpa Scan', $keluaran);
+        $this->assertStringContainsString('(belum ada jadwal)', $keluaran);
+
+        Carbon::setTestNow();
+    }
 }

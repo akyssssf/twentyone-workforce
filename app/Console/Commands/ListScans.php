@@ -20,7 +20,7 @@ use Illuminate\Console\Command;
 class ListScans extends Command
 {
     protected $signature = 'attendance:scan
-                            {pin : PIN karyawan}
+                            {pin? : PIN karyawan; kosong = SEMUA karyawan pada satu tanggal}
                             {--from= : Tanggal awal (YYYY-MM-DD)}
                             {--to= : Tanggal akhir, kosong berarti sama dengan --from}';
 
@@ -28,6 +28,10 @@ class ListScans extends Command
 
     public function handle(): int
     {
+        if ($this->argument('pin') === null) {
+            return $this->semuaOrang();
+        }
+
         $employee = Employee::where('pin_device', (string) $this->argument('pin'))->first();
 
         if ($employee === null) {
@@ -115,6 +119,59 @@ class ListScans extends Command
         }
 
         $this->line('Jam scan di sekitar tengah malam (00:00–03:30) milik shift hari SEBELUMNYA.');
+
+        return self::SUCCESS;
+    }
+
+    /**
+     * Semua karyawan pada SATU tanggal: siapa terjadwal apa, dan semua scan
+     * mentahnya. Untuk pertanyaan "kenapa si A tidak ada di tabel absensi" —
+     * jawabannya hampir selalu terlihat di sini (tidak ada scan, atau scannya
+     * jatuh di luar jendela shift).
+     */
+    protected function semuaOrang(): int
+    {
+        if (! $this->option('from')) {
+            $this->error('Isi --from (satu tanggal), mis. attendance:scan --from=2026-10-27');
+
+            return self::FAILURE;
+        }
+
+        $tanggal = DateInput::parseOrFail((string) $this->option('from'), 'from');
+        $timezone = config('attendance.timezone', 'Asia/Jakarta');
+
+        $baris = [];
+
+        foreach (Employee::query()->tracked()->employed()->orderBy('name')->get() as $e) {
+            $rencana = RosterAssignment::query()
+                ->with('shift')
+                ->where('employee_id', $e->id)
+                ->whereDate('work_date', $tanggal)
+                ->where('status', '!=', 'cancelled')
+                ->get()
+                ->map(fn (RosterAssignment $r) => $r->shift
+                    ? $r->shift->name.' '.substr((string) $r->mulaiEfektif(), 0, 5)
+                    : 'LIBUR')
+                ->implode(' + ');
+
+            $scan = AttendanceLog::query()
+                ->where('pin', (string) $e->pin_device)
+                ->whereBetween('scanned_at', [
+                    $tanggal->copy()->setTimezone($timezone)->startOfDay(),
+                    $tanggal->copy()->setTimezone($timezone)->endOfDay(),
+                ])
+                ->orderBy('scanned_at')
+                ->get()
+                ->map(fn (AttendanceLog $l) => $l->scanned_at->copy()->setTimezone($timezone)->format('H:i'))
+                ->implode('  ');
+
+            $baris[] = [$e->pin_device, $e->name, $rencana !== '' ? $rencana : '(belum ada jadwal)', $scan !== '' ? $scan : '—'];
+        }
+
+        $this->newLine();
+        $this->line('Semua karyawan — '.$tanggal->translatedFormat('l, d F Y'));
+        $this->table(['PIN', 'Nama', 'Jadwal', 'Scan hari ini'], $baris);
+        $this->line('Scan sebelum jendela shift dibuka (shift malam: 10:00) tidak dihitung ke shift itu.');
 
         return self::SUCCESS;
     }
