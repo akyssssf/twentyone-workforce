@@ -74,17 +74,17 @@ class LemburUmumTest extends TestCase
         $this->orang('Libur Pulang', '11', null, ['08:05:00', '12:30:00']);     // libur: 08:05 → 12:30 = 4j25m
         $this->orang('Libur Lewat', '12', null, ['08:00:00', '13:40:00']);      // pulang lewat batas → dipotong 13:00 = 5j
         $this->orang('Libur Tanpa Pulang', '13', null, ['08:00:00']);           // tanpa scan pulang → sampai 13:00 = 5j
-        $this->orang('Shift Malam', '14', 'malam', ['08:10:00', '13:52:00']);   // 08:10 → 14:00 = 5j50m
-        $this->orang('Shift Pagi', '15', 'pagi', ['07:50:00', '18:02:00']);     // pagi biasa: tidak ada tambahan
-        $this->orang('Malam Biasa', '16', 'malam', ['13:50:00']);               // masuk shiftnya sendiri: bukan lembur pagi
+        $this->orang('Shift Malam', '14', 'malam', ['08:10:00', '13:52:00']);   // 08:10 → batas 13:00 = 4j50m
+        $this->orang('Shift Pagi', '15', 'pagi', ['07:50:00', '18:02:00']);     // pagi biasa: DIBATASI lewat --abaikan, bukan lewat roster
+        $this->orang('Malam Biasa', '16', 'malam', ['13:50:00']);               // baru scan setelah batas: bukan lembur pagi
 
-        $this->assertSame(0, Artisan::call('lembur:umum', ['tanggal' => self::TANGGAL]));
+        $this->assertSame(0, Artisan::call('lembur:umum', ['tanggal' => self::TANGGAL, '--abaikan' => ['15']]));
         $keluaran = Artisan::output();
 
         $this->assertStringContainsString('4j 25m', $keluaran);
         $this->assertStringContainsString('Libur Lewat', $keluaran);
-        $this->assertStringContainsString('5j 50m', $keluaran);
-        $this->assertStringNotContainsString('Shift Pagi ', $keluaran, 'yang pagi tidak dapat tambahan');
+        $this->assertStringContainsString('4j 50m', $keluaran);
+        $this->assertStringNotContainsString('Shift Pagi', $keluaran, 'yang di-abaikan tidak ikut');
         $this->assertStringNotContainsString('Malam Biasa', $keluaran);
         $this->assertStringContainsString('4 orang', $keluaran);
         $this->assertStringContainsString('Belum disimpan', $keluaran);
@@ -235,5 +235,26 @@ class LemburUmumTest extends TestCase
             'pin' => '15', 'tanggal' => self::TANGGAL, '--keperluan' => 'general_cleaning', '--alasan' => 'uji',
         ]));
         $this->assertSame(0, OvertimeRecord::count());
+    }
+
+    /**
+     * Roster boleh sudah diperbaiki jadi "pagi" untuk acaranya: yang menentukan
+     * lembur adalah scan dan siapa yang berhak (--pin), BUKAN rosternya. Dulu
+     * orang yang shift malamnya diubah ke pagi mendadak dianggap pagi biasa
+     * tanpa lembur.
+     */
+    public function test_roster_pagi_tidak_menghilangkan_lembur_kalau_berhak(): void
+    {
+        $this->orang('Dulu Malam', '11', 'pagi', ['07:37:00']);   // rosternya sudah pagi, hanya scan masuk
+
+        $this->artisan('lembur:umum '.self::TANGGAL.' --pin=11')
+            ->expectsOutputToContain('1 orang')
+            ->assertSuccessful();
+
+        Artisan::call('lembur:umum', ['tanggal' => self::TANGGAL, '--pin' => ['11'], '--simpan' => true]);
+
+        $r = OvertimeRecord::sole();
+        $this->assertSame(323, (int) $r->payable_minutes, '07:37 → 13:00 (tanpa scan pulang)');
+        $this->assertSame(2.0, (float) $r->multiplier);
     }
 }

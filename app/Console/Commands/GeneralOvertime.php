@@ -28,15 +28,15 @@ use Illuminate\Support\Facades\DB;
  * angka ditampilkan dulu (tanpa --simpan tidak ada yang berubah) supaya
  * jumlah jamnya bisa diperiksa orang sebelum jadi uang.
  *
- * Aturan per orang, menurut ROSTER hari itu:
- *   - libur / tidak terjadwal : dari scan pertama sampai scan terakhir di
- *                                rentang, dibatasi --batas-libur (bawaan 13:00)
- *   - shift sore/malam/middle : dari scan pertama (yang pagi) sampai jam mulai
- *                                shiftnya — setelah itu shift biasa berjalan
- *   - shift pagi              : tidak ada lembur tambahan (datang pagi memang
- *                                jadwalnya)
- * Jangan ubah roster hari itu menjadi "pagi semua": orang yang shift malam
- * lalu dianggap pagi biasa dan tidak mendapat lembur.
+ * Aturan, sama untuk semua orang dan TIDAK bergantung pada roster:
+ *   - mulai  = scan pertama hari itu (setelah --awal, bawaan 05:00)
+ *   - selesai = scan terakhir sebelum --batas (bawaan 13:00), atau --batas itu
+ *               sendiri kalau tidak ada scan pulang; tidak pernah melewatinya
+ *   - yang berhak: dibatasi --pin (hanya mereka) atau --abaikan (lewati mereka);
+ *     kalau kode sudah dibuat (lembur:kode-umum), hanya yang sudah
+ *     mengaktifkan kodenya.
+ * Kolom Roster di tabel cuma keterangan. Roster boleh (dan sebaiknya) sudah
+ * diperbaiki jadi "pagi" untuk acara itu.
  *
  * Disahkan atas nama admin dan dilindungi dari perhitungan ulang otomatis.
  * Scan adalah buktinya, jadi tanpa kode aktivasi.
@@ -46,7 +46,7 @@ class GeneralOvertime extends Command
     protected $signature = 'lembur:umum
                             {tanggal : Tanggal acara (YYYY-MM-DD)}
                             {--pengali=2 : Pengali tarif lembur biasa}
-                            {--batas-libur=13:00 : Jam paling akhir yang dihitung untuk yang libur}
+                            {--batas=13:00 : Jam paling akhir yang dihitung untuk SEMUA orang}
                             {--awal=05:00 : Scan sebelum jam ini tidak dianggap}
                             {--pin=* : Hanya PIN ini (boleh diulang)}
                             {--abaikan=* : Lewati PIN ini (boleh diulang)}
@@ -70,10 +70,10 @@ class GeneralOvertime extends Command
         }
 
         $awal = $this->jam($tanggal, (string) $this->option('awal'), $timezone);
-        $batasLibur = $this->jam($tanggal, (string) $this->option('batas-libur'), $timezone);
+        $batas = $this->jam($tanggal, (string) $this->option('batas'), $timezone);
 
-        if ($awal === null || $batasLibur === null) {
-            $this->error('Format jam harus HH:MM, mis. --batas-libur=13:00');
+        if ($awal === null || $batas === null) {
+            $this->error('Format jam harus HH:MM, mis. --batas=13:00');
 
             return self::FAILURE;
         }
@@ -103,16 +103,22 @@ class GeneralOvertime extends Command
         $hitungan = [];
 
         foreach ($karyawan as $e) {
-            $assignments = RosterAssignment::query()
+            // Roster hanya KETERANGAN di tabel, bukan penentu. Penentu dulu
+            // rosternya (libur / shift sore / pagi), dan itu rusak begitu
+            // rosternya diperbaiki jadi "pagi semua" — orang yang shift
+            // malamnya diubah ke pagi mendadak dianggap pagi biasa tanpa
+            // lembur. Sekarang yang menentukan: ada scan, dan (kalau kode
+            // sudah dibuat) sudah mengaktifkan kodenya. Siapa yang BERHAK
+            // lembur dibatasi lewat --pin atau --abaikan.
+            $jenis = RosterAssignment::query()
                 ->with('shift')
                 ->where('employee_id', $e->id)
                 ->whereDate('work_date', $tanggal)
                 ->where('status', '!=', AssignmentStatus::Cancelled->value)
-                ->get();
+                ->get()
+                ->map(fn (RosterAssignment $r) => $r->shift?->name ?? 'LIBUR')
+                ->implode(' + ') ?: 'tanpa roster';
 
-            $kerja = $assignments->filter(fn (RosterAssignment $a) => $a->status === AssignmentStatus::Scheduled && $a->shift !== null);
-
-            // Sebelum jam batas terjauh: scan malam hari berikutnya milik shift lain.
             $scan = AttendanceLog::query()
                 ->where('pin', (string) $e->pin_device)
                 ->whereBetween('scanned_at', [$awal, $tanggal->copy()->setTimezone($timezone)->setTime(23, 59, 59)])
@@ -124,38 +130,17 @@ class GeneralOvertime extends Command
                 continue;
             }
 
-            if ($kerja->isEmpty()) {
-                $jenis = 'Libur';
-                $mulai = $scan->first();
-                $dalamRentang = $scan->filter(fn (Carbon $s) => $s->lessThanOrEqualTo($batasLibur->copy()->addMinutes(30)));
+            $mulai = $scan->first();
 
-                if ($mulai->greaterThan($batasLibur)) {
-                    continue;
-                }
-
-                // Tanpa scan pulang: dianggap sampai batas. Dengan scan pulang
-                // sebelum batas: sampai scan itu. Tidak pernah melewati batas.
-                $selesai = $dalamRentang->count() > 1 ? $dalamRentang->last() : $batasLibur->copy();
-                $selesai = $selesai->greaterThan($batasLibur) ? $batasLibur->copy() : $selesai;
-            } else {
-                $paling = $kerja->sortBy(fn (RosterAssignment $a) => $a->shift->jamPada($tanggal)['start_time'])->first();
-                $mulaiShift = $this->jam($tanggal, substr((string) $paling->shift->jamPada($tanggal)['start_time'], 0, 5), $timezone);
-
-                // Shift pagi: datang pagi memang jadwalnya, tidak ada tambahan.
-                if ($mulaiShift->hour < 12) {
-                    continue;
-                }
-
-                $jenis = 'Shift '.($paling->shift->name);
-                $mulai = $scan->first();
-
-                // Scan pertama sudah dekat jam shift: itu scan masuk shiftnya, bukan lembur pagi.
-                if ($mulai->greaterThanOrEqualTo($mulaiShift->copy()->subMinutes(45))) {
-                    continue;
-                }
-
-                $selesai = $mulaiShift;
+            if ($mulai->greaterThan($batas)) {
+                continue;
             }
+
+            // Tanpa scan pulang: dianggap sampai batas. Dengan scan pulang
+            // sebelum batas: sampai scan itu. Tidak pernah melewati batas.
+            $dalamRentang = $scan->filter(fn (Carbon $x) => $x->lessThanOrEqualTo($batas->copy()->addMinutes(30)));
+            $selesai = $dalamRentang->count() > 1 ? $dalamRentang->last() : $batas->copy();
+            $selesai = $selesai->greaterThan($batas) ? $batas->copy() : $selesai;
 
             $menit = (int) max(0, floor($mulai->diffInSeconds($selesai) / 60));
 
@@ -216,7 +201,7 @@ class GeneralOvertime extends Command
             $this->line('  Kalau tetap mau dihitung: --tanpa-kode');
         }
 
-        $this->table(['PIN', 'Nama', 'Jenis', 'Masuk', 'Sampai', 'Lama', 'Pengali'], $baris);
+        $this->table(['PIN', 'Nama', 'Roster', 'Masuk', 'Sampai', 'Lama', 'Pengali'], $baris);
         $this->line(sprintf('%d orang · total %s (belum dikali pengali)', count($hitungan), Durasi::menit((int) collect($hitungan)->sum('menit'))));
 
         if (! $this->option('simpan')) {

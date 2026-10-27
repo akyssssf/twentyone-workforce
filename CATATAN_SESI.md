@@ -1106,10 +1106,14 @@ php artisan attendance:scan --from=2026-10-27
 php artisan attendance:scan <pin> --from=2026-10-12 --to=2026-10-18
 
 # Lembur hari kerja bersama (General Cleaning 27 Okt 2026, tarif x2) DARI JAM SCAN.
-# Tanpa --simpan hanya menampilkan hitungan per orang. Libur: scan pertama s/d
-# scan terakhir, maks 13:00. Shift sore/malam/middle: scan pagi s/d jam mulai
-# shiftnya. Shift pagi: tidak ada tambahan. JANGAN ubah roster hari itu jadi
-# "pagi semua". Pengali disimpan di overtime_records.multiplier (menit tetap nyata).
+# Tanpa --simpan hanya menampilkan hitungan per orang. Aturannya SAMA untuk semua
+# dan TIDAK bergantung roster: mulai = scan pertama, selesai = scan terakhir
+# sebelum --batas (13:00) atau --batas itu sendiri. Yang berhak dibatasi --pin /
+# --abaikan (+ aktivasi kode kalau kode sudah dibuat). Roster hari itu BOLEH
+# diperbaiki jadi pagi. (Versi pertama menentukan jenis dari roster dan menyuruh
+# roster TIDAK diubah — itu salah: pemilik bilang "semua shift pagi", dan yang
+# shift malam jadi alpha tengah malam karena tak ada scan di jendela malam.)
+# Pengali disimpan di overtime_records.multiplier (menit tetap nyata).
 php artisan lembur:umum 2026-10-27 --pengali=2
 php artisan lembur:umum 2026-10-27 --pengali=2 --abaikan=7 --simpan
 # Yang lupa scan / scannya keliru: jam manual (menggantikan hitungan scan untuk PIN itu)
