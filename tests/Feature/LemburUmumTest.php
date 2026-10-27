@@ -3,7 +3,6 @@
 namespace Tests\Feature;
 
 use App\Enums\UserRole;
-use App\Jobs\SendWhatsAppMessage;
 use App\Models\Attendance;
 use App\Models\AttendanceLog;
 use App\Models\Branch;
@@ -191,6 +190,8 @@ class LemburUmumTest extends TestCase
         $otomatis = $this->orang('Tidak Minta', '12', null, ['08:00:00', '12:00:00']);
         $tidakDatang = $this->orang('Tidak Datang', '13', null, []);
 
+        $akun = User::factory()->create(['role' => UserRole::Karyawan, 'employee_id' => $otomatis->id]);
+
         Artisan::call('lembur:kode-umum', ['tanggal' => self::TANGGAL]);
 
         $kodeSendiri = OvertimeRequest::query()
@@ -214,12 +215,31 @@ class LemburUmumTest extends TestCase
 
         $this->assertSame(0, (int) OvertimeRecord::where('employee_id', $tidakDatang->id)->sole()->payable_minutes);
 
-        // Pemberitahuan HANYA untuk yang kodenya dipakai otomatis.
-        Queue::assertPushed(SendWhatsAppMessage::class, 1);
+        $this->assertTrue($r->fresh()->activated_auto);
+        $this->assertFalse(OvertimeRecord::where('employee_id', $sendiri->id)->sole()->activated_auto, 'yang memasukkan sendiri bukan otomatis');
+
+        // Pemberitahuan LEWAT PORTAL, bukan WhatsApp, dan hanya untuk yang kodenya dipakai otomatis.
+        Queue::assertNothingPushed();
         $pesan = Notification::sole();
+        $this->assertSame($akun->id, $pesan->user_id);
         $this->assertStringContainsString('terpakai otomatis', $pesan->body);
         $this->assertStringContainsString('08:00–12:00', $pesan->body);
         $this->assertStringContainsString('×2', $pesan->body);
+
+        // Halaman Lembur karyawan memuat kartu "tercatat otomatis".
+        $this->actingAs($akun)->get(route('karyawan.lembur.index'))
+            ->assertOk()
+            ->assertSee('tercatat otomatis')
+            ->assertSee('Anda tidak perlu memasukkannya')
+            ->assertSee('08:00')
+            ->assertSee('12:00')
+            ->assertSee('×2');
+
+        // Yang memasukkan kodenya sendiri tidak mendapat kartu itu.
+        $akunSendiri = User::factory()->create(['role' => UserRole::Karyawan, 'employee_id' => $sendiri->id]);
+        $this->actingAs($akunSendiri)->get(route('karyawan.lembur.index'))
+            ->assertOk()
+            ->assertDontSee('tercatat otomatis');
 
         Artisan::call('attendance:compute', ['--from' => self::TANGGAL, '--to' => self::TANGGAL]);
         $this->assertSame(240, (int) $r->fresh()->payable_minutes);
@@ -248,15 +268,14 @@ class LemburUmumTest extends TestCase
 
     public function test_tanpa_notif_tidak_mengirim_apa_apa(): void
     {
-        Queue::fake();
-
-        $this->orang('Tidak Minta', '12', null, ['08:00:00', '12:00:00']);
+        $e = $this->orang('Tidak Minta', '12', null, ['08:00:00', '12:00:00']);
+        User::factory()->create(['role' => UserRole::Karyawan, 'employee_id' => $e->id]);
         Artisan::call('lembur:kode-umum', ['tanggal' => self::TANGGAL]);
 
         Artisan::call('lembur:umum', ['tanggal' => self::TANGGAL, '--simpan' => true, '--tanpa-notif' => true]);
 
         $this->assertSame(240, (int) OvertimeRecord::sole()->payable_minutes);
-        Queue::assertNothingPushed();
+        $this->assertSame(0, Notification::count(), 'tanpa pemberitahuan di portal');
     }
 
     /** General Cleaning tidak boleh lewat lembur:tugaskan, yang menyambung setelah jam pulang shift. */

@@ -52,7 +52,7 @@ class GeneralOvertime extends Command
                             {--pin=* : Hanya PIN ini (boleh diulang)}
                             {--abaikan=* : Lewati PIN ini (boleh diulang)}
                             {--wajib-kode : Hanya yang SUDAH memasukkan kodenya sendiri (bawaan: kode dipakai otomatis untuk yang punya scan)}
-                            {--tanpa-notif : Jangan kirim pemberitahuan WhatsApp}
+                            {--tanpa-notif : Jangan buat pemberitahuan di portal karyawan}
                             {--tambah=* : Jam manual untuk yang lupa scan: PIN:08:00-13:00 (boleh diulang; menggantikan hitungan dari scan)}
                             {--catatan=General cleaning : Tertulis di slip}
                             {--simpan : Simpan. Tanpa ini hanya menampilkan hitungannya}';
@@ -271,7 +271,13 @@ class GeneralOvertime extends Command
                 $otomatis = $punyaKode !== null && ! $punyaKode->isActivated();
 
                 if ($punyaKode !== null) {
-                    $punyaKode->update($nilai + ['activated_at' => $punyaKode->activated_at ?? now(), 'activated_by' => $punyaKode->activated_by ?? $admin?->id]);
+                    $punyaKode->update($nilai + [
+                        'activated_at' => $punyaKode->activated_at ?? now(),
+                        'activated_by' => $punyaKode->activated_by ?? $admin?->id,
+                        // Ditandai supaya halaman Lembur karyawan bisa bilang
+                        // "tercatat otomatis" (hanya kalau orangnya tidak memasukkan sendiri).
+                        'activated_auto' => $punyaKode->isActivated() ? $punyaKode->activated_auto : true,
+                    ]);
                     $record = $punyaKode->fresh();
                 } else {
                     $record = OvertimeRecord::create($nilai);
@@ -297,18 +303,25 @@ class GeneralOvertime extends Command
             '--to' => $tanggal->toDateString(),
         ]);
 
+        // Pemberitahuan LEWAT PORTAL (bukan WhatsApp): satu baris di lonceng
+        // beranda, dan kartu "tercatat otomatis" di halaman Lembur yang dibaca
+        // dari catatan lemburnya sendiri.
         $terkirim = 0;
-        $tanpaNomor = [];
+        $tanpaAkun = [];
 
         if ($diberitahu !== [] && ! $this->option('tanpa-notif')) {
             $notifier = app(Notifier::class);
 
             foreach ($diberitahu as $d) {
-                if (blank($d['employee']->phone)) {
-                    $tanpaNomor[] = $d['employee']->name;
+                $akun = $d['employee']->user;
+
+                if ($akun === null) {
+                    $tanpaAkun[] = $d['employee']->name;
+
+                    continue;
                 }
 
-                $notifier->whatsappToEmployee($d['employee'], 'Lembur General Cleaning tercatat', $this->pesan($d, $tanggal, $pengali));
+                $notifier->send($akun, 'Lembur General Cleaning tercatat', $this->pesan($d, $tanggal, $pengali), route('karyawan.lembur.index'));
                 $terkirim++;
             }
         }
@@ -323,11 +336,11 @@ class GeneralOvertime extends Command
         if ($diberitahu !== []) {
             $this->line(sprintf('%d orang kodenya dipakai otomatis; %s',
                 count($diberitahu),
-                $this->option('tanpa-notif') ? 'pemberitahuan TIDAK dikirim (--tanpa-notif).' : "{$terkirim} pemberitahuan WhatsApp diantrekan."));
+                $this->option('tanpa-notif') ? 'pemberitahuan di portal TIDAK dibuat (--tanpa-notif).' : "{$terkirim} pemberitahuan muncul di portal mereka."));
         }
 
-        if ($tanpaNomor !== []) {
-            $this->warn('Nomor WhatsApp belum diisi, pemberitahuan gagal untuk: '.implode(', ', $tanpaNomor));
+        if ($tanpaAkun !== []) {
+            $this->warn('Belum punya akun portal (tidak ada pemberitahuan, lemburnya tetap tersimpan): '.implode(', ', $tanpaAkun));
         }
 
         return self::SUCCESS;

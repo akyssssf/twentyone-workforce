@@ -178,6 +178,17 @@ class EmployeePortalController extends Controller
 
             'belumAktif' => app(\App\Services\Requests\OvertimeCodeService::class)->pendingFor($employee),
 
+            // Lembur yang kodenya dipakai OTOMATIS oleh sistem: orangnya tidak
+            // memasukkan apa pun, jadi halaman ini yang memberi tahu.
+            'otomatis' => \App\Models\OvertimeRecord::query()
+                ->with('overtimeRequest')
+                ->where('employee_id', $employee->id)
+                ->where('activated_auto', true)
+                ->where('status', 'confirmed')
+                ->where('work_date', '>=', now()->subDays(30)->startOfDay())
+                ->orderByDesc('work_date')
+                ->get(),
+
             'riwayat' => \App\Models\OvertimeRecord::query()
                 ->with('overtimeRequest')
                 ->where('employee_id', $employee->id)

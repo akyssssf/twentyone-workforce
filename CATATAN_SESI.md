@@ -1173,3 +1173,8 @@ Julian Amal 6 · Fikri Imamy 11 · Nurdiansyah 8 · Dea 20 · Sinta 16.
 dan bagian 7 (jebakan) sebelum menyentuh kode roster/absensi/lembur —
 sebagian besar bug di atas berulang polanya (mass-update yang bentrok
 constraint, pencarian tanggal pakai string, asumsi soal `proc_open`).*
+
+## Lembur umum: pemberitahuan lewat portal (27 Okt 2026)
+- Kode yang terpakai otomatis oleh `lembur:umum --simpan` ditandai `overtime_records.activated_auto`.
+- Pemberitahuan lewat web, BUKAN WhatsApp: kartu hijau "tercatat otomatis" di atas halaman Lembur karyawan (30 hari terakhir) + notifikasi lonceng via Notifier.
+- Karyawan tanpa akun portal dilaporkan di output perintah.

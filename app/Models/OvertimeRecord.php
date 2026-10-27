@@ -17,7 +17,7 @@ class OvertimeRecord extends Model
         'employee_id', 'work_date', 'overtime_request_id', 'attendance_id',
         'actual_start', 'actual_end', 'actual_minutes', 'approved_minutes',
         'payable_minutes', 'multiplier', 'status', 'confirmed_by', 'confirmed_at', 'note',
-        'activated_at', 'activated_by',
+        'activated_at', 'activated_by', 'activated_auto',
     ];
 
     protected function casts(): array
@@ -30,6 +30,7 @@ class OvertimeRecord extends Model
             'approved_minutes' => 'integer',
             'payable_minutes' => 'integer',
             'multiplier' => 'float',
+            'activated_auto' => 'boolean',
             'confirmed_at' => 'datetime',
             'activated_at' => 'datetime',
         ];

@@ -4,6 +4,39 @@
 
 @section('content')
 
+{{-- Lembur yang tercatat OTOMATIS: kodenya dipakai sistem karena ada scan,
+     orangnya tidak perlu memasukkan apa pun. Ditaruh paling atas supaya
+     terlihat sebelum kotak kode, dan jelas bahwa tidak ada yang harus dilakukan. --}}
+@foreach ($otomatis as $r)
+    <div class="kartu mb-5 border-emerald-300 bg-emerald-50">
+        <div class="kartu-isi">
+            <div class="flex items-start gap-3">
+                <div class="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-emerald-600 text-white">
+                    <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 13l4 4L19 7" stroke-linecap="round" stroke-linejoin="round" /></svg>
+                </div>
+                <div class="min-w-0">
+                    <h2 class="font-semibold text-emerald-900">
+                        Lembur {{ $r->overtimeRequest?->occasion?->label() ?? '' }} {{ $r->work_date->translatedFormat('d M Y') }} tercatat otomatis
+                    </h2>
+                    <p class="mt-1 text-sm text-emerald-900">
+                        Kode lembur <span class="font-mono font-semibold">{{ $r->overtimeRequest?->secret_code }}</span> sudah terpakai otomatis —
+                        Anda tidak perlu memasukkannya.
+                    </p>
+                    <dl class="mt-2 grid grid-cols-2 gap-x-6 gap-y-1 text-sm sm:grid-cols-4">
+                        <div><dt class="text-xs text-emerald-700">Masuk</dt><dd class="font-medium">{{ $r->actual_start?->setTimezone(config('attendance.timezone'))->format('H:i') ?? '—' }}</dd></div>
+                        <div><dt class="text-xs text-emerald-700">Sampai</dt><dd class="font-medium">{{ $r->actual_end?->setTimezone(config('attendance.timezone'))->format('H:i') ?? '—' }}</dd></div>
+                        <div><dt class="text-xs text-emerald-700">Lama</dt><dd class="font-medium">{{ \App\Support\Durasi::menit($r->payable_minutes) }}</dd></div>
+                        <div><dt class="text-xs text-emerald-700">Tarif</dt><dd class="font-medium">×{{ rtrim(rtrim(number_format($r->multiplier, 1, ',', ''), '0'), ',') }}</dd></div>
+                    </dl>
+                    <p class="mt-2 text-xs text-emerald-800">
+                        Jam dihitung dari scan absen Anda. Kalau tidak sesuai, hubungi manajer.
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+@endforeach
+
 {{-- Kotak kode ditaruh paling atas dan dibuat besar.
 
      Ini satu-satunya tindakan yang membuat lembur terhitung, dan dilakukan
