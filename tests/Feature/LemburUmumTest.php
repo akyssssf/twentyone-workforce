@@ -94,6 +94,18 @@ class LemburUmumTest extends TestCase
         $this->assertSame(0, OvertimeRecord::count(), 'tanpa --simpan tidak ada yang berubah');
     }
 
+    /** Tempel jari dua kali (08:21 dan 08:22) bukan scan pulang: lemburnya tetap sampai batas. */
+    public function test_tap_dobel_di_pagi_hari_bukan_scan_pulang(): void
+    {
+        $this->orang('Tap Dobel', '17', 'pagi', ['08:21:10', '08:22:05', '23:36:00']);
+
+        $this->assertSame(0, Artisan::call('lembur:umum', ['tanggal' => self::TANGGAL]));
+        $keluaran = Artisan::output();
+
+        $this->assertStringContainsString('Tap Dobel', $keluaran);
+        $this->assertStringContainsString('4j 38m', $keluaran, '08:21 → batas 13:00');
+    }
+
     public function test_simpan_membuat_catatan_berpengali_dan_tidak_dobel(): void
     {
         $a = $this->orang('Libur Pulang', '11', null, ['08:05:00', '12:30:00']);

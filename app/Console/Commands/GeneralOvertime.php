@@ -142,7 +142,9 @@ class GeneralOvertime extends Command
 
             // Tanpa scan pulang: dianggap sampai batas. Dengan scan pulang
             // sebelum batas: sampai scan itu. Tidak pernah melewati batas.
-            $dalamRentang = $scan->filter(fn (Carbon $x) => $x->lessThanOrEqualTo($batas->copy()->addMinutes(30)));
+            // Scan kurang dari 1 jam setelah scan masuk = tempel jari dua kali, bukan pulang.
+            $dalamRentang = $scan->filter(fn (Carbon $x) => $x->lessThanOrEqualTo($batas->copy()->addMinutes(30))
+                && ($x->equalTo($mulai) || $mulai->diffInMinutes($x) >= 60));
             $selesai = $dalamRentang->count() > 1 ? $dalamRentang->last() : $batas->copy();
             $selesai = $selesai->greaterThan($batas) ? $batas->copy() : $selesai;
 
