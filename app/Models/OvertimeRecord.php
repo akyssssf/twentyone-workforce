@@ -17,7 +17,7 @@ class OvertimeRecord extends Model
         'employee_id', 'work_date', 'overtime_request_id', 'attendance_id',
         'actual_start', 'actual_end', 'actual_minutes', 'approved_minutes',
         'payable_minutes', 'multiplier', 'status', 'confirmed_by', 'confirmed_at', 'note',
-        'activated_at', 'activated_by', 'activated_auto',
+        'activated_at', 'activated_by', 'activated_auto', 'paid_in_period',
     ];
 
     protected function casts(): array

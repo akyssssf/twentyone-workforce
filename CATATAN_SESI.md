@@ -1178,3 +1178,9 @@ constraint, pencarian tanggal pakai string, asumsi soal `proc_open`).*
 - Kode yang terpakai otomatis oleh `lembur:umum --simpan` ditandai `overtime_records.activated_auto`.
 - Pemberitahuan lewat web, BUKAN WhatsApp: kartu hijau "tercatat otomatis" di atas halaman Lembur karyawan (30 hari terakhir) + notifikasi lonceng via Notifier.
 - Karyawan tanpa akun portal dilaporkan di output perintah.
+
+## Lembur umum dibayar sebagai bonus di periode berjalan (31 Okt 2026)
+- Manajer minta lembur General Cleaning 27 Okt cair bulan Oktober, ditambahkan ke bonus periode 2026-10 (22 Sep–20 Okt), bukan menunggu payroll 2026-11.
+- `lembur:bonus-umum {tanggal} --bulan=2026-10 [--pin=*] [--simpan]`: nominal = tarif per jam × menit × pengali (RuleResolver::overtimePay, sama dengan payroll biasa), disimpan sebagai ManualPayrollEntry bonus ("Lembur General Cleaning 27 Okt 2026 (4j 54m ×2)").
+- Catatan lembur ditandai `overtime_records.paid_in_period` supaya PayrollGenerator::addOvertime (whereNull) tidak membayarnya lagi di periode tanggal kerjanya.
+- Hari kerja dibaca dari slip periode itu yang SUDAH dihitung (item basis "Hari kerja terjadwal"), jadi payroll:hitung periodenya harus pernah jalan. Periode `locked` ditolak.

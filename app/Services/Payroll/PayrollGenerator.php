@@ -58,7 +58,7 @@ class PayrollGenerator
         if (! $period->status->canGenerate()) {
             throw new RuntimeException(
                 "Periode {$period->code} berstatus {$period->status->label()} dan tidak bisa dihitung ulang. "
-                . 'Buka kunci periode ini lebih dulu kalau memang harus diubah.'
+                .'Buka kunci periode ini lebih dulu kalau memang harus diubah.'
             );
         }
 
@@ -292,6 +292,7 @@ class PayrollGenerator
         $records = OvertimeRecord::query()
             ->where('employee_id', $employee->id)
             ->whereBetween('work_date', [$period->start_date, $period->end_date])
+            ->whereNull('paid_in_period')
             ->confirmed()
             ->where('payable_minutes', '>', 0)
             ->orderBy('work_date')
@@ -403,7 +404,7 @@ class PayrollGenerator
         $this->addItem(
             $payslip,
             'deduction',
-            'Potongan Terlambat (' . $late->count() . 'x)',
+            'Potongan Terlambat ('.$late->count().'x)',
             $late->count(),
             0,
             $total,
@@ -450,7 +451,7 @@ class PayrollGenerator
         $this->addItem(
             $payslip,
             'deduction',
-            'Potongan Pulang Cepat (' . $early->count() . 'x)',
+            'Potongan Pulang Cepat ('.$early->count().'x)',
             $early->count(),
             0,
             $total,
@@ -481,7 +482,7 @@ class PayrollGenerator
         $this->addItem(
             $payslip,
             'deduction',
-            'Potongan Alpha (' . $alpha->count() . ' hari)',
+            'Potongan Alpha ('.$alpha->count().' hari)',
             $alpha->count(),
             $perHari,
             $result['amount'],
@@ -509,14 +510,14 @@ class PayrollGenerator
         $jamPerHari = max(1, Settings::int('payroll.hours_per_day', 10));
 
         $this->addItem($payslip, 'info', "Hari kerja terjadwal: {$workingDays} hari", $workingDays, 0, 0, $sort++, [], 'basis');
-        $this->addItem($payslip, 'info', 'Tarif harian: gaji pokok ÷ ' . $workingDays . ' hari', 1, $tarifHarian, 0, $sort++, [], 'basis');
+        $this->addItem($payslip, 'info', 'Tarif harian: gaji pokok ÷ '.$workingDays.' hari', 1, $tarifHarian, 0, $sort++, [], 'basis');
         $this->addItem($payslip, 'info', "Tarif per jam: tarif harian ÷ {$jamPerHari} jam", 1, $this->rules->hourlyRate($baseSalary, $workingDays), 0, $sort++, [], 'basis');
 
         if ($toleransi > 0) {
             $this->addItem(
                 $payslip,
                 'info',
-                "Toleransi telat {$toleransi} menit: " . $telatDimaafkan->count() . 'x datang lewat masih dalam toleransi, tidak dipotong',
+                "Toleransi telat {$toleransi} menit: ".$telatDimaafkan->count().'x datang lewat masih dalam toleransi, tidak dipotong',
                 $telatDimaafkan->count(),
                 0,
                 0,
@@ -548,7 +549,7 @@ class PayrollGenerator
             ->bonus()
             ->get()
             ->each(function (ManualPayrollEntry $entry) use ($payslip, $sort) {
-                $this->addItem($payslip, $this->kategoriBonus(), 'Bonus: ' . $entry->reason, 1, $entry->amount, $entry->amount, $sort, [], 'manual', $entry->id);
+                $this->addItem($payslip, $this->kategoriBonus(), 'Bonus: '.$entry->reason, 1, $entry->amount, $entry->amount, $sort, [], 'manual', $entry->id);
             });
     }
 
@@ -561,7 +562,7 @@ class PayrollGenerator
             ->with('deductionType')
             ->get()
             ->each(function (ManualPayrollEntry $entry) use ($payslip, $sort) {
-                $label = ($entry->deductionType?->name ?? 'Potongan') . ': ' . $entry->reason;
+                $label = ($entry->deductionType?->name ?? 'Potongan').': '.$entry->reason;
                 $this->addItem($payslip, 'deduction', $label, 1, $entry->amount, $entry->amount, $sort, [], 'manual', $entry->id);
             });
     }
@@ -631,7 +632,7 @@ class PayrollGenerator
                 $this->addItem(
                     $payslip,
                     $adj->amount >= 0 ? 'earning' : 'deduction',
-                    'Penyesuaian periode ' . ($adj->originPeriod?->code ?? '-') . ': ' . $adj->reason,
+                    'Penyesuaian periode '.($adj->originPeriod?->code ?? '-').': '.$adj->reason,
                     1,
                     abs($adj->amount),
                     abs($adj->amount),
