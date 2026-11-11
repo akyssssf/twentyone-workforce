@@ -45,6 +45,7 @@ class Employee extends Model
         'joined_at',
         'resigned_at',
         'preferred_off_days',
+        'flexible_off',
     ];
 
     protected function casts(): array
@@ -55,6 +56,7 @@ class Employee extends Model
             'joined_at' => 'date',
             'resigned_at' => 'date',
             'preferred_off_days' => 'array',
+            'flexible_off' => 'boolean',
         ];
     }
 

@@ -23,7 +23,8 @@ class EditEmployee extends Command
                             {--shift= : Ganti shift}
                             {--salary= : Ganti gaji pokok}
                             {--joined= : Ganti tanggal bergabung (YYYY-MM-DD)}
-                            {--off-days= : Libur mingguan, misal "minggu" atau "senin,kamis" atau "-" untuk kosongkan}';
+                            {--off-days= : Libur mingguan, misal "minggu" atau "senin,kamis" atau "-" untuk kosongkan}
+                            {--libur-fleksibel= : ya/tidak. Ya = roster penuh, hari tanpa scan dicatat Libur (bukan Alpha)}';
 
     protected $description = 'Ubah data karyawan yang sudah terdaftar';
 
@@ -89,6 +90,10 @@ class EditEmployee extends Command
             $perubahan['preferred_off_days'] = $masukan === '-' ? [] : DayOfWeek::parse($masukan);
         }
 
+        if ($this->option('libur-fleksibel') !== null) {
+            $perubahan['flexible_off'] = in_array(strtolower((string) $this->option('libur-fleksibel')), ['ya', 'y', '1', 'true'], true);
+        }
+
         if ($perubahan === [] && ! isset($gajiBaru)) {
             $this->warn('Tidak ada yang diubah. Sebutkan minimal satu opsi.');
             $this->line('Contoh: php artisan employee:edit 1 --shift="Shift 2" --off-days=minggu');
@@ -126,11 +131,12 @@ class EditEmployee extends Command
             ['Shift preferensi', $employee->defaultShift?->name ?? '-'],
             ['Gaji pokok', 'Rp '.number_format($employee->baseSalaryOn(now()), 0, ',', '.')],
             ['Libur mingguan', DayOfWeek::daftar($employee->offDays())],
+            ['Libur fleksibel', $employee->flexible_off ? 'ya (tanpa scan = Libur, bukan Alpha)' : 'tidak'],
             ['Bergabung', $employee->joined_at?->toDateString() ?? '-'],
             ['Aktif', $employee->is_active ? 'ya' : 'tidak'],
         ]);
 
-        if (array_key_exists('default_shift_id', $perubahan) || array_key_exists('preferred_off_days', $perubahan)) {
+        if (array_key_exists('default_shift_id', $perubahan) || array_key_exists('preferred_off_days', $perubahan) || array_key_exists('flexible_off', $perubahan)) {
             $this->newLine();
             $this->line('Rekap lama tidak ikut berubah. Jalankan <comment>php artisan attendance:compute</comment>');
             $this->line('dengan rentang tanggal yang mau dihitung ulang kalau perlu.');

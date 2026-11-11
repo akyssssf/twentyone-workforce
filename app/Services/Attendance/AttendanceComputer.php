@@ -448,7 +448,7 @@ class AttendanceComputer
 
         $status = $statusOverride
             ? AttendanceStatus::from($statusOverride)
-            : $this->resolveStatus($checkIn, $libur, $assignment);
+            : $this->resolveStatus($checkIn, $libur, $assignment, $employee);
 
         return Attendance::updateOrCreate(
             [
@@ -706,7 +706,7 @@ class AttendanceComputer
         return $employee->isOffDay($date) || Holiday::closingOn($date) !== null;
     }
 
-    protected function resolveStatus(?Carbon $checkIn, bool $libur, ?RosterAssignment $assignment): AttendanceStatus
+    protected function resolveStatus(?Carbon $checkIn, bool $libur, ?RosterAssignment $assignment, ?Employee $employee = null): AttendanceStatus
     {
         if (! $libur) {
             if ($checkIn !== null) {
@@ -722,6 +722,13 @@ class AttendanceComputer
             // datang tanpa roster masih kena aturan telat seperti biasa.
             // Cabut fallback ini begitu roster dipakai penuh untuk semua
             // karyawan.
+            // Libur fleksibel: orangnya menentukan sendiri hari liburnya.
+            // Roster-nya penuh, dan hari tanpa scan berarti dia memakai
+            // jatah liburnya (Libur), bukan melanggar jadwal (Alpha).
+            if ($employee?->flexible_off) {
+                return AttendanceStatus::Libur;
+            }
+
             return $assignment === null ? AttendanceStatus::Libur : AttendanceStatus::Alpha;
         }
 

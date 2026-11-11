@@ -1184,3 +1184,12 @@ constraint, pencarian tanggal pakai string, asumsi soal `proc_open`).*
 - `lembur:bonus-umum {tanggal} --bulan=2026-10 [--pin=*] [--simpan]`: nominal = tarif per jam × menit × pengali (RuleResolver::overtimePay, sama dengan payroll biasa), disimpan sebagai ManualPayrollEntry bonus ("Lembur General Cleaning 27 Okt 2026 (4j 54m ×2)").
 - Catatan lembur ditandai `overtime_records.paid_in_period` supaya PayrollGenerator::addOvertime (whereNull) tidak membayarnya lagi di periode tanggal kerjanya.
 - Hari kerja dibaca dari slip periode itu yang SUDAH dihitung (item basis "Hari kerja terjadwal"), jadi payroll:hitung periodenya harus pernah jalan. Periode `locked` ditolak.
+
+## Libur fleksibel (Indra, 11 Nov 2026)
+
+Indra (PIN 23) menentukan sendiri hari liburnya. Kolom `employees.flexible_off`:
+roster dibuat penuh (Pagi), hari tanpa scan dicatat **Libur**, bukan Alpha
+(`AttendanceComputer::resolveStatus`). Libur tidak memotong jatah cuti. Hari
+yang ada scan tetap hadir/telat seperti biasa. Menyalakan:
+`php artisan employee:edit 23 --libur-fleksibel=ya`, lalu `attendance:compute`
+untuk tanggal yang mau dihitung ulang.
