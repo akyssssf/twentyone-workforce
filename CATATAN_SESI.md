@@ -1193,3 +1193,10 @@ roster dibuat penuh (Pagi), hari tanpa scan dicatat **Libur**, bukan Alpha
 yang ada scan tetap hadir/telat seperti biasa. Menyalakan:
 `php artisan employee:edit 23 --libur-fleksibel=ya`, lalu `attendance:compute`
 untuk tanggal yang mau dihitung ulang.
+
+## attendance:janggal (12 Nov 2026)
+
+Satu layar kejanggalan rekap: jadwal diduga tertukar (telat/pulang cepat ≥45
+menit), masuk tanpa jadwal kerja, scan pulang hilang, pulang melewati jadwal
+tanpa lembur, dobel baris sehari, alpha. Hanya membaca. Opsi `--from --to
+--telat --lebih`. Jalankan `attendance:compute` dulu kalau baru ubah roster.
