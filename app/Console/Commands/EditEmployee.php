@@ -24,6 +24,7 @@ class EditEmployee extends Command
                             {--salary= : Ganti gaji pokok}
                             {--joined= : Ganti tanggal bergabung (YYYY-MM-DD)}
                             {--off-days= : Libur mingguan, misal "minggu" atau "senin,kamis" atau "-" untuk kosongkan}
+                            {--divisi= : Kode divisi utama (mis. cleaning, kasir). Divisi lain yang sudah ada tetap, hanya bukan utama lagi}
                             {--libur-fleksibel= : ya/tidak. Ya = roster penuh, hari tanpa scan dicatat Libur (bukan Alpha)}';
 
     protected $description = 'Ubah data karyawan yang sudah terdaftar';
@@ -94,7 +95,20 @@ class EditEmployee extends Command
             $perubahan['flexible_off'] = in_array(strtolower((string) $this->option('libur-fleksibel')), ['ya', 'y', '1', 'true'], true);
         }
 
-        if ($perubahan === [] && ! isset($gajiBaru)) {
+        $divisi = null;
+
+        if ($kode = $this->option('divisi')) {
+            $divisi = \App\Models\Division::where('code', $kode)->first();
+
+            if ($divisi === null) {
+                $this->error("Divisi dengan kode '{$kode}' tidak ada.");
+                $this->line('Yang tersedia: '.\App\Models\Division::pluck('code')->implode(', '));
+
+                return self::FAILURE;
+            }
+        }
+
+        if ($perubahan === [] && ! isset($gajiBaru) && $divisi === null) {
             $this->warn('Tidak ada yang diubah. Sebutkan minimal satu opsi.');
             $this->line('Contoh: php artisan employee:edit 1 --shift="Shift 2" --off-days=minggu');
 
@@ -102,6 +116,15 @@ class EditEmployee extends Command
         }
 
         $employee->update($perubahan);
+
+        if ($divisi !== null) {
+            // Divisi lama dipertahankan tapi tidak lagi utama, supaya orang
+            // yang merangkap divisi tidak kehilangan kompetensinya.
+            $employee->divisions()->newPivotQuery()->update(['is_primary' => false]);
+            $employee->divisions()->syncWithoutDetaching([
+                $divisi->id => ['is_primary' => true, 'competency_level' => 3],
+            ]);
+        }
 
         // Gaji ditutup-dan-buka-baru, bukan ditimpa: baris lama diberi tanggal
         // akhir, baris baru berlaku mulai hari ini. Slip gaji yang sudah
@@ -132,6 +155,7 @@ class EditEmployee extends Command
             ['Gaji pokok', 'Rp '.number_format($employee->baseSalaryOn(now()), 0, ',', '.')],
             ['Libur mingguan', DayOfWeek::daftar($employee->offDays())],
             ['Libur fleksibel', $employee->flexible_off ? 'ya (tanpa scan = Libur, bukan Alpha)' : 'tidak'],
+            ['Divisi utama', $employee->load('divisions')->primaryDivision()?->name ?? '-'],
             ['Bergabung', $employee->joined_at?->toDateString() ?? '-'],
             ['Aktif', $employee->is_active ? 'ya' : 'tidak'],
         ]);
