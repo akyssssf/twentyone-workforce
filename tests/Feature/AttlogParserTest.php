@@ -291,6 +291,17 @@ class AttlogParserTest extends TestCase
         $this->assertSame('https://s3.example.com/foto/abc123.jpg', AttendanceLog::sole()->photo_url);
     }
 
+    public function test_photo_url_bukan_alamat_http_diabaikan(): void
+    {
+        $callback = $this->makeCallback($this->attlogPayload([
+            'photo_url' => '-',
+        ]));
+
+        $this->parser->parseCallback($callback);
+
+        $this->assertNull(AttendanceLog::sole()->photo_url);
+    }
+
     public function test_mesin_tanpa_kamera_tidak_dianggap_bermasalah(): void
     {
         $this->parser->parseCallback($this->makeCallback($this->attlogPayload()));

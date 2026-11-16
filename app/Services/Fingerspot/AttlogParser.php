@@ -161,7 +161,10 @@ class AttlogParser
             raw: $row,
             // Cuma dikirim mesin yang berkamera. Selain itu tetap null, dan
             // itu bukan kesalahan.
-            photoUrl: is_string($photo) && $photo !== '' ? $photo : null,
+            // Mesin tanpa foto kadang mengirim "-" atau teks lain, bukan
+            // kosong. Hanya alamat http(s) yang dianggap foto: "-" yang
+            // dipakai apa adanya jadi <img src="-"> dan memuat /- (404).
+            photoUrl: is_string($photo) && preg_match('#^https?://#i', $photo) ? $photo : null,
         );
     }
 

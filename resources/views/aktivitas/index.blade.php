@@ -121,7 +121,7 @@
                         @foreach ($scan as $log)
                             <tr>
                                 <td >
-                                    @if ($log->photo_url)
+                                    @if ($log->photo_url && preg_match('#^https?://#i', $log->photo_url))
                                         <a href="{{ $log->photo_url }}" target="_blank" rel="noopener noreferrer"
                                            title="Buka foto ukuran penuh">
                                             <img src="{{ $log->photo_url }}" alt="Foto scan" loading="lazy"
