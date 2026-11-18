@@ -268,8 +268,9 @@ class Employee extends Model
     public function latestPhotoUrl(): ?string
     {
         return $this->attendanceLogs()
-            ->whereNotNull('photo_url')
-            ->where('photo_url', '!=', '')
+            // Hanya alamat http(s): mesin kadang mengirim "-" saat foto gagal
+            // diunggah, dan "-" di <img src> jadi kotak rusak /-.
+            ->where(fn ($q) => $q->where('photo_url', 'like', 'http://%')->orWhere('photo_url', 'like', 'https://%'))
             ->orderByDesc('scanned_at')
             ->value('photo_url');
     }

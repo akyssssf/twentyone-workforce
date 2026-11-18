@@ -7,6 +7,7 @@ use App\Models\Shift;
 use App\Support\DateInput;
 use App\Support\DayOfWeek;
 use Illuminate\Console\Command;
+use Illuminate\Support\Facades\File;
 
 /**
  * Ubah data karyawan yang sudah terdaftar.
@@ -25,6 +26,7 @@ class EditEmployee extends Command
                             {--joined= : Ganti tanggal bergabung (YYYY-MM-DD)}
                             {--off-days= : Libur mingguan, misal "minggu" atau "senin,kamis" atau "-" untuk kosongkan}
                             {--divisi= : Kode divisi utama (mis. cleaning, kasir). Divisi lain yang sudah ada tetap, hanya bukan utama lagi}
+                            {--foto= : Path file JPEG di server untuk foto profil di web (disalin ke public/avatars/pin_PIN.jpg)}
                             {--libur-fleksibel= : ya/tidak. Ya = roster penuh, hari tanpa scan dicatat Libur (bukan Alpha)}';
 
     protected $description = 'Ubah data karyawan yang sudah terdaftar';
@@ -108,7 +110,21 @@ class EditEmployee extends Command
             }
         }
 
-        if ($perubahan === [] && ! isset($gajiBaru) && $divisi === null) {
+        $foto = null;
+
+        if ($path = $this->option('foto')) {
+            $info = is_file($path) ? @getimagesize($path) : false;
+
+            if ($info === false || $info[2] !== IMAGETYPE_JPEG) {
+                $this->error("Foto \"{$path}\" tidak ada atau bukan JPEG.");
+
+                return self::FAILURE;
+            }
+
+            $foto = $path;
+        }
+
+        if ($perubahan === [] && ! isset($gajiBaru) && $divisi === null && $foto === null) {
             $this->warn('Tidak ada yang diubah. Sebutkan minimal satu opsi.');
             $this->line('Contoh: php artisan employee:edit 1 --shift="Shift 2" --off-days=minggu');
 
@@ -116,6 +132,14 @@ class EditEmployee extends Command
         }
 
         $employee->update($perubahan);
+
+        if ($foto !== null) {
+            // Sama dengan lokasi yang dibaca Employee::avatarUrl(). Folder ini
+            // di-gitignore, jadi foto orang tidak ikut ke repositori.
+            File::ensureDirectoryExists(public_path('avatars'));
+            File::copy($foto, public_path("avatars/pin_{$employee->pin_device}.jpg"));
+            $this->info("Foto profil tersimpan: avatars/pin_{$employee->pin_device}.jpg");
+        }
 
         if ($divisi !== null) {
             // Divisi lama dipertahankan tapi tidak lagi utama, supaya orang
