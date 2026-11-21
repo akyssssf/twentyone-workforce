@@ -148,6 +148,18 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Kelonggaran scan pulang setelah kafe tutup (untuk menghitung lembur)
+    |--------------------------------------------------------------------------
+    |
+    | Scan pulang saat tutup jatuh beberapa menit sesudah jam tutup. Scan dalam
+    | rentang ini tetap dihitung sebagai akhir lembur (dibatasi sampai jam tutup).
+    |
+    */
+
+    'overtime_close_grace_minutes' => (int) env('ATTENDANCE_OVERTIME_CLOSE_GRACE_MINUTES', 30),
+
+    /*
+    |--------------------------------------------------------------------------
     | Tebak shift dari jam scan (tanpa roster)
     |--------------------------------------------------------------------------
     |

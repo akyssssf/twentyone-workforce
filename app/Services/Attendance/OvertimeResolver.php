@@ -114,9 +114,16 @@ class OvertimeResolver
 
         $batas = $this->batasAkhirHari($workDate);
 
+        // Scan pulang saat kafe tutup hampir selalu jatuh SETELAH jam tutup
+        // (23:30:36, 23:32:11...), bukan tepat di detik 23:30:00. Tanpa
+        // kelonggaran, scan itu terlewat dan scan sore yang dianggap akhir
+        // lembur, sehingga orang yang bertahan sampai tutup cuma dibayar
+        // sampai jam scan sorenya.
+        $kelonggaran = max(0, (int) config('attendance.overtime_close_grace_minutes', 30));
+
         $scanTerakhir = AttendanceLog::query()
             ->where('employee_id', $employee->id)
-            ->whereBetween('scanned_at', [$scheduledOut, $batas])
+            ->whereBetween('scanned_at', [$scheduledOut, $batas->copy()->addMinutes($kelonggaran)])
             ->orderByDesc('scanned_at')
             ->first();
 
@@ -126,6 +133,11 @@ class OvertimeResolver
         // karena lupa menempel jari. Manajer bisa menurunkannya lewat
         // konfirmasi manual, dan setiap penurunan tercatat.
         $selesai = $scanTerakhir?->scanned_at?->copy() ?? $batas;
+
+        // Lembur tidak melewati jam tutup, berapa pun lama orangnya masih di sana.
+        if ($selesai->greaterThan($batas)) {
+            $selesai = $batas->copy();
+        }
 
         $menit = max(0, (int) round($scheduledOut->diffInMinutes($selesai)));
 
